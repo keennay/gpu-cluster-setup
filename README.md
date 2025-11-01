@@ -15,7 +15,7 @@ For this, it's assumed your working directory is either `/` or `/workspace`. Edi
 `./install_model.sh`
 
 ### Template for Running GLM-4.5:
-`./run_glm.sh`
+`serve_models/vllm_***.sh`
 
 ### Change Between Python Environments
 `source ./launch_env.sh`
