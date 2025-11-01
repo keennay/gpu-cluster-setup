@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+
+# GLM 4.5 Base vLLM Server Launcher
+
+echo ""
+echo "🚀 GLM 4.5 Inference Server Launcher"
+
+MODEL_REPO="zai-org/GLM-4.5-Base"
+MODEL_NAME="glm-4.5"
+DEFAULT_TENSOR_PARALLEL_SIZE=8
+DEFAULT_PORT=8000
+
+trap 'echo -e "\n\nServer stopped by user."; exit 0' INT
+
+is_valid_tensor_parallel_size() {
+    [[ "$1" =~ ^(1|2|4|8)$ ]]
+}
+
+is_valid_gpu_list() {
+    [[ "$1" =~ ^[0-9]+(,[0-9]+)*$ ]]
+}
+
+count_gpus() {
+    local list="$1"
+    local count=0
+    local IFS=,
+    read -ra gpu_array <<< "$list"
+    for _ in "${gpu_array[@]}"; do
+        count=$((count + 1))
+    done
+    echo "$count"
+}
+
+is_valid_port() {
+    [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+get_tensor_parallel_size() {
+    local arg_value="$1"
+    GPU_SELECTION_MODE="tensor"
+
+    if [ -n "$arg_value" ]; then
+        if is_valid_tensor_parallel_size "$arg_value"; then
+            TENSOR_PARALLEL_SIZE="$arg_value"
+            return
+        elif [[ "$arg_value" =~ ^gpus?=(.*)$ ]]; then
+            local gpu_list="${BASH_REMATCH[1]}"
+            if is_valid_gpu_list "$gpu_list"; then
+                GPU_SELECTION_MODE="custom"
+                CUDA_VISIBLE_DEVICES_VALUE="$gpu_list"
+                TENSOR_PARALLEL_SIZE="$(count_gpus "$gpu_list")"
+                return
+            else
+                echo "Invalid GPU list in argument '$arg_value'. Expected format gpus=0,1,2."
+                exit 1
+            fi
+        elif [[ "$arg_value" == *","* ]] && is_valid_gpu_list "$arg_value"; then
+            GPU_SELECTION_MODE="custom"
+            CUDA_VISIBLE_DEVICES_VALUE="$arg_value"
+            TENSOR_PARALLEL_SIZE="$(count_gpus "$arg_value")"
+            return
+        else
+            echo "Invalid tensor parallel argument '$arg_value'. Use 1/2/4/8 or gpus=0,1."
+            exit 1
+        fi
+    fi
+
+    GPU_SELECTION_MODE="tensor"
+    while true; do
+        echo ""
+        echo "============================================================"
+        echo "Tensor Parallel Configuration"
+        echo "============================================================"
+        echo ""
+        echo "Tensor parallel size determines how many GPUs to use:"
+        echo "  1 = Single GPU"
+        echo "  2 = 2 GPUs"
+        echo "  4 = 4 GPUs"
+        echo "  8 = 8 GPUs (default)"
+        echo ""
+        echo "Or type 'custom' (or provide a comma-separated list like 0,2,3) to set specific GPU IDs (overrides tensor parallel size)."
+        echo ""
+
+        read -r -p "Enter tensor parallel size (1/2/4/8) or 'custom' [default: ${DEFAULT_TENSOR_PARALLEL_SIZE}]: " size
+        size="${size,,}" # lowercase for comparisons
+
+        if [ -z "$size" ]; then
+            TENSOR_PARALLEL_SIZE="$DEFAULT_TENSOR_PARALLEL_SIZE"
+            break
+        elif is_valid_tensor_parallel_size "$size"; then
+            TENSOR_PARALLEL_SIZE="$size"
+            break
+        elif [[ "$size" == "custom" || "$size" == "c" ]]; then
+            read -r -p "Enter GPU IDs to use (comma-separated, e.g., 0,2,3): " custom_list
+            if is_valid_gpu_list "$custom_list"; then
+                GPU_SELECTION_MODE="custom"
+                CUDA_VISIBLE_DEVICES_VALUE="$custom_list"
+                TENSOR_PARALLEL_SIZE="$(count_gpus "$custom_list")"
+                break
+            else
+                echo "Invalid GPU list. Expected comma-separated integers (e.g., 0,1,3)."
+            fi
+        elif [[ "$size" == *","* ]] && is_valid_gpu_list "$size"; then
+            GPU_SELECTION_MODE="custom"
+            CUDA_VISIBLE_DEVICES_VALUE="$size"
+            TENSOR_PARALLEL_SIZE="$(count_gpus "$size")"
+            break
+        else
+            echo "Invalid choice. Please enter 1, 2, 4, 8, or a comma-separated GPU list."
+        fi
+    done
+}
+
+get_port() {
+    local arg_value="$1"
+
+    if [ -n "$arg_value" ]; then
+        if is_valid_port "$arg_value"; then
+            VLLM_PORT="$arg_value"
+            return
+        else
+            echo "Invalid port '$arg_value'. Please provide a value between 1 and 65535."
+            exit 1
+        fi
+    fi
+
+    while true; do
+        echo ""
+        echo "============================================================"
+        echo "vLLM Server Port"
+        echo "============================================================"
+        echo ""
+
+        read -r -p "Enter vLLM server port [default: ${DEFAULT_PORT}]: " port
+
+        if [ -z "$port" ]; then
+            VLLM_PORT="$DEFAULT_PORT"
+            break
+        elif is_valid_port "$port"; then
+            VLLM_PORT="$port"
+            break
+        else
+            echo "Invalid port. Please enter a number between 1 and 65535."
+        fi
+    done
+}
+
+main() {
+    get_tensor_parallel_size "$1"
+    get_port "$2"
+
+    echo ""
+    echo "============================================================"
+    echo "Starting vLLM Server"
+    echo "============================================================"
+    echo "Model: $MODEL_REPO"
+    echo "Served as: $MODEL_NAME"
+    echo "Tensor parallel size: $TENSOR_PARALLEL_SIZE"
+    if [ "$GPU_SELECTION_MODE" = "custom" ]; then
+        echo "GPU selection: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE"
+    fi
+    echo "Port: $VLLM_PORT"
+    echo ""
+    local base_command="vllm serve $MODEL_REPO --tensor-parallel-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm45 --reasoning-parser glm45 --enable-auto-tool-choice --served-model-name $MODEL_NAME --port $VLLM_PORT --api-key YOUR_API_KEY"
+    if [ "$GPU_SELECTION_MODE" = "custom" ]; then
+        echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
+    else
+        echo "Command: $base_command"
+    fi
+    echo ""
+    echo "Press Ctrl+C to stop the server"
+    echo "============================================================"
+    echo ""
+
+    if [ "$GPU_SELECTION_MODE" = "custom" ]; then
+        CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_VALUE" \
+        vllm serve "$MODEL_REPO" \
+            --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
+            --tool-call-parser glm45 \
+            --reasoning-parser glm45 \
+            --enable-auto-tool-choice \
+            --served-model-name "$MODEL_NAME" \
+            --port "$VLLM_PORT" \
+            --api-key YOUR_API_KEY
+    else
+        vllm serve "$MODEL_REPO" \
+            --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
+            --tool-call-parser glm45 \
+            --reasoning-parser glm45 \
+            --enable-auto-tool-choice \
+            --served-model-name "$MODEL_NAME" \
+            --port "$VLLM_PORT" \
+            --api-key YOUR_API_KEY
+    fi
+}
+
+main "$@"

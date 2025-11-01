@@ -180,10 +180,10 @@ run_uv_install() {
 install_glm_sglang() {
     print_info "Installing packages for GLM 4.5 (SGLang)..."
     local packages=(
-        "transformers>=4.56.1"
+        "transformers>=4.56.2"
         "pre-commit>=4.2.0"
-        "accelerate>=1.10.0"
-        "sglang>=0.5.2"
+        "accelerate>=1.10.1"
+        "sglang==0.5.2"
         "pybase64"
         "pydantic"
         "orjson"
@@ -213,9 +213,9 @@ install_glm_sglang() {
 install_glm_vllm() {
     print_info "Installing packages for GLM 4.5 (vLLM)..."
     local packages=(
-        "transformers>=4.56.1"
+        "transformers>=4.56.2"
         "pre-commit>=4.2.0"
-        "accelerate>=1.10.0"
+        "accelerate>=1.10.1"
         "vllm>=0.10.2"
     )
 

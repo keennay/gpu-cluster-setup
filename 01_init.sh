@@ -237,11 +237,10 @@ if command -v npm &> /dev/null; then
     print_info "Available coding CLIs to install:"
     print_info "  1. Claude Code (@anthropic-ai/claude-code)"
     print_info "  2. Claude Code Router (@musistudio/claude-code-router)"
-    print_info "  3. Crush (@charmland/crush)"
-    print_info "  4. Gemini CLI (@google/gemini-cli)"
-    print_info "  5. OpenAI Codex (@openai/codex)"
-    print_info "  6. Qwen Code (@qwen-code/qwen-code)"
-    print_info "  7. OpenCode AI (opencode-ai)"
+    print_info "  3. Gemini CLI (@google/gemini-cli)"
+    print_info "  4. OpenAI Codex (@openai/codex)"
+    print_info "  5. Qwen Code (@qwen-code/qwen-code)"
+    print_info "  6. OpenCode AI (opencode-ai)"
     echo ""
     
     if [ "$AUTO_YES" = true ]; then
@@ -299,18 +298,6 @@ if command -v npm &> /dev/null; then
             else
                 print_warning "Failed to install Claude Code Router"
             fi
-        fi
-        
-# Crush
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_CRUSH="y"
-        else
-            read -p "  Install Crush? (y/n): " INSTALL_CRUSH
-        fi
-        if [[ "$INSTALL_CRUSH" =~ ^[Yy]$ ]]; then
-            print_info "Installing Crush..."
-            npm install -g @charmland/crush
-            [ $? -eq 0 ] && print_info "✓ Crush installed" || print_warning "Failed to install Crush"
         fi
         
         # Gemini CLI
