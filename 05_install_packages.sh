@@ -27,6 +27,7 @@ ENV_TYPES=(
   "deepseek-v3-vllm"
   "glm-4.5-sglang"
   "glm-4.5-vllm"
+  "glm-4.7-flash-vllm_env"
   "gpt-oss-transformers"
   "gpt-oss-vllm"
   "kimi-k2-sglang"
@@ -42,6 +43,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["deepseek-v3-vllm"]="DeepSeek-V3/V3.1/R1 (vLLM)"
   ["glm-4.5-sglang"]="GLM 4.5 (SGLang)"
   ["glm-4.5-vllm"]="GLM 4.5 (vLLM)"
+  ["glm-4.7-flash-vllm_env"]="GLM 4.7 Flash (vLLM)"
   ["gpt-oss-transformers"]="gpt-oss (Transformers)"
   ["gpt-oss-vllm"]="gpt-oss (vLLM)"
   ["kimi-k2-sglang"]="Kimi K2 (SGLang)"
@@ -68,25 +70,28 @@ resolve_env_type() {
         5|glm_4.5_vllm|glm45_vllm|glm-4.5-vllm)
             echo "glm-4.5-vllm"
             ;;
-        6|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        6|glm_4.7_flash_vllm|glm47_flash_vllm|glm-4.7-flash-vllm|glm-4.7-flash-vllm_env)
+            echo "glm-4.7-flash-vllm_env"
+            ;;
+        7|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        7|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        8|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        8|kimi_k2_sglang|kimi-k2-sglang)
+        9|kimi_k2_sglang|kimi-k2-sglang)
             echo "kimi-k2-sglang"
             ;;
-        9|kimi_k2_vllm|kimi-k2-vllm)
+        10|kimi_k2_vllm|kimi-k2-vllm)
             echo "kimi-k2-vllm"
             ;;
-        10|qwen3_sglang|qwen3-sglang)
+        11|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        11|qwen3_transformers|qwen3-transformers)
+        12|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        12|qwen3_vllm|qwen3-vllm)
+        13|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
         *)
@@ -222,6 +227,19 @@ install_glm_vllm() {
     run_uv_install "${packages[@]}"
 }
 
+install_glm_flash_vllm() {
+    print_info "Installing packages for GLM 4.7 Flash (vLLM)..."
+    local packages=(
+        "git+https://github.com/huggingface/transformers.git"
+        "pre-commit>=4.2.0"
+        "accelerate>=1.10.1"
+    )
+
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install "${packages[@]}"
+}
+
 install_deepseek_lmdeploy() {
     print_info "Installing LMDeploy for DeepSeek..."
     local target_dir="${LMDEPLOY_DIR:-$HOME/lmdeploy}"
@@ -308,6 +326,10 @@ perform_environment_action() {
             ;;
         glm-4.5-vllm)
             install_glm_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        glm-4.7-flash-vllm_env)
+            install_glm_flash_vllm || return 1
             ACTION_TAKEN=true
             ;;
         gpt-oss-transformers)

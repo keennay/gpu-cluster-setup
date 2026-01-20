@@ -345,7 +345,28 @@ if command -v npm &> /dev/null; then
         if [[ "$INSTALL_OPENCODE" =~ ^[Yy]$ ]]; then
             print_info "Installing OpenCode AI..."
             npm install -g opencode-ai@latest
-            [ $? -eq 0 ] && print_info "✓ OpenCode AI installed" || print_warning "Failed to install OpenCode AI"
+            if [ $? -eq 0 ]; then
+                print_info "✓ OpenCode AI installed"
+
+                # Set up OpenCode config to avoid runtime directory creation issues
+                OPENCODE_CONFIG_SOURCE="$(dirname "$0")/configs/opencode.json"
+                OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
+                OPENCODE_CONFIG_TARGET="$OPENCODE_CONFIG_DIR/opencode.json"
+
+                if [ -f "$OPENCODE_CONFIG_SOURCE" ]; then
+                    print_info "Setting up OpenCode config..."
+                    mkdir -p "$OPENCODE_CONFIG_DIR"
+                    if cp "$OPENCODE_CONFIG_SOURCE" "$OPENCODE_CONFIG_TARGET"; then
+                        print_info "✓ OpenCode config copied to $OPENCODE_CONFIG_TARGET"
+                    else
+                        print_warning "Failed to copy OpenCode config"
+                    fi
+                else
+                    print_warning "OpenCode config not found at $OPENCODE_CONFIG_SOURCE"
+                fi
+            else
+                print_warning "Failed to install OpenCode AI"
+            fi
         fi
     else
         print_info "Skipped CLI installations"

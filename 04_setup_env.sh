@@ -38,28 +38,31 @@ resolve_env_type() {
         5|glm_4.5_vllm|glm45_vllm|glm-4.5-vllm)
             echo "glm-4.5-vllm"
             ;;
-        6|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        6|glm_4.7_flash_vllm|glm47_flash_vllm|glm-4.7-flash-vllm|glm-4.7-flash-vllm_env)
+            echo "glm-4.7-flash-vllm_env"
+            ;;
+        7|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        7|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        8|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        8|kimi_k2_sglang|kimi-k2-sglang)
+        9|kimi_k2_sglang|kimi-k2-sglang)
             echo "kimi-k2-sglang"
             ;;
-        9|kimi_k2_vllm|kimi-k2-vllm)
+        10|kimi_k2_vllm|kimi-k2-vllm)
             echo "kimi-k2-vllm"
             ;;
-        10|qwen3_sglang|qwen3-sglang)
+        11|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        11|qwen3_transformers|qwen3-transformers)
+        12|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        12|qwen3_vllm|qwen3-vllm)
+        13|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        13|custom)
+        14|custom)
             echo "custom"
             ;;
         *)
@@ -79,7 +82,14 @@ resolve_env_name() {
         return 0
     fi
 
-    echo "$env_type"
+    case "$env_type" in
+        glm-4.7-flash-vllm_env)
+            echo "glm-4.7-flash-vllm"
+            ;;
+        *)
+            echo "$env_type"
+            ;;
+    esac
 }
 
 # Check if being sourced
@@ -115,21 +125,22 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "3) DeepSeek-V3/V3.1/R1 (vLLM)"
     echo "4) GLM 4.5 (SGLang)"
     echo "5) GLM 4.5 (vLLM)"
-    echo "6) gpt-oss (Transformers)"
-    echo "7) gpt-oss (vLLM)"
-    echo "8) Kimi K2 (SGLang)"
-    echo "9) Kimi K2 (vLLM)"
-    echo "10) Qwen3 (SGLang)"
-    echo "11) Qwen3 (Transformers)"
-    echo "12) Qwen3 (vLLM)"
-    echo "13) Custom"
+    echo "6) GLM 4.7 Flash (vLLM)"
+    echo "7) gpt-oss (Transformers)"
+    echo "8) gpt-oss (vLLM)"
+    echo "9) Kimi K2 (SGLang)"
+    echo "10) Kimi K2 (vLLM)"
+    echo "11) Qwen3 (SGLang)"
+    echo "12) Qwen3 (Transformers)"
+    echo "13) Qwen3 (vLLM)"
+    echo "14) Custom"
     echo ""
     while true; do
-        read -p "Enter your choice (1-13): " choice
+        read -p "Enter your choice (1-14): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 13."
+            print_error "Invalid choice. Please enter a number between 1 and 14."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then

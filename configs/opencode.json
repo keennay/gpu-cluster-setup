@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "glm-local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "GLM 4.7 Flash BF16 (Local)",
+      "options": {
+        "baseURL": "http://localhost:8000/v1",
+        "apiKey": "YOUR_API_KEY"
+      },
+      "models": {
+        "glm-4.7-flash": {
+          "name": "GLM 4.7 Flash"
+        }
+      }
+    }
+  },
+  "model": "glm-local/glm-4.7-flash"
+}
