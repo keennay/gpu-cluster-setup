@@ -13,6 +13,40 @@ print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
+CONFIG_OWNER_USER="${SUDO_USER:-$USER}"
+CONFIG_OWNER_GROUP="$(id -gn "$CONFIG_OWNER_USER" 2>/dev/null || echo "$CONFIG_OWNER_USER")"
+CONFIG_HOME="$(eval echo "~$CONFIG_OWNER_USER")"
+CONFIG_ROOT="$CONFIG_HOME/.config"
+
+ensure_config_ownership() {
+    local config_root="$1"
+
+    if [ -z "$config_root" ]; then
+        print_warning "Config root not set; skipping ownership check"
+        return 1
+    fi
+
+    if [ ! -d "$config_root" ]; then
+        mkdir -p "$config_root" 2>/dev/null || sudo mkdir -p "$config_root"
+    fi
+
+    local owner group
+    owner=$(stat -c '%U' "$config_root" 2>/dev/null)
+    group=$(stat -c '%G' "$config_root" 2>/dev/null)
+
+    if [ "$owner" != "$CONFIG_OWNER_USER" ] || [ "$group" != "$CONFIG_OWNER_GROUP" ]; then
+        print_warning "$config_root is owned by $owner:$group; fixing ownership for $CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP"
+        if sudo chown -R "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$config_root"; then
+            print_info "✓ Ownership updated for $config_root"
+        else
+            print_warning "Failed to update ownership for $config_root"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
 ensure_sudo_installed() {
     if command -v sudo &> /dev/null; then
         print_info "sudo already installed"
@@ -106,7 +140,7 @@ fi
 echo ""
 
 # Basic Linux essentials installed after upgrades to keep tooling current
-BASIC_LINUX_ESSENTIALS=(curl wget less vim nano tmux git git-lfs htop nvtop)
+BASIC_LINUX_ESSENTIALS=(curl wget less vim nano tmux git git-lfs htop nvtop ripgrep)
 if [ "$AUTO_YES" = true ]; then
     INSTALL_BASICS="y"
 else
@@ -350,16 +384,20 @@ if command -v npm &> /dev/null; then
 
                 # Set up OpenCode config to avoid runtime directory creation issues
                 OPENCODE_CONFIG_SOURCE="$(dirname "$0")/configs/opencode.json"
-                OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
-                OPENCODE_CONFIG_TARGET="$OPENCODE_CONFIG_DIR/opencode.json"
 
                 if [ -f "$OPENCODE_CONFIG_SOURCE" ]; then
                     print_info "Setting up OpenCode config..."
-                    mkdir -p "$OPENCODE_CONFIG_DIR"
-                    if cp "$OPENCODE_CONFIG_SOURCE" "$OPENCODE_CONFIG_TARGET"; then
-                        print_info "✓ OpenCode config copied to $OPENCODE_CONFIG_TARGET"
+                    if ensure_config_ownership "$CONFIG_ROOT"; then
+                        OPENCODE_CONFIG_DIR="$CONFIG_ROOT/opencode"
+                        OPENCODE_CONFIG_TARGET="$OPENCODE_CONFIG_DIR/opencode.json"
+                        mkdir -p "$OPENCODE_CONFIG_DIR"
+                        if cp "$OPENCODE_CONFIG_SOURCE" "$OPENCODE_CONFIG_TARGET"; then
+                            print_info "✓ OpenCode config copied to $OPENCODE_CONFIG_TARGET"
+                        else
+                            print_warning "Failed to copy OpenCode config"
+                        fi
                     else
-                        print_warning "Failed to copy OpenCode config"
+                        print_warning "Skipping OpenCode config setup due to ownership issues"
                     fi
                 else
                     print_warning "OpenCode config not found at $OPENCODE_CONFIG_SOURCE"
@@ -376,6 +414,160 @@ else
     print_info "Install Node.js first to install coding CLIs"
 fi
 
+NVIM_AVAILABLE=false
+
+# Install latest Neovim (downloaded from GitHub releases)
+if [ "$AUTO_YES" = true ]; then
+    INSTALL_NVIM_LATEST="y"
+else
+    read -p "Install latest Neovim (download from GitHub releases)? (y/n): " INSTALL_NVIM_LATEST
+fi
+
+if [[ "$INSTALL_NVIM_LATEST" =~ ^[Yy]$ ]]; then
+    if ! command -v tar &> /dev/null; then
+        print_warning "tar not found - skipping Neovim install"
+    elif ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+        print_warning "curl or wget not found - skipping Neovim install"
+    else
+        print_info "Installing latest Neovim..."
+        NVIM_ARCH="$(uname -m)"
+        case "$NVIM_ARCH" in
+            x86_64|amd64) NVIM_ASSETS=("nvim-linux-x86_64.tar.gz" "nvim-linux64.tar.gz") ;;
+            aarch64|arm64) NVIM_ASSETS=("nvim-linux-arm64.tar.gz") ;;
+            *) NVIM_ASSETS=() ;;
+        esac
+
+        if [ ${#NVIM_ASSETS[@]} -eq 0 ]; then
+            print_warning "Unsupported architecture for Neovim installer: $NVIM_ARCH"
+        else
+            TMP_DIR="$(mktemp -d)"
+            NVIM_TARBALL=""
+            for asset in "${NVIM_ASSETS[@]}"; do
+                URL="https://github.com/neovim/neovim/releases/latest/download/$asset"
+                if command -v curl &> /dev/null; then
+                    if curl -fL "$URL" -o "$TMP_DIR/$asset"; then
+                        NVIM_TARBALL="$TMP_DIR/$asset"
+                        break
+                    fi
+                else
+                    if wget -O "$TMP_DIR/$asset" "$URL"; then
+                        NVIM_TARBALL="$TMP_DIR/$asset"
+                        break
+                    fi
+                fi
+            done
+
+            if [ -z "$NVIM_TARBALL" ]; then
+                print_warning "Failed to download Neovim release from GitHub"
+            else
+                NVIM_TOP_DIR="$(tar -tf "$NVIM_TARBALL" | head -n1 | cut -d/ -f1)"
+                if [ -z "$NVIM_TOP_DIR" ]; then
+                    print_warning "Failed to read Neovim archive contents"
+                else
+                    sudo mkdir -p /opt
+                    if sudo tar -C /opt -xzf "$NVIM_TARBALL"; then
+                        if sudo ln -sfn "/opt/$NVIM_TOP_DIR/bin/nvim" /usr/local/bin/nvim; then
+                            print_info "✓ Latest Neovim installed (symlinked to /usr/local/bin/nvim)"
+                            NVIM_AVAILABLE=true
+                        else
+                            print_warning "Failed to link Neovim binary"
+                        fi
+                    else
+                        print_warning "Failed to extract Neovim archive"
+                    fi
+                fi
+            fi
+            rm -rf "$TMP_DIR"
+        fi
+    fi
+fi
+
+# Check if Neovim is available (installed previously or just now)
+if command -v nvim &> /dev/null; then
+    NVIM_AVAILABLE=true
+fi
+
+# Optionally alias vi/vim to Neovim in bashrc (only if installed here)
+if [ "$NVIM_AVAILABLE" = true ]; then
+    read -p "Alias vi and vim to Neovim in $CONFIG_HOME/.bashrc? (y/n): " ALIAS_NVIM
+
+    if [[ "$ALIAS_NVIM" =~ ^[Yy]$ ]]; then
+        BASHRC_PATH="$CONFIG_HOME/.bashrc"
+
+        if [ ! -f "$BASHRC_PATH" ]; then
+            if ! touch "$BASHRC_PATH" 2>/dev/null; then
+                sudo touch "$BASHRC_PATH"
+                sudo chown "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$BASHRC_PATH"
+            fi
+        fi
+
+        # Remove previous block and any existing vi/vim alias lines
+        if ! sed -i '/# Neovim aliases (added by 01_init.sh)/,/^# End Neovim aliases/d' "$BASHRC_PATH" 2>/dev/null; then
+            sudo sed -i '/# Neovim aliases (added by 01_init.sh)/,/^# End Neovim aliases/d' "$BASHRC_PATH"
+            sudo chown "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$BASHRC_PATH"
+        fi
+        if ! sed -i '/^alias vi=/d; /^alias vim=/d' "$BASHRC_PATH" 2>/dev/null; then
+            sudo sed -i '/^alias vi=/d; /^alias vim=/d' "$BASHRC_PATH"
+            sudo chown "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$BASHRC_PATH"
+        fi
+
+        if [ -w "$BASHRC_PATH" ]; then
+            cat <<'EOF' >> "$BASHRC_PATH"
+# Neovim aliases (added by 01_init.sh)
+alias vi='nvim'
+alias vim='nvim'
+# End Neovim aliases
+EOF
+        else
+            cat <<'EOF' | sudo tee -a "$BASHRC_PATH" > /dev/null
+# Neovim aliases (added by 01_init.sh)
+alias vi='nvim'
+alias vim='nvim'
+# End Neovim aliases
+EOF
+            sudo chown "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$BASHRC_PATH"
+        fi
+
+        print_info "✓ Aliases for vi and vim added to $BASHRC_PATH"
+    else
+        print_info "Skipped aliasing vi/vim to Neovim"
+    fi
+fi
+
+# NeoVim config install (only prompt if installed here; always prompt regardless of AUTO_YES)
+if [ "$NVIM_AVAILABLE" = true ]; then
+    read -p "Install NeoVim configs provided by the author of this script? (y/n): " INSTALL_NVIM_CONFIG
+    if [[ "$INSTALL_NVIM_CONFIG" =~ ^[Yy]$ ]]; then
+    if command -v git &> /dev/null; then
+        if ! ensure_config_ownership "$CONFIG_ROOT"; then
+            print_warning "Skipping NeoVim config install due to ownership issues"
+        else
+            NVIM_CONFIG_DIR="$CONFIG_ROOT/nvim"
+            NVIM_CONFIG_PARENT="$(dirname "$NVIM_CONFIG_DIR")"
+
+            if [ -d "$NVIM_CONFIG_DIR" ] && [ -z "$(ls -A "$NVIM_CONFIG_DIR" 2>/dev/null)" ]; then
+                rmdir "$NVIM_CONFIG_DIR"
+            fi
+
+            if [ -d "$NVIM_CONFIG_DIR" ]; then
+                print_warning "NeoVim config directory already exists and is not empty: $NVIM_CONFIG_DIR"
+                print_info "Skipping NeoVim config install to avoid overwriting existing files"
+            else
+                print_info "Installing custom NeoVim configs..."
+                mkdir -p "$NVIM_CONFIG_PARENT"
+                if git clone https://github.com/keennay/neovim.git "$NVIM_CONFIG_DIR"; then
+                    print_info "✓ NeoVim configs installed to $NVIM_CONFIG_DIR"
+                else
+                    print_warning "Failed to clone NeoVim configs"
+                fi
+            fi
+        fi
+    else
+        print_warning "git not found - skipping NeoVim config install"
+    fi
+    fi
+fi
+
 echo ""
 print_info "✅ Initialization complete!"
-print_info "If you installed nvm/Node.js, restart your shell or run: source ~/.bashrc"
+print_info "If you installed nvm or Neovim, restart your shell or run: source ~/.bashrc"
