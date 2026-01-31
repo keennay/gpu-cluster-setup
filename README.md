@@ -15,11 +15,11 @@ For this, it's assumed your working directory is either `/` or `/workspace`. Edi
 `source ./04_setup_env.sh`<br>
 `./05_install_packages.sh`<br>
 
-### 3. Install any selection of open-weights models (DeepSeek V3/V3.1/R1, GLM-4.5, gpt-oss, Kimi K2, Qwen3)
-`./install_model.sh`
+### 3.1 Template for Running Models (Also Downloads if doesn't exist in HuggingFace PATH):
+`serve_models/***.sh`
 
-### Template for Running GLM-4.5:
-`serve_models/vllm_***.sh`
+### 3.2 Install any selection of open-weights models or input your desired repo:
+`./install_model.sh`
 
 ### Change Between Python Environments
 `source ./launch_env.sh`
