@@ -22,32 +22,40 @@ print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 ACTION_TAKEN=false
 
 ENV_TYPES=(
-  "deepseek-v3-lmdeploy"
-  "deepseek-v3-sglang"
-  "deepseek-v3-vllm"
-  "glm-4.5-sglang"
-  "glm-4.5-vllm"
-  "glm-4.7-flash-vllm_env"
+  "deepseek-lmdeploy"
+  "deepseek-sglang"
+  "deepseek-vllm"
+  "glm-sglang"
+  "glm-transformers"
+  "glm-vllm"
   "gpt-oss-transformers"
   "gpt-oss-vllm"
-  "kimi-k2-sglang"
-  "kimi-k2-vllm"
+  "kimi-ktransformers"
+  "kimi-sglang"
+  "kimi-vllm"
+  "minimax-sglang"
+  "minimax-transformers"
+  "minimax-vllm"
   "qwen3-sglang"
   "qwen3-transformers"
   "qwen3-vllm"
 )
 
 declare -A ENV_DESCRIPTIONS=(
-  ["deepseek-v3-lmdeploy"]="DeepSeek-V3/V3.1/R1 (LMDeploy)"
-  ["deepseek-v3-sglang"]="DeepSeek-V3/V3.1/R1 (SGLang)"
-  ["deepseek-v3-vllm"]="DeepSeek-V3/V3.1/R1 (vLLM)"
-  ["glm-4.5-sglang"]="GLM 4.5 (SGLang)"
-  ["glm-4.5-vllm"]="GLM 4.5 (vLLM)"
-  ["glm-4.7-flash-vllm_env"]="GLM 4.7 Flash (vLLM)"
+  ["deepseek-lmdeploy"]="DeepSeek-V3.X/R1/OCR (LMDeploy)"
+  ["deepseek-sglang"]="DeepSeek-V3.X/R1/OCR (SGLang)"
+  ["deepseek-vllm"]="DeepSeek-V3.X/R1/OCR (vLLM)"
+  ["glm-sglang"]="GLM 4.X (SGLang)"
+  ["glm-transformers"]="GLM 4.X (Transformers)"
+  ["glm-vllm"]="GLM 4.X (vLLM)"
   ["gpt-oss-transformers"]="gpt-oss (Transformers)"
   ["gpt-oss-vllm"]="gpt-oss (vLLM)"
-  ["kimi-k2-sglang"]="Kimi K2 (SGLang)"
-  ["kimi-k2-vllm"]="Kimi K2 (vLLM)"
+  ["kimi-ktransformers"]="Kimi K2.X (KTransformers)"
+  ["kimi-sglang"]="Kimi K2.X (SGLang)"
+  ["kimi-vllm"]="Kimi K2.X (vLLM)"
+  ["minimax-sglang"]="MiniMax-M2.X (SGLang)"
+  ["minimax-transformers"]="MiniMax-M2.X (Transformers)"
+  ["minimax-vllm"]="MiniMax-M2.X (vLLM)"
   ["qwen3-sglang"]="Qwen3 (SGLang)"
   ["qwen3-transformers"]="Qwen3 (Transformers)"
   ["qwen3-vllm"]="Qwen3 (vLLM)"
@@ -55,23 +63,23 @@ declare -A ENV_DESCRIPTIONS=(
 
 resolve_env_type() {
     case "$1" in
-        1|deepseek_v3_lmdeploy|deepseek-v3-lmdeploy)
-            echo "deepseek-v3-lmdeploy"
+        1|deepseek_lmdeploy|deepseek-lmdeploy)
+            echo "deepseek-lmdeploy"
             ;;
-        2|deepseek_v3_sglang|deepseek-v3-sglang)
-            echo "deepseek-v3-sglang"
+        2|deepseek_sglang|deepseek-sglang)
+            echo "deepseek-sglang"
             ;;
-        3|deepseek_v3_vllm|deepseek-v3-vllm)
-            echo "deepseek-v3-vllm"
+        3|deepseek_vllm|deepseek-vllm)
+            echo "deepseek-vllm"
             ;;
-        4|glm_4.5|glm45_sglang|glm-4.5-sglang)
-            echo "glm-4.5-sglang"
+        4|glm_sglang|glm-sglang)
+            echo "glm-sglang"
             ;;
-        5|glm_4.5_vllm|glm45_vllm|glm-4.5-vllm)
-            echo "glm-4.5-vllm"
+        5|glm_transformers|glm-transformers)
+            echo "glm-transformers"
             ;;
-        6|glm_4.7_flash_vllm|glm47_flash_vllm|glm-4.7-flash-vllm|glm-4.7-flash-vllm_env)
-            echo "glm-4.7-flash-vllm_env"
+        6|glm_vllm|glm-vllm)
+            echo "glm-vllm"
             ;;
         7|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
@@ -79,19 +87,31 @@ resolve_env_type() {
         8|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        9|kimi_k2_sglang|kimi-k2-sglang)
-            echo "kimi-k2-sglang"
+        9|kimi_ktransformers|kimi-ktransformers)
+            echo "kimi-ktransformers"
             ;;
-        10|kimi_k2_vllm|kimi-k2-vllm)
-            echo "kimi-k2-vllm"
+        10|kimi_sglang|kimi-sglang)
+            echo "kimi-sglang"
             ;;
-        11|qwen3_sglang|qwen3-sglang)
+        11|kimi_vllm|kimi-vllm)
+            echo "kimi-vllm"
+            ;;
+        12|minimax_sglang|minimax-sglang)
+            echo "minimax-sglang"
+            ;;
+        13|minimax_transformers|minimax-transformers)
+            echo "minimax-transformers"
+            ;;
+        14|minimax_vllm|minimax-vllm)
+            echo "minimax-vllm"
+            ;;
+        15|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        12|qwen3_transformers|qwen3-transformers)
+        16|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        13|qwen3_vllm|qwen3-vllm)
+        17|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
         *)
@@ -183,52 +203,20 @@ run_uv_install() {
 }
 
 install_glm_sglang() {
-    print_info "Installing packages for GLM 4.5 (SGLang)..."
-    local packages=(
-        "transformers>=4.56.2"
-        "pre-commit>=4.2.0"
-        "accelerate>=1.10.1"
-        "sglang==0.5.2"
-        "pybase64"
-        "pydantic"
-        "orjson"
-        "uvicorn"
-        "uvloop"
-        "fastapi"
-        "zmq"
-        "Pillow"
-        "openai"
-        "partial_json_parser"
-        "sentencepiece"
-        "sgl_kernel"
-        "dill"
-        "compressed_tensors"
-        "einops"
-        "msgspec"
-        "python-multipart"
-	"torchao"
-	"xgrammar"
-	"openai_harmony"
-	"nvidia-ml-py"
-    )
+    print_info "Installing packages for GLM 4.X (SGLang)..."
+    
+    run_uv_install sglang==0.3.2.dev9039+pr-17247.g90c446848 --extra-index-url https://sgl-project.github.io/whl/pr/
+    run_uv_install git+https://github.com/huggingface/transformers.git@76732b4e7120808ff989edbd16401f61fa6a0afa
+}
 
-    run_uv_install "${packages[@]}"
+install_glm_transformers() {
+    print_info "Installing packages for GLM 4.X (Transformers)..."
+
+    run_uv_install git+https://github.com/huggingface/transformers.git@76732b4e7120808ff989edbd16401f61fa6a0afa
 }
 
 install_glm_vllm() {
-    print_info "Installing packages for GLM 4.5 (vLLM)..."
-    local packages=(
-        "transformers>=4.56.2"
-        "pre-commit>=4.2.0"
-        "accelerate>=1.10.1"
-        "vllm>=0.10.2"
-    )
-
-    run_uv_install "${packages[@]}"
-}
-
-install_glm_flash_vllm() {
-    print_info "Installing packages for GLM 4.7 Flash (vLLM)..."
+    print_info "Installing packages for GLM 4.X (vLLM)..."
     local packages=(
         "git+https://github.com/huggingface/transformers.git"
         "pre-commit>=4.2.0"
@@ -308,28 +296,28 @@ perform_environment_action() {
     ACTION_TAKEN=false
 
     case "$1" in
-        deepseek-v3-lmdeploy)
+        deepseek-lmdeploy)
             install_deepseek_lmdeploy || return 1
             ACTION_TAKEN=true
             ;;
-        deepseek-v3-sglang)
+        deepseek-sglang)
             install_deepseek_sglang || return 1
             ACTION_TAKEN=true
             ;;
-        deepseek-v3-vllm)
+        deepseek-vllm)
             install_deepseek_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        glm-4.5-sglang)
+        glm-sglang)
             install_glm_sglang || return 1
             ACTION_TAKEN=true
             ;;
-        glm-4.5-vllm)
-            install_glm_vllm || return 1
+        glm-transformers)
+            install_glm_transformers || return 1
             ACTION_TAKEN=true
             ;;
-        glm-4.7-flash-vllm_env)
-            install_glm_flash_vllm || return 1
+        glm-vllm)
+            install_glm_vllm || return 1
             ACTION_TAKEN=true
             ;;
         gpt-oss-transformers)
@@ -340,11 +328,11 @@ perform_environment_action() {
             install_gptoss_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        kimi-k2-sglang)
+        kimi-sglang)
             install_kimi_sglang || return 1
             ACTION_TAKEN=true
             ;;
-        kimi-k2-vllm)
+        kimi-vllm)
             install_kimi_vllm || return 1
             ACTION_TAKEN=true
             ;;

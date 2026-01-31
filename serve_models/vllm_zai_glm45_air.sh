@@ -3,7 +3,7 @@
 # GLM 4.5 Air vLLM Server Launcher
 
 echo ""
-echo "🚀 GLM 4.5 Inference Server Launcher"
+echo "GLM 4.5 Inference Server Launcher"
 
 MODEL_REPO="zai-org/GLM-4.5-Air"
 MODEL_NAME="glm-4.5-air"

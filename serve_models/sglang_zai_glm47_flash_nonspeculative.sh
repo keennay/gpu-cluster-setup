@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 
-# GLM 4.5 Air vLLM Server Launcher
+INFERENCE_PROVIDER="SGLang"
+MODEL_REPO="zai-org/GLM-4.7-Flash"
+MODEL_NAME="glm-4.7-flash"
+DEFAULT_TENSOR_PARALLEL_SIZE=2
+DEFAULT_PORT=8000
 
 echo ""
-echo "GLM 4.5 Inference Server Launcher"
-
-MODEL_REPO="zai-org/GLM-4.5-Air-Base"
-MODEL_NAME="glm-4.5-air"
-DEFAULT_TENSOR_PARALLEL_SIZE=8
-DEFAULT_PORT=8000
+echo "$MODEL_REPO $INFERENCE_PROVIDER Launcher"
 
 trap 'echo -e "\n\nServer stopped by user."; exit 0' INT
 
@@ -116,7 +115,7 @@ get_port() {
 
     if [ -n "$arg_value" ]; then
         if is_valid_port "$arg_value"; then
-            VLLM_PORT="$arg_value"
+            INFERENCE_PORT="$arg_value"
             return
         else
             echo "Invalid port '$arg_value'. Please provide a value between 1 and 65535."
@@ -127,17 +126,17 @@ get_port() {
     while true; do
         echo ""
         echo "============================================================"
-        echo "vLLM Server Port"
+        echo "$INFERENCE_PROVIDER Server Port"
         echo "============================================================"
         echo ""
 
-        read -r -p "Enter vLLM server port [default: ${DEFAULT_PORT}]: " port
+        read -r -p "Enter Inference Provider server port [default: ${DEFAULT_PORT}]: " port
 
         if [ -z "$port" ]; then
-            VLLM_PORT="$DEFAULT_PORT"
+            INFERENCE_PORT="$DEFAULT_PORT"
             break
         elif is_valid_port "$port"; then
-            VLLM_PORT="$port"
+            INFERENCE_PORT="$port"
             break
         else
             echo "Invalid port. Please enter a number between 1 and 65535."
@@ -151,7 +150,7 @@ main() {
 
     echo ""
     echo "============================================================"
-    echo "Starting vLLM Server"
+    echo "Starting $INFERENCE_PROVIDER Server"
     echo "============================================================"
     echo "Model: $MODEL_REPO"
     echo "Served as: $MODEL_NAME"
@@ -159,9 +158,9 @@ main() {
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "GPU selection: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE"
     fi
-    echo "Port: $VLLM_PORT"
+    echo "Port: $INFERENCE_PORT"
     echo ""
-    local base_command="vllm serve $MODEL_REPO --tensor-parallel-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm45 --reasoning-parser glm45 --enable-auto-tool-choice --served-model-name $MODEL_NAME --port $VLLM_PORT --api-key YOUR_API_KEY"
+    local base_command="python3 -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm47 --reasoning-parser glm45 --mem-fraction-static 0.8 --served-model-name $MODEL_NAME --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else
@@ -174,23 +173,9 @@ main() {
 
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_VALUE" \
-        vllm serve "$MODEL_REPO" \
-            --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
-            --tool-call-parser glm45 \
-            --reasoning-parser glm45 \
-            --enable-auto-tool-choice \
-            --served-model-name "$MODEL_NAME" \
-            --port "$VLLM_PORT" \
-            --api-key YOUR_API_KEY
+	$base_command
     else
-        vllm serve "$MODEL_REPO" \
-            --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
-            --tool-call-parser glm45 \
-            --reasoning-parser glm45 \
-            --enable-auto-tool-choice \
-            --served-model-name "$MODEL_NAME" \
-            --port "$VLLM_PORT" \
-            --api-key YOUR_API_KEY
+	$base_command
     fi
 }
 
