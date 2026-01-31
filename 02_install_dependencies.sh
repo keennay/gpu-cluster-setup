@@ -146,8 +146,8 @@ detect_os_package_manager() {
             return 1
         fi
         OS_TYPE="ubuntu"
-        PKG_INSTALL_CMD="${sudo_prefix}NEEDRESTART_MODE=l apt install -y"
-        PKG_UPDATE_CMD="${sudo_prefix}NEEDRESTART_MODE=l apt update"
+        PKG_INSTALL_CMD="${sudo_prefix}apt install -y"
+        PKG_UPDATE_CMD="${sudo_prefix}apt update"
         PKG_QUERY_CMD="dpkg -l"
         PKG_CLEAN_CMD="${sudo_prefix}apt clean"
         return 0
@@ -378,7 +378,6 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
         
         # Update package lists
         if [ "$OS_TYPE" = "ubuntu" ]; then
-            print_info "Note: Using NEEDRESTART_MODE=l to prevent automatic service restarts"
             $PKG_UPDATE_CMD
         elif [ "$OS_TYPE" = "rhel" ]; then
             $PKG_UPDATE_CMD

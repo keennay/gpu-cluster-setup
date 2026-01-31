@@ -42,7 +42,7 @@ detect_os_package_manager() {
             return 1
         fi
         OS_TYPE="ubuntu"
-        PKG_INSTALL_CMD="sudo NEEDRESTART_MODE=l apt install -y"
+        PKG_INSTALL_CMD="sudo apt install -y"
         return 0
     fi
 
