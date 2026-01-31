@@ -67,7 +67,7 @@ ensure_sudo_installed() {
 
     if [[ "$INSTALL_SUDO" =~ ^[Yy]$ ]]; then
         print_info "Installing sudo..."
-        if apt-get update && apt-get install -y sudo; then
+        if $PKG_UPDATE_CMD && $PKG_INSTALL_CMD sudo; then
             print_info "✓ sudo installed"
         else
             print_error "Failed to install sudo"
@@ -92,21 +92,99 @@ if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
     exit 0
 fi
 
+# OS/package manager detection
+OS_TYPE=""
+PKG_INSTALL_CMD=""
+PKG_UPDATE_CMD=""
+PKG_UPGRADE_CMD=""
+OS_ID=""
+OS_NAME=""
+OS_VERSION_ID=""
+
+detect_os_package_manager() {
+    if [ ! -f /etc/os-release ]; then
+        return 1
+    fi
+
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    OS_ID="$ID"
+    OS_NAME="$NAME"
+    OS_VERSION_ID="$VERSION_ID"
+    local version_major
+    version_major=$(echo "$VERSION_ID" | cut -d. -f1)
+
+    local sudo_prefix="sudo "
+    if [ "$(id -u)" -eq 0 ]; then
+        sudo_prefix=""
+    fi
+
+    if [ "$ID" = "ubuntu" ]; then
+        if [ "$version_major" -lt 22 ]; then
+            return 1
+        fi
+        OS_TYPE="ubuntu"
+        PKG_INSTALL_CMD="${sudo_prefix}NEEDRESTART_MODE=l apt install -y"
+        PKG_UPDATE_CMD="${sudo_prefix}NEEDRESTART_MODE=l apt update"
+        PKG_UPGRADE_CMD="${sudo_prefix}NEEDRESTART_MODE=l apt upgrade -y"
+        return 0
+    fi
+
+    if [[ "$ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
+        if [ "$version_major" -lt 9 ]; then
+            return 1
+        fi
+        OS_TYPE="rhel"
+        if command -v dnf &> /dev/null; then
+            PKG_INSTALL_CMD="${sudo_prefix}dnf install -y"
+            PKG_UPDATE_CMD="${sudo_prefix}dnf makecache"
+            PKG_UPGRADE_CMD="${sudo_prefix}dnf upgrade -y"
+        else
+            PKG_INSTALL_CMD="${sudo_prefix}yum install -y"
+            PKG_UPDATE_CMD="${sudo_prefix}yum makecache"
+            PKG_UPGRADE_CMD="${sudo_prefix}yum upgrade -y"
+        fi
+        return 0
+    fi
+
+    return 1
+}
+
 print_info "Initialization Script for Development Environment"
 echo ""
 
+print_info "Checking OS version..."
+if ! detect_os_package_manager; then
+    if [ ! -f /etc/os-release ]; then
+        print_error "Cannot determine OS version. /etc/os-release not found."
+    elif [ "$OS_ID" = "ubuntu" ]; then
+        print_error "This script requires Ubuntu 22.04 or newer. Detected: $OS_ID $OS_VERSION_ID"
+    elif [[ "$OS_ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
+        print_error "This script requires RHEL/Rocky/AlmaLinux 9 or newer. Detected: $OS_ID $OS_VERSION_ID"
+    else
+        print_error "Unsupported OS. This script supports Ubuntu 22.04+ and RHEL/Rocky/AlmaLinux 9+. Detected: $OS_ID $OS_VERSION_ID"
+    fi
+    exit 1
+fi
+
+if [ "$OS_TYPE" = "ubuntu" ]; then
+    print_info "✓ Ubuntu $OS_VERSION_ID detected"
+else
+    print_info "✓ $OS_NAME $OS_VERSION_ID detected"
+fi
+
 ensure_sudo_installed
 
-# Update Ubuntu
+# Update system packages
 if [ "$AUTO_YES" = true ]; then
     UPDATE_SYSTEM="y"
 else
-    read -p "Update system packages (apt-get update)? (y/n): " UPDATE_SYSTEM
+    read -p "Update system packages (package manager update)? (y/n): " UPDATE_SYSTEM
 fi
 
 if [[ "$UPDATE_SYSTEM" =~ ^[Yy]$ ]]; then
     print_info "Updating system packages..."
-    sudo apt-get update
+    $PKG_UPDATE_CMD
     if [ $? -ne 0 ]; then
         print_error "Failed to update packages"
         exit 1
@@ -118,16 +196,16 @@ fi
 
 echo ""
 
-# Upgrade Ubuntu
+# Upgrade system packages
 if [ "$AUTO_YES" = true ]; then
     UPGRADE_SYSTEM="y"
 else
-    read -p "Upgrade system packages (sudo apt-get upgrade)? This may take a while. (y/n): " UPGRADE_SYSTEM
+    read -p "Upgrade system packages (package manager upgrade)? This may take a while. (y/n): " UPGRADE_SYSTEM
 fi
 
 if [[ "$UPGRADE_SYSTEM" =~ ^[Yy]$ ]]; then
     print_info "Upgrading system packages..."
-    sudo apt-get upgrade -y
+    $PKG_UPGRADE_CMD
     if [ $? -ne 0 ]; then
         print_error "Failed to upgrade packages"
         exit 1
@@ -140,7 +218,11 @@ fi
 echo ""
 
 # Basic Linux essentials installed after upgrades to keep tooling current
-BASIC_LINUX_ESSENTIALS=(curl wget less vim nano tmux git git-lfs htop nvtop ripgrep)
+if [ "$OS_TYPE" = "ubuntu" ]; then
+    BASIC_LINUX_ESSENTIALS=(curl wget less vim nano tmux git git-lfs htop nvtop ripgrep)
+else
+    BASIC_LINUX_ESSENTIALS=(curl wget less vim-enhanced nano tmux git git-lfs htop nvtop ripgrep)
+fi
 if [ "$AUTO_YES" = true ]; then
     INSTALL_BASICS="y"
 else
@@ -149,7 +231,7 @@ fi
 
 if [[ "$INSTALL_BASICS" =~ ^[Yy]$ ]]; then
     print_info "Installing basic Linux essentials..."
-    if sudo apt-get install -y "${BASIC_LINUX_ESSENTIALS[@]}"; then
+    if $PKG_INSTALL_CMD "${BASIC_LINUX_ESSENTIALS[@]}"; then
         print_info "✓ Basic Linux essentials installed"
     else
         print_warning "Failed to install some basic Linux essentials"

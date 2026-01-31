@@ -112,47 +112,86 @@ AUTO_YES=false
 if [[ "$1" == "-y" ]]; then
     AUTO_YES=true
 fi
-# Check OS version first
-print_info "Checking OS version..."
-if [ ! -f /etc/os-release ]; then
-    print_error "Cannot determine OS version. /etc/os-release not found."
-    exit 1
-fi
-source /etc/os-release
-VERSION_MAJOR=$(echo $VERSION_ID | cut -d. -f1)
 
-# Detect OS type and set package manager
+# OS/package manager detection
 OS_TYPE=""
-PKG_MANAGER=""
 PKG_INSTALL_CMD=""
 PKG_UPDATE_CMD=""
 PKG_QUERY_CMD=""
+PKG_CLEAN_CMD=""
+OS_ID=""
+OS_NAME=""
+OS_VERSION_ID=""
 
-if [ "$ID" = "ubuntu" ]; then
-    if [ "$VERSION_MAJOR" -lt 22 ]; then
-        print_error "This script requires Ubuntu 22.04 or newer. Detected: $ID $VERSION_ID"
-        exit 1
+detect_os_package_manager() {
+    if [ ! -f /etc/os-release ]; then
+        return 1
     fi
-    OS_TYPE="ubuntu"
-    PKG_MANAGER="apt"
-    PKG_INSTALL_CMD="sudo NEEDRESTART_MODE=l apt install -y"
-    PKG_UPDATE_CMD="sudo NEEDRESTART_MODE=l apt update"
-    PKG_QUERY_CMD="dpkg -l"
-    print_info "✓ Ubuntu $VERSION_ID detected"
-elif [[ "$ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
-    if [ "$VERSION_MAJOR" -lt 9 ]; then
-        print_error "This script requires RHEL/Rocky/AlmaLinux 9 or newer. Detected: $ID $VERSION_ID"
-        exit 1
+
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    OS_ID="$ID"
+    OS_NAME="$NAME"
+    OS_VERSION_ID="$VERSION_ID"
+    local version_major
+    version_major=$(echo "$VERSION_ID" | cut -d. -f1)
+
+    local sudo_prefix="sudo "
+    if [ "$(id -u)" -eq 0 ]; then
+        sudo_prefix=""
     fi
-    OS_TYPE="rhel"
-    PKG_MANAGER="dnf"
-    PKG_INSTALL_CMD="sudo dnf install -y"
-    PKG_UPDATE_CMD="sudo dnf makecache"
-    PKG_QUERY_CMD="rpm -qa"
-    print_info "✓ $NAME $VERSION_ID detected"
-else
-    print_error "Unsupported OS. This script supports Ubuntu 22.04+ and RHEL/Rocky/AlmaLinux 9+. Detected: $ID $VERSION_ID"
+
+    if [ "$ID" = "ubuntu" ]; then
+        if [ "$version_major" -lt 22 ]; then
+            return 1
+        fi
+        OS_TYPE="ubuntu"
+        PKG_INSTALL_CMD="${sudo_prefix}NEEDRESTART_MODE=l apt install -y"
+        PKG_UPDATE_CMD="${sudo_prefix}NEEDRESTART_MODE=l apt update"
+        PKG_QUERY_CMD="dpkg -l"
+        PKG_CLEAN_CMD="${sudo_prefix}apt clean"
+        return 0
+    fi
+
+    if [[ "$ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
+        if [ "$version_major" -lt 9 ]; then
+            return 1
+        fi
+        OS_TYPE="rhel"
+        if command -v dnf &> /dev/null; then
+            PKG_INSTALL_CMD="${sudo_prefix}dnf install -y"
+            PKG_UPDATE_CMD="${sudo_prefix}dnf makecache"
+            PKG_CLEAN_CMD="${sudo_prefix}dnf clean all"
+        else
+            PKG_INSTALL_CMD="${sudo_prefix}yum install -y"
+            PKG_UPDATE_CMD="${sudo_prefix}yum makecache"
+            PKG_CLEAN_CMD="${sudo_prefix}yum clean all"
+        fi
+        PKG_QUERY_CMD="rpm -qa"
+        return 0
+    fi
+
+    return 1
+}
+
+print_info "Checking OS version..."
+if ! detect_os_package_manager; then
+    if [ ! -f /etc/os-release ]; then
+        print_error "Cannot determine OS version. /etc/os-release not found."
+    elif [ "$OS_ID" = "ubuntu" ]; then
+        print_error "This script requires Ubuntu 22.04 or newer. Detected: $OS_ID $OS_VERSION_ID"
+    elif [[ "$OS_ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
+        print_error "This script requires RHEL/Rocky/AlmaLinux 9 or newer. Detected: $OS_ID $OS_VERSION_ID"
+    else
+        print_error "Unsupported OS. This script supports Ubuntu 22.04+ and RHEL/Rocky/AlmaLinux 9+. Detected: $OS_ID $OS_VERSION_ID"
+    fi
     exit 1
+fi
+
+if [ "$OS_TYPE" = "ubuntu" ]; then
+    print_info "✓ Ubuntu $OS_VERSION_ID detected"
+else
+    print_info "✓ $OS_NAME $OS_VERSION_ID detected"
 fi
 echo ""
 # Check disk space
@@ -161,7 +200,9 @@ AVAILABLE_SPACE=$(df -BG /var | awk 'NR==2 {print $4}' | sed 's/G//')
 if [ "$AVAILABLE_SPACE" -lt 5 ]; then
     print_error "Low disk space: ${AVAILABLE_SPACE}GB available on /var"
     print_error "At least 5GB recommended for package installation"
-    print_info "Free up space with: sudo apt clean"
+    if [ -n "$PKG_CLEAN_CMD" ]; then
+        print_info "Free up space with: $PKG_CLEAN_CMD"
+    fi
     exit 1
 else
     print_info "✓ Disk space: ${AVAILABLE_SPACE}GB available"
@@ -314,39 +355,41 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
         print_info "Installing missing packages..."
         echo ""
         
-        # Clean apt cache first if low on space
+        # Clean package cache first if low on space
         if [ "$AVAILABLE_SPACE" -lt 10 ]; then
             if [ "$AUTO_YES" = true ]; then
                 CLEAN_CACHE="y"
             else
-                print_warning "Low disk space (${AVAILABLE_SPACE}GB). Clean apt cache to free space?"
-                read -p "Clean apt cache? (y/n): " CLEAN_CACHE
+                print_warning "Low disk space (${AVAILABLE_SPACE}GB). Clean package cache to free space?"
+                read -p "Clean package cache? (y/n): " CLEAN_CACHE
             fi
             
             if [[ "$CLEAN_CACHE" =~ ^[Yy]$ ]]; then
-                print_info "Cleaning apt cache to free space..."
-                sudo apt clean
+                print_info "Cleaning package cache to free space..."
+                if [ -n "$PKG_CLEAN_CMD" ]; then
+                    $PKG_CLEAN_CMD
+                else
+                    print_warning "No package cache clean command available for this OS"
+                fi
             else
-                print_warning "Proceeding without cleaning apt cache - installation may fail if space runs out"
+                print_warning "Proceeding without cleaning package cache - installation may fail if space runs out"
             fi
         fi
         
         # Update package lists
         if [ "$OS_TYPE" = "ubuntu" ]; then
             print_info "Note: Using NEEDRESTART_MODE=l to prevent automatic service restarts"
-            sudo NEEDRESTART_MODE=l apt update
+            $PKG_UPDATE_CMD
         elif [ "$OS_TYPE" = "rhel" ]; then
-            sudo dnf makecache
+            $PKG_UPDATE_CMD
         fi
         
         if [ $? -ne 0 ]; then
             print_error "Package update failed - check your internet connection and disk space"
             INSTALL_SUCCESS=false
         else
-            if [ "$OS_TYPE" = "ubuntu" ]; then
-                sudo NEEDRESTART_MODE=l apt install -y ${MISSING_PACKAGES[*]}
-            elif [ "$OS_TYPE" = "rhel" ]; then
-                sudo dnf install -y ${MISSING_PACKAGES[*]}
+            if [ -n "$PKG_INSTALL_CMD" ]; then
+                $PKG_INSTALL_CMD ${MISSING_PACKAGES[*]}
             fi
             
             if [ $? -ne 0 ]; then
@@ -378,7 +421,7 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
                 if [[ "$INSTALL_GPP" =~ ^[Yy]$ ]]; then
                     print_info "Installing g++-$GCC_VERSION to match gcc-$GCC_VERSION..."
                     if [ "$OS_TYPE" = "ubuntu" ]; then
-                        if sudo NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
+                        if $PKG_INSTALL_CMD g++-$GCC_VERSION; then
                             print_info "✓ g++-$GCC_VERSION installed"
                             
                             # Ask about setting as default
@@ -608,15 +651,15 @@ echo ""
                         fi
 
                         if [ "$APT_UPDATED" = false ]; then
-                            print_info "Updating apt package index before CUDA installation..."
-                            if ! sudo NEEDRESTART_MODE=l apt update; then
-                                print_warning "apt update failed; CUDA installation may require manual dependency resolution"
+                            print_info "Updating package index before CUDA installation..."
+                            if ! $PKG_UPDATE_CMD; then
+                                print_warning "Package index update failed; CUDA installation may require manual dependency resolution"
                             fi
                             APT_UPDATED=true
                         fi
 
                         print_info "Installing CUDA toolkit package..."
-                        if sudo NEEDRESTART_MODE=l apt install -y "$CUDA_DEB_FILE"; then
+                        if $PKG_INSTALL_CMD "$CUDA_DEB_FILE"; then
                             print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
                             CUDA_INSTALLED=true
                         else
@@ -657,15 +700,15 @@ echo ""
                         fi
 
                         if [ "$DNF_REFRESHED" = false ]; then
-                            print_info "Refreshing dnf metadata before CUDA installation..."
-                            if ! dnf makecache; then
-                                print_warning "dnf makecache failed; CUDA installation may require manual dependency resolution"
+                            print_info "Refreshing package metadata before CUDA installation..."
+                            if ! $PKG_UPDATE_CMD; then
+                                print_warning "Package metadata refresh failed; CUDA installation may require manual dependency resolution"
                             fi
                             DNF_REFRESHED=true
                         fi
 
                         print_info "Installing CUDA toolkit package..."
-                        if dnf install -y "$CUDA_RPM_FILE"; then
+                        if $PKG_INSTALL_CMD "$CUDA_RPM_FILE"; then
                             print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
                             CUDA_INSTALLED=true
                         else

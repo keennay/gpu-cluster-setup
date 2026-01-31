@@ -33,6 +33,7 @@ ENV_TYPES=(
   "kimi-ktransformers"
   "kimi-sglang"
   "kimi-vllm"
+  "minimax-ktransformers"
   "minimax-sglang"
   "minimax-transformers"
   "minimax-vllm"
@@ -53,6 +54,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["kimi-ktransformers"]="Kimi K2.X (KTransformers)"
   ["kimi-sglang"]="Kimi K2.X (SGLang)"
   ["kimi-vllm"]="Kimi K2.X (vLLM)"
+  ["minimax-ktransformers"]="MiniMax-M2.X (KTransformers)"
   ["minimax-sglang"]="MiniMax-M2.X (SGLang)"
   ["minimax-transformers"]="MiniMax-M2.X (Transformers)"
   ["minimax-vllm"]="MiniMax-M2.X (vLLM)"
@@ -96,22 +98,25 @@ resolve_env_type() {
         11|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        12|minimax_sglang|minimax-sglang)
+        12|minimax_ktransformers|minimax-ktransformers)
+            echo "minimax-ktransformers"
+            ;;
+        13|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        13|minimax_transformers|minimax-transformers)
+        14|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        14|minimax_vllm|minimax-vllm)
+        15|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        15|qwen3_sglang|qwen3-sglang)
+        16|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        16|qwen3_transformers|qwen3-transformers)
+        17|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        17|qwen3_vllm|qwen3-vllm)
+        18|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
         *)
@@ -230,7 +235,14 @@ install_glm_vllm() {
 
 install_deepseek_lmdeploy() {
     print_info "Installing LMDeploy for DeepSeek..."
-    local target_dir="${LMDEPLOY_DIR:-$HOME/lmdeploy}"
+    local target_dir=""
+    if [ -n "${LMDEPLOY_DIR:-}" ]; then
+        target_dir="$LMDEPLOY_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        target_dir="$VIRTUAL_ENV/lmdeploy"
+    else
+        target_dir="$HOME/lmdeploy"
+    fi
 
     if [ -d "$target_dir/.git" ]; then
         print_info "Updating existing repository at $target_dir"
@@ -238,6 +250,11 @@ install_deepseek_lmdeploy() {
         run_command git -C "$target_dir" checkout support-dsv3 || return 1
         run_command git -C "$target_dir" pull --ff-only || return 1
     else
+        local parent_dir
+        parent_dir=$(dirname "$target_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
         run_command git clone -b support-dsv3 https://github.com/InternLM/lmdeploy.git "$target_dir" || return 1
     fi
 
@@ -268,13 +285,79 @@ install_gptoss_vllm() {
 }
 
 install_kimi_sglang() {
-    print_info "Installing SGLang for Kimi K2..."
+    print_info "Installing SGLang for Kimi K2.X..."
     run_uv_install sglang
 }
 
 install_kimi_vllm() {
-    print_info "Installing vLLM for Kimi K2..."
+    print_info "Installing vLLM for Kimi K2.X..."
     run_uv_install "vllm>=0.10.0rc1"
+}
+
+install_minimax_ktransformers() {
+    print_info "Installing KTransformers for MiniMax-M2.X..."
+
+    local target_dir=""
+    if [ -n "${KTRANSFORMERS_DIR:-}" ]; then
+        target_dir="$KTRANSFORMERS_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        target_dir="$VIRTUAL_ENV/ktransformers"
+    else
+        target_dir="$HOME/ktransformers"
+    fi
+
+    if [ -d "$target_dir/.git" ]; then
+        print_info "Updating existing repository at $target_dir"
+        run_command git -C "$target_dir" fetch origin || return 1
+        run_command git -C "$target_dir" pull --ff-only || return 1
+    else
+        local parent_dir
+        parent_dir=$(dirname "$target_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/kvcache-ai/sglang.git "$target_dir" || return 1
+    fi
+
+    run_uv_install -e "$target_dir/python[all]"
+}
+
+install_minimax_sglang() {
+    print_info "Installing SGLang for MiniMax-M2.X..."
+
+    local target_dir=""
+    if [ -n "${SGLANG_DIR:-}" ]; then
+        target_dir="$SGLANG_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        target_dir="$VIRTUAL_ENV/sglang"
+    else
+        target_dir="$HOME/sglang"
+    fi
+
+    if [ -d "$target_dir/.git" ]; then
+        print_info "Updating existing repository at $target_dir"
+        run_command git -C "$target_dir" fetch origin || return 1
+        run_command git -C "$target_dir" pull --ff-only || return 1
+    else
+        local parent_dir
+        parent_dir=$(dirname "$target_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/sgl-project/sglang "$target_dir" || return 1
+    fi
+
+    run_uv_install -e "$target_dir/python" --prerelease=allow
+}
+
+install_minimax_transformers() {
+    print_info "Installing Transformers for MiniMax-M2.X..."
+    run_uv_install "transformers==4.57.1" "torch" "accelerate" "--torch-backend=auto"
+}
+
+install_minimax_vllm() {
+    print_info "Installing vLLM for MiniMax-M2.X..."
+    run_uv_install -U vllm --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 install_qwen3_sglang() {
@@ -334,6 +417,22 @@ perform_environment_action() {
             ;;
         kimi-vllm)
             install_kimi_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        minimax-ktransformers)
+            install_minimax_ktransformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        minimax-sglang)
+            install_minimax_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        minimax-transformers)
+            install_minimax_transformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        minimax-vllm)
+            install_minimax_vllm || return 1
             ACTION_TAKEN=true
             ;;
         qwen3-sglang)

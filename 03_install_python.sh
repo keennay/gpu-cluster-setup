@@ -23,6 +23,73 @@ fi
 
 NEEDS_PATH_UPDATE=false
 
+# OS/package manager detection for python-dev installation
+OS_TYPE=""
+PKG_INSTALL_CMD=""
+
+detect_os_package_manager() {
+    if [ ! -f /etc/os-release ]; then
+        return 1
+    fi
+
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    local version_major
+    version_major=$(echo "$VERSION_ID" | cut -d. -f1)
+
+    if [ "$ID" = "ubuntu" ]; then
+        if [ "$version_major" -lt 22 ]; then
+            return 1
+        fi
+        OS_TYPE="ubuntu"
+        PKG_INSTALL_CMD="sudo NEEDRESTART_MODE=l apt install -y"
+        return 0
+    fi
+
+    if [[ "$ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
+        if [ "$version_major" -lt 9 ]; then
+            return 1
+        fi
+        OS_TYPE="rhel"
+        if command -v dnf &> /dev/null; then
+            PKG_INSTALL_CMD="sudo dnf install -y"
+        else
+            PKG_INSTALL_CMD="sudo yum install -y"
+        fi
+        return 0
+    fi
+
+    return 1
+}
+
+get_python_major_minor() {
+    local version="$1"
+    if [[ "$version" =~ ^([0-9]+)\.([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+        return 0
+    fi
+    return 1
+}
+
+is_python_dev_installed() {
+    local pkg="$1"
+    if [ -z "$pkg" ]; then
+        return 1
+    fi
+
+    if [ "$OS_TYPE" = "ubuntu" ]; then
+        dpkg -s "$pkg" &> /dev/null
+        return $?
+    fi
+
+    if [ "$OS_TYPE" = "rhel" ]; then
+        rpm -q "$pkg" &> /dev/null
+        return $?
+    fi
+
+    return 1
+}
+
 # Function to reload shell environment
 reload_shell_env() {
     # Source bashrc to get latest PATH
@@ -47,6 +114,12 @@ reload_shell_env() {
 
 # Initial environment load
 reload_shell_env
+
+if detect_os_package_manager; then
+    print_info "✓ OS detected for python-dev install: $OS_TYPE"
+else
+    print_warning "OS not supported for python-dev installation prompts; will skip python-dev installation."
+fi
 
 print_info "Checking pyenv availability..."
 if command -v pyenv &> /dev/null; then
@@ -323,6 +396,53 @@ else
 fi
 
 echo ""
+
+# Step 2.5: Optionally install python-dev package
+PYTHON_DEV_VERSION=""
+PYTHON_DEV_PACKAGE=""
+
+if [ "$PYTHON_PRESENT" = true ] && [ -n "$CURRENT_PYTHON_VERSION" ]; then
+    PYTHON_DEV_VERSION=$(get_python_major_minor "$CURRENT_PYTHON_VERSION")
+fi
+
+if [ -n "$PYTHON_DEV_VERSION" ] && [ -n "$OS_TYPE" ]; then
+    if [ "$OS_TYPE" = "ubuntu" ]; then
+        PYTHON_DEV_PACKAGE="python${PYTHON_DEV_VERSION}-dev"
+    elif [ "$OS_TYPE" = "rhel" ]; then
+        PYTHON_DEV_PACKAGE="python${PYTHON_DEV_VERSION}-devel"
+    fi
+fi
+
+if [ -n "$PYTHON_DEV_PACKAGE" ]; then
+    if is_python_dev_installed "$PYTHON_DEV_PACKAGE"; then
+        print_info "✓ $PYTHON_DEV_PACKAGE already installed"
+    else
+        INSTALL_PYTHON_DEV=""
+        if [ "$AUTO_YES" = true ]; then
+            INSTALL_PYTHON_DEV="y"
+            print_info "Automatic mode enabled (-y): installing $PYTHON_DEV_PACKAGE"
+        else
+            read -p "Install $PYTHON_DEV_PACKAGE? (y/n): " INSTALL_PYTHON_DEV
+        fi
+
+        if [[ "$INSTALL_PYTHON_DEV" =~ ^[Yy]$ ]]; then
+            print_info "Installing $PYTHON_DEV_PACKAGE..."
+            if $PKG_INSTALL_CMD "$PYTHON_DEV_PACKAGE"; then
+                print_info "✓ $PYTHON_DEV_PACKAGE installed"
+            else
+                print_warning "Failed to install $PYTHON_DEV_PACKAGE"
+            fi
+        else
+            print_info "Skipped $PYTHON_DEV_PACKAGE installation."
+        fi
+    fi
+else
+    if [ "$PYTHON_PRESENT" = true ] && [ -n "$CURRENT_PYTHON_VERSION" ]; then
+        print_warning "Unable to determine python-dev package for version $CURRENT_PYTHON_VERSION; skipping."
+    else
+        print_info "No Python version detected; skipping python-dev installation prompt."
+    fi
+fi
 
 # Step 3: Check and install uv
 print_info "Checking uv..."
