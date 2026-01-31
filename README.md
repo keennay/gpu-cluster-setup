@@ -4,9 +4,9 @@
 For this, it's assumed your working directory is either `/` or `/workspace`. Edit as needed.
 
 ### 2. Run the below:
-#### Cluster with Root user:
+#### GPU Instance with Root user (For ex: Runpod):
 `mkdir -p /workspace ; cd /workspace ; git clone https://github.com/keennay/gpu-cluster-setup.git ; mv gpu-cluster-setup scripts ; cd scripts`<br>
-#### Cluster with Ubuntu user:
+#### GPU Instance with Ubuntu user (For ex: Prime Intellect):
 `sudo mkdir -p /workspace ; sudo chown -R ubuntu:ubuntu /workspace ; cd /workspace ; git clone https://github.com/keennay/gpu-cluster-setup.git ; mv gpu-cluster-setup scripts ; cd scripts`<br>
 #### Remaining:
 `./01_init.sh`<br>
