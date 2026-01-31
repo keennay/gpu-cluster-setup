@@ -4,7 +4,11 @@
 For this, it's assumed your working directory is either `/` or `/workspace`. Edit as needed.
 
 ### 2. Run the below:
-`mkdir -p /workspace ; cd /workspace ; git clone https://github.com/keennay/gpu-cluster-setup.git ; mv gpu-cluster-setup scripts ; cd scripts`<br><br>
+#### Cluster with Root user:
+`mkdir -p /workspace ; cd /workspace ; git clone https://github.com/keennay/gpu-cluster-setup.git ; mv gpu-cluster-setup scripts ; cd scripts`<br>
+#### Cluster with Ubuntu user:
+`sudo mkdir -p /workspace ; sudo chown -R ubuntu:ubuntu /workspace ; cd /workspace ; git clone https://github.com/keennay/gpu-cluster-setup.git ; mv gpu-cluster-setup scripts ; cd scripts`<br>
+#### Remaining:
 `./01_init.sh`<br>
 `./02_install_dependencies.sh`<br>
 `./03_install_python.sh`<br>
