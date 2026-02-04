@@ -160,7 +160,7 @@ main() {
     fi
     echo "Port: $INFERENCE_PORT"
     echo ""
-    local base_command="sglang serve --model-path $MODEL_REPO --tp $TENSOR_PARALLEL_SIZE --trust-remote-code --tool-call-parser $MODEL_NAME --reasoning-parser $MODEL_NAME --mem-fraction-static 0.95 --context-length 131072 --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
+    local base_command="sglang serve --model-path $MODEL_REPO --tp $TENSOR_PARALLEL_SIZE --trust-remote-code --tool-call-parser $MODEL_NAME --reasoning-parser $MODEL_NAME --mem-fraction-static 0.95 --context-length 50000 --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else
