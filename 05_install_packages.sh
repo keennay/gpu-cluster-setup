@@ -284,14 +284,18 @@ install_gptoss_vllm() {
         --index-strategy unsafe-best-match
 }
 
+install_kimi_ktransformers() {
+    print_info "Installing KTransformers for Kimi K2.X..."
+}
 install_kimi_sglang() {
     print_info "Installing SGLang for Kimi K2.X..."
-    run_uv_install sglang
+    run_uv_install "sglang @ git+https://github.com/sgl-project/sglang.git#subdirectory=python"
+    run_uv_install nvidia-cudnn-cu12==9.16.0.29
 }
 
 install_kimi_vllm() {
     print_info "Installing vLLM for Kimi K2.X..."
-    run_uv_install "vllm>=0.10.0rc1"
+    run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 install_minimax_ktransformers() {
@@ -409,6 +413,10 @@ perform_environment_action() {
             ;;
         gpt-oss-vllm)
             install_gptoss_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        kimi-ktransformers)
+            install_kimi_ktransformers || return 1
             ACTION_TAKEN=true
             ;;
         kimi-sglang)
