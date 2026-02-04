@@ -355,8 +355,9 @@ if command -v npm &> /dev/null; then
     print_info "  2. Claude Code Router (@musistudio/claude-code-router)"
     print_info "  3. Gemini CLI (@google/gemini-cli)"
     print_info "  4. OpenAI Codex (@openai/codex)"
-    print_info "  5. Qwen Code (@qwen-code/qwen-code)"
-    print_info "  6. OpenCode AI (opencode-ai)"
+    print_info "  5. Kimi-CLI (curl installer)"
+    print_info "  6. Qwen Code (@qwen-code/qwen-code)"
+    print_info "  7. OpenCode AI (opencode-ai)"
     echo ""
     
     if [ "$AUTO_YES" = true ]; then
@@ -438,6 +439,45 @@ if command -v npm &> /dev/null; then
             print_info "Installing OpenAI Codex..."
             npm install -g @openai/codex
             [ $? -eq 0 ] && print_info "✓ OpenAI Codex installed" || print_warning "Failed to install OpenAI Codex"
+        fi
+
+        # Kimi-CLI
+        if [ "$AUTO_YES" = true ]; then
+            INSTALL_KIMI="y"
+        else
+            read -p "  Install Kimi-CLI? (y/n): " INSTALL_KIMI
+        fi
+        if [[ "$INSTALL_KIMI" =~ ^[Yy]$ ]]; then
+            print_info "Installing Kimi-CLI..."
+            curl -LsSf https://code.kimi.com/install.sh | bash
+            if [ $? -eq 0 ]; then
+                print_info "✓ Kimi-CLI installed"
+
+                KIMI_CONFIG_SOURCE="$(dirname "$0")/configs/.kimi"
+                KIMI_CONFIG_TARGET="$HOME/.kimi"
+
+                if [ -d "$KIMI_CONFIG_SOURCE" ]; then
+                    if [ "$AUTO_YES" = true ]; then
+                        COPY_KIMI_CONFIG="y"
+                    else
+                        read -p "  Copy Kimi config directory to $KIMI_CONFIG_TARGET? (y/n): " COPY_KIMI_CONFIG
+                    fi
+                    if [[ "$COPY_KIMI_CONFIG" =~ ^[Yy]$ ]]; then
+                        print_info "Setting up Kimi config..."
+                        mkdir -p "$KIMI_CONFIG_TARGET"
+                        cp -r "$KIMI_CONFIG_SOURCE"/. "$KIMI_CONFIG_TARGET"/
+                        if [ $? -eq 0 ]; then
+                            print_info "✓ Kimi config copied to $KIMI_CONFIG_TARGET"
+                        else
+                            print_warning "Failed to copy Kimi config"
+                        fi
+                    fi
+                else
+                    print_warning "Kimi config directory not found at $KIMI_CONFIG_SOURCE"
+                fi
+            else
+                print_warning "Failed to install Kimi-CLI"
+            fi
         fi
         
         # Qwen Code

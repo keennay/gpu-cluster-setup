@@ -286,6 +286,70 @@ install_gptoss_vllm() {
 
 install_kimi_ktransformers() {
     print_info "Installing KTransformers for Kimi K2.X..."
+
+    local ktransformers_dir=""
+    if [ -n "${KTRANSFORMERS_DIR:-}" ]; then
+        ktransformers_dir="$KTRANSFORMERS_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        ktransformers_dir="$VIRTUAL_ENV/ktransformers"
+    else
+        ktransformers_dir="$HOME/ktransformers"
+    fi
+
+    if [ -d "$ktransformers_dir/.git" ]; then
+        print_info "Updating existing repository at $ktransformers_dir"
+        run_command git -C "$ktransformers_dir" fetch origin || return 1
+        run_command git -C "$ktransformers_dir" checkout kimi_k2.5 || return 1
+        run_command git -C "$ktransformers_dir" pull --ff-only || return 1
+    else
+        local parent_dir
+        parent_dir=$(dirname "$ktransformers_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/kvcache-ai/ktransformers.git "$ktransformers_dir" || return 1
+        run_command git -C "$ktransformers_dir" checkout kimi_k2.5 || return 1
+    fi
+
+    run_command git -C "$ktransformers_dir" submodule update --init --recursive || return 1
+
+    if [ -d "$ktransformers_dir/kt-kernel" ]; then
+        # kt-kernel install script calls python -m pip; ensure pip exists in uv venvs.
+        run_uv_install pip || return 1
+        run_command bash -c "cd \"$ktransformers_dir/kt-kernel\" && ./install.sh" || return 1
+    else
+        print_warning "kt-kernel directory not found at $ktransformers_dir/kt-kernel"
+        return 1
+    fi
+
+    print_info "Installing SGLang for Kimi K2.X..."
+
+    local sglang_dir=""
+    if [ -n "${SGLANG_DIR:-}" ]; then
+        sglang_dir="$SGLANG_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        sglang_dir="$VIRTUAL_ENV/sglang"
+    else
+        sglang_dir="$HOME/sglang"
+    fi
+
+    if [ -d "$sglang_dir/.git" ]; then
+        print_info "Updating existing repository at $sglang_dir"
+        run_command git -C "$sglang_dir" fetch origin || return 1
+        run_command git -C "$sglang_dir" checkout kimi_k2.5 || return 1
+        run_command git -C "$sglang_dir" pull --ff-only || return 1
+    else
+        local parent_dir
+        parent_dir=$(dirname "$sglang_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/kvcache-ai/sglang.git "$sglang_dir" || return 1
+        run_command git -C "$sglang_dir" checkout kimi_k2.5 || return 1
+    fi
+
+    run_uv_install -e "$sglang_dir/python[all]" || return 1
+    run_uv_install nvidia-cudnn-cu12==9.16.0.29 || return 1
 }
 install_kimi_sglang() {
     print_info "Installing SGLang for Kimi K2.X..."
