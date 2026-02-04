@@ -160,7 +160,7 @@ main() {
     fi
     echo "Port: $INFERENCE_PORT"
     echo ""
-    local base_command="vllm serve $MODEL_REPO --tensor-parallel-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm47 --reasoning-parser glm45 --enable-auto-tool-choice --served-model-name $MODEL_NAME --gpu-memory-utilization 0.95 --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
+    local base_command="vllm serve $MODEL_REPO --tensor-parallel-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm47 --reasoning-parser glm45 --enable-auto-tool-choice --served-model-name $MODEL_NAME --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else

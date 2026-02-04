@@ -160,7 +160,7 @@ main() {
     fi
     echo "Port: $INFERENCE_PORT"
     echo ""
-    local base_command="python3 -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm47 --reasoning-parser glm45 --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --mem-fraction-static 0.95 --served-model-name $MODEL_NAME --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
+    local base_command="python3 -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm47 --reasoning-parser glm45 --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --served-model-name $MODEL_NAME --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else
