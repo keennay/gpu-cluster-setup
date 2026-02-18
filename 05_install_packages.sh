@@ -296,19 +296,13 @@ install_kimi_ktransformers() {
         ktransformers_dir="$HOME/ktransformers"
     fi
 
-    if [ -d "$ktransformers_dir/.git" ]; then
-        print_info "Updating existing repository at $ktransformers_dir"
-        run_command git -C "$ktransformers_dir" fetch origin || return 1
-        run_command git -C "$ktransformers_dir" checkout kimi_k2.5 || return 1
-        run_command git -C "$ktransformers_dir" pull --ff-only || return 1
-    else
-        local parent_dir
+    if [ ! -d "$ktransformers_dir/.git" ]; then
+	local parent_dir
         parent_dir=$(dirname "$ktransformers_dir")
         if [ ! -d "$parent_dir" ]; then
             run_command mkdir -p "$parent_dir" || return 1
         fi
         run_command git clone https://github.com/kvcache-ai/ktransformers.git "$ktransformers_dir" || return 1
-        run_command git -C "$ktransformers_dir" checkout kimi_k2.5 || return 1
     fi
 
     run_command git -C "$ktransformers_dir" submodule update --init --recursive || return 1
@@ -333,19 +327,13 @@ install_kimi_ktransformers() {
         sglang_dir="$HOME/sglang"
     fi
 
-    if [ -d "$sglang_dir/.git" ]; then
-        print_info "Updating existing repository at $sglang_dir"
-        run_command git -C "$sglang_dir" fetch origin || return 1
-        run_command git -C "$sglang_dir" checkout kimi_k2.5 || return 1
-        run_command git -C "$sglang_dir" pull --ff-only || return 1
-    else
+    if [ ! -d "$sglang_dir/.git" ]; then
         local parent_dir
         parent_dir=$(dirname "$sglang_dir")
         if [ ! -d "$parent_dir" ]; then
             run_command mkdir -p "$parent_dir" || return 1
         fi
         run_command git clone https://github.com/kvcache-ai/sglang.git "$sglang_dir" || return 1
-        run_command git -C "$sglang_dir" checkout kimi_k2.5 || return 1
     fi
 
     run_uv_install -e "$sglang_dir/python[all]" || return 1

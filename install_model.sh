@@ -493,7 +493,7 @@ try:
     local_path = snapshot_download(
         repo_id=model_name,
         cache_dir=os.environ['HF_HOME'],
-        max_workers=4,
+        max_workers=8,
         force_download=False,  # This allows resuming
         local_files_only=False
     )
