@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-INFERENCE_PROVIDER="vLLM"
-MODEL_REPO="MiniMaxAI/MiniMax-M2.1"
-MODEL_NAME="minimax_m2"
+INFERENCE_PROVIDER="SGLang"
+MODEL_REPO="MiniMaxAI/MiniMax-M2.5"
+MODEL_NAME="minimax-m2"
 DEFAULT_TENSOR_PARALLEL_SIZE=4
 DEFAULT_PORT=8000
 
@@ -160,7 +160,7 @@ main() {
     fi
     echo "Port: $INFERENCE_PORT"
     echo ""
-    local base_command="env SAFETENSORS_FAST_GPU=1 vllm serve $MODEL_REPO --trust-remote-code --tensor-parallel-size $TENSOR_PARALLEL_SIZE --enable-auto-tool-choice --tool-call-parser $MODEL_NAME --reasoning-parser minimax_m2_append_think --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
+    local base_command="python -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser $MODEL_NAME --reasoning-parser minimax-append-think --host 0.0.0.0 --trust-remote-code --port $INFERENCE_PORT --api-key YOUR_API_KEY"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else
