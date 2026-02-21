@@ -434,7 +434,7 @@ install_qwen3_transformers() {
 
 install_qwen3_vllm() {
     print_info "Installing vLLM for Qwen3..."
-    run_uv_install "vllm>=0.8.5"
+    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 perform_environment_action() {
