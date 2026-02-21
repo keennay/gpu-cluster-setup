@@ -342,6 +342,11 @@ install_kimi_ktransformers() {
 install_kimi_sglang() {
     print_info "Installing SGLang for Kimi K2.X..."
     run_uv_install "sglang @ git+https://github.com/sgl-project/sglang.git#subdirectory=python"
+    run_uv_install remote_pdb
+    run_uv_install imageio
+    run_uv_install diffusers
+    run_uv_install addict
+    run_uv_install cache_dit
     run_uv_install nvidia-cudnn-cu12==9.16.0.29
 }
 
@@ -418,7 +423,8 @@ install_minimax_vllm() {
 
 install_qwen3_sglang() {
     print_info "Installing SGLang for Qwen3..."
-    run_uv_install "sglang[all]>=0.4.6.post1"
+    run_uv_install "git+https://github.com/sgl-project/sglang.git#subdirectory=python&egg=sglang[all]"
+    run_uv_install nvidia-cudnn-cu12==9.16.0.29
 }
 
 install_qwen3_transformers() {

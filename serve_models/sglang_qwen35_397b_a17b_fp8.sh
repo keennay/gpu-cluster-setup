@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 INFERENCE_PROVIDER="SGLang"
-MODEL_REPO="zai-org/GLM-4.7-FP8"
-MODEL_NAME="glm-4.7-fp8"
+MODEL_REPO="Qwen/Qwen3.5-397B-A17B-FP8"
+MODEL_NAME="qwen3"
 DEFAULT_TENSOR_PARALLEL_SIZE=8
 DEFAULT_PORT=8000
 
@@ -160,7 +160,7 @@ main() {
     fi
     echo "Port: $INFERENCE_PORT"
     echo ""
-    local base_command="python3 -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm47 --reasoning-parser glm45 --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --served-model-name $MODEL_NAME --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
+    local base_command="python3 -m sglang.launch_server --model-path $MODEL_REPO --served-model-name $MODEL_NAME --tp-size $TENSOR_PARALLEL_SIZE --mem-fraction-static 0.8 --context-length 262144 --reasoning-parser $MODEL_NAME --tool-call-parser qwen3_coder --speculative-algo NEXTN --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else
