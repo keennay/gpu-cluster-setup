@@ -1,0 +1,197 @@
+Kimi-K2.5 + SGLang (UV, CUDA 13) - Fast Startup Parity with Docker
+===================================================================
+
+Goal
+- Match Docker startup behavior for Kimi-K2.5:
+  - `Loading safetensors checkpoint shards: 100%` -> server ready in under 5 minutes.
+  - On this host, validated UV runs are ~87-98 seconds for that segment (Docker baseline ~88 seconds).
+
+Primary root cause found
+- The slow UV runs inherited high CPU math thread env from shell:
+  - `OMP_NUM_THREADS=32`, `MKL_NUM_THREADS=32`, `OPENBLAS_NUM_THREADS=32`, `NUMEXPR_NUM_THREADS=32`, ...
+- With TP=8, this causes severe CPU oversubscription during hidden MoE weight materialization after shard `100%`.
+- The shard progress bar is misleading: major loading work continues after `100%`.
+
+Model path used below
+- `/workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1`
+
+1) Activate env and set CUDA paths
+----------------------------------
+```bash
+source /root/kimi-sglang_env/bin/activate
+
+export CUDA_HOME=/usr/local/cuda
+export PATH="$CUDA_HOME/bin:$CUDA_HOME/nvvm/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+
+nvcc --version
+python -V
+```
+
+2) Install Docker-parity package set (UV pip)
+---------------------------------------------
+```bash
+export SGLANG_COMMIT=c3d78ded2ebf0c38abdde0266a31a2a147a9b9cb
+export ARCH="$(uname -m)"
+
+# Core SGLang + PyTorch cu130
+uv pip install --reinstall "sglang[all] @ git+https://github.com/sgl-project/sglang.git@${SGLANG_COMMIT}#subdirectory=python" \
+  --index-url https://download.pytorch.org/whl/cu130 \
+  --extra-index-url https://pypi.org/simple \
+  --index-strategy unsafe-first-match
+
+uv pip install --reinstall torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 \
+  --index-url https://download.pytorch.org/whl/cu130
+
+# FlashInfer stack
+uv pip install --reinstall --no-deps flashinfer-python==0.6.3 flashinfer-cubin==0.6.3
+uv pip install --reinstall --no-deps flashinfer-jit-cache==0.6.3+cu130 \
+  --index-url https://flashinfer.ai/whl/cu130 \
+  --extra-index-url https://pypi.org/simple
+
+# sgl-kernel
+uv pip install --reinstall --no-deps \
+  "https://github.com/sgl-project/whl/releases/download/v0.3.21/sgl_kernel-0.3.21+cu130-cp310-abi3-manylinux2014_${ARCH}.whl"
+
+# CUDA runtime libs used in parity env
+# Keep these on the cu130 index
+uv pip install --reinstall --no-deps \
+  nvidia-cublas==13.1.0.3 \
+  nixl-cu13==0.10.0 \
+  cuda-python==13.1.1 \
+  --index-url https://download.pytorch.org/whl/cu130 \
+  --extra-index-url https://pypi.org/simple \
+  --index-strategy first-index
+
+# Install these from PyPI to ensure component runtime libs are present
+# under site-packages/nvidia/{cudnn,nccl,cusparselt,nvshmem}/lib
+uv pip install --reinstall --no-deps \
+  nvidia-cudnn-cu13==9.16.0.29 \
+  nvidia-nccl-cu13==2.28.3 \
+  nvidia-cusparselt-cu13==0.8.0 \
+  nvidia-nvshmem-cu13==3.3.24 \
+  --index-url https://pypi.org/simple
+
+# Explicitly pin model-runtime extras used by Kimi route
+uv pip install --reinstall xgrammar==0.1.27 compressed-tensors==0.13.0
+
+# deep-ep wheel can be unavailable on Python 3.12; use source fallback if needed
+if ! uv pip install --reinstall deep-ep==1.2.1; then
+  DEEPEP_SRC=/tmp/DeepEP-9af0e0d0e74f3577af1979c9b9e1ac2cad0104ee
+  if [ ! -d "$DEEPEP_SRC" ]; then
+    git clone https://github.com/deepseek-ai/DeepEP.git "$DEEPEP_SRC"
+    git -C "$DEEPEP_SRC" checkout 9af0e0d0e74f3577af1979c9b9e1ac2cad0104ee
+  fi
+  TORCH_CUDA_ARCH_LIST='9.0;10.0;10.3' uv pip install --reinstall --no-build-isolation --no-deps "$DEEPEP_SRC"
+fi
+
+# Remove accidental cu12 leftovers if present
+uv pip uninstall \
+  nvidia-cublas-cu12 nvidia-cuda-cupti-cu12 nvidia-cuda-nvrtc-cu12 nvidia-cuda-runtime-cu12 \
+  nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-cufile-cu12 nvidia-curand-cu12 nvidia-cusolver-cu12 \
+  nvidia-cusparse-cu12 nvidia-cusparselt-cu12 nvidia-nccl-cu12 nvidia-nvjitlink-cu12 \
+  nvidia-nvshmem-cu12 nvidia-nvtx-cu12 || true
+```
+
+3) Runtime parity fixes
+-----------------------
+```bash
+# Docker image exposes libmlx5.so; match that on host
+sudo ln -sfn /usr/lib/$(uname -m)-linux-gnu/libmlx5.so.1 /usr/lib/$(uname -m)-linux-gnu/libmlx5.so
+ls -l /usr/lib/$(uname -m)-linux-gnu/libmlx5.so
+```
+
+4) Verify important package versions
+------------------------------------
+```bash
+for p in sglang torch triton transformers deep-ep flashinfer-python sgl-kernel xgrammar compressed-tensors; do
+  python -c 'import importlib.metadata as m,sys; p=sys.argv[1]; print(f"{p}=={m.version(p)}")' "$p" || echo "$p==<missing>"
+done
+```
+
+Expected key versions:
+- `sglang` from commit `c3d78ded2ebf0c38abdde0266a31a2a147a9b9cb`
+  (package version may show as `0.5.6.post2` in this install path)
+- `torch==2.9.1+cu130`
+- `triton==3.5.1`
+- `transformers==4.57.1`
+- `deep-ep==1.2.1`
+- `flashinfer-python==0.6.3`
+- `sgl-kernel==0.3.21`
+
+Critical shared-lib sanity check:
+```bash
+SITE_PKGS="$(python -c 'import sysconfig; print(sysconfig.get_paths()[\"purelib\"])')"
+find "$SITE_PKGS" \
+  -name 'libcusparseLt.so.0' -o -name 'libnvshmem_host.so.3' -o -name 'libnccl.so.2' -o -name 'libcudnn.so.9'
+```
+
+5) Launch command that avoids the slow-start trap
+-------------------------------------------------
+Important: do NOT force DeepGEMM flags here. Match Docker launch semantics.
+
+```bash
+# Critical fix: neutralize inherited high-thread BLAS/OMP env
+unset OMP_NUM_THREADS MKL_NUM_THREADS OPENBLAS_NUM_THREADS NUMEXPR_NUM_THREADS VECLIB_MAXIMUM_THREADS OMP_PLACES OMP_PROC_BIND
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+
+export LOG=/tmp/sglang_uv_kimi_fast.log
+rm -f "$LOG"
+
+python -m sglang.launch_server \
+  --model-path /workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1 \
+  --served-model-name kimi_k2 \
+  --tp 8 \
+  --trust-remote-code \
+  --tool-call-parser kimi_k2 \
+  --reasoning-parser kimi_k2 \
+  --disable-radix-cache \
+  --disable-chunked-prefix-cache \
+  --api-key YOUR_API_KEY \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --show-time-cost \
+  2>&1 | awk '{ print strftime("%F %T"), $0; fflush(); }' | tee "$LOG"
+```
+
+6) Timing check (post-shard to ready)
+-------------------------------------
+```bash
+python - <<'PY'
+import re
+from datetime import datetime
+log="/tmp/sglang_uv_kimi_fast.log"
+fmt="%Y-%m-%d %H:%M:%S"
+cur=None
+t100=None
+tready=None
+for line in open(log, "r", errors="ignore"):
+    m=re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s", line)
+    if m:
+        cur=datetime.strptime(m.group(1), fmt)
+    if t100 is None and "Loading safetensors checkpoint shards: 100% Completed" in line:
+        t100=cur
+    if tready is None and "Uvicorn running on" in line:
+        tready=cur
+print("t100:", t100)
+print("tready:", tready)
+if t100 and tready:
+    print("seconds_100_to_ready:", int((tready-t100).total_seconds()))
+PY
+```
+
+Expected:
+- `seconds_100_to_ready < 300` (target)
+- On this machine after fix: about `87-98` seconds.
+
+7) If still slow
+----------------
+```bash
+env | rg '^(OMP_NUM_THREADS|MKL_NUM_THREADS|OPENBLAS_NUM_THREADS|NUMEXPR_NUM_THREADS|VECLIB_MAXIMUM_THREADS|OMP_PLACES|OMP_PROC_BIND)='
+```
+
+- If any are high/non-empty from shell startup files, clear them before launch exactly as in step 5.
