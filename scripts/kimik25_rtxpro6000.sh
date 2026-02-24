@@ -18,11 +18,11 @@ set -euo pipefail
 # Model path used below
 # - /workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1
 
-VENV_PATH="${VENV_PATH:-/root/kimi-sglang_env}"
+VENV_PATH="${VENV_PATH:-${VIRTUAL_ENV:-/root/kimi-sglang_env}}"
 CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 MODEL_PATH="${MODEL_PATH:-/workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1}"
 SGLANG_COMMIT="${SGLANG_COMMIT:-c3d78ded2ebf0c38abdde0266a31a2a147a9b9cb}"
-API_KEY="${API_KEY:-YOUR_API_KEY}"
+API_KEY="${API_KEY:-YPUR_API_KEY}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-kimi_k2}"
@@ -83,8 +83,22 @@ step2_install_parity_packages() {
     nvidia-nvshmem-cu13==3.3.24 \
     --index-url https://pypi.org/simple
 
-  # Explicitly pin model-runtime extras used by Kimi route
-  uv pip install --reinstall xgrammar==0.1.27 compressed-tensors==0.13.0
+  # Explicitly pin model-runtime extras used by Kimi route.
+  # Keep --no-deps so these cannot pull torch/triton/transformers off the cu130 stack.
+  uv pip install --reinstall --no-deps xgrammar==0.1.27 compressed-tensors==0.13.0
+
+  # Defensive parity check: ensure torch stays on the cu130 build before deep-ep build.
+  local torch_cuda
+  torch_cuda="$(python - <<'PY'
+import torch
+print(torch.version.cuda or "")
+PY
+)"
+  if [ "${torch_cuda}" != "13.0" ]; then
+    echo "Detected torch CUDA '${torch_cuda}', re-pinning to cu130..."
+    uv pip install --reinstall torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 \
+      --index-url https://download.pytorch.org/whl/cu130
+  fi
 
   # deep-ep wheel can be unavailable on Python 3.12; use source fallback if needed
   if ! uv pip install --reinstall deep-ep==1.2.1; then
@@ -93,6 +107,13 @@ step2_install_parity_packages() {
       git clone https://github.com/deepseek-ai/DeepEP.git "${DEEPEP_SRC}"
     fi
     git -C "${DEEPEP_SRC}" checkout 9af0e0d0e74f3577af1979c9b9e1ac2cad0104ee
+
+    # CUDA 13 + current NVSHMEM headers can require CCCL headers (cuda/std/*).
+    # Inject CUDA's CCCL include dir into DeepEP setup.py if present.
+    if [ -d "${CUDA_HOME}/include/cccl" ] && ! rg -q "include_dirs\\.append\\('${CUDA_HOME}/include/cccl'\\)" "${DEEPEP_SRC}/setup.py"; then
+      sed -i "/include_dirs.extend(\\[f'{nvshmem_dir}\\/include'\\])/i\\        include_dirs.append('${CUDA_HOME}/include/cccl')" "${DEEPEP_SRC}/setup.py"
+    fi
+
     TORCH_CUDA_ARCH_LIST='9.0;10.0;10.3' uv pip install --reinstall --no-build-isolation --no-deps "${DEEPEP_SRC}"
   fi
 
@@ -102,6 +123,21 @@ step2_install_parity_packages() {
     nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-cufile-cu12 nvidia-curand-cu12 nvidia-cusolver-cu12 \
     nvidia-cusparse-cu12 nvidia-cusparselt-cu12 nvidia-nccl-cu12 nvidia-nvjitlink-cu12 \
     nvidia-nvshmem-cu12 nvidia-nvtx-cu12 || true
+
+  # Re-assert cu13 shared-library packages after cu12 cleanup.
+  # Some package managers may remove shared nvidia/* paths during cu12 uninstall.
+  uv pip install --reinstall --no-deps \
+    nvidia-cudnn-cu13==9.16.0.29 \
+    nvidia-nccl-cu13==2.28.3 \
+    nvidia-cusparselt-cu13==0.8.0 \
+    nvidia-nvshmem-cu13==3.3.24 \
+    --index-url https://pypi.org/simple
+
+  uv pip install --reinstall --no-deps \
+    nvidia-cublas==13.1.0.3 \
+    --index-url https://download.pytorch.org/whl/cu130 \
+    --extra-index-url https://pypi.org/simple \
+    --index-strategy first-index
 }
 
 step3_runtime_parity_fixes() {
@@ -142,6 +178,23 @@ step4_verify_versions_and_libs() {
     -name 'libnccl.so.2' -o \
     -name 'libcudnn.so.9' \
   \) -print
+
+  # Hard-fail if any critical runtime .so is missing.
+  python - <<'PY'
+from pathlib import Path
+import sysconfig
+
+site = Path(sysconfig.get_paths()["purelib"])
+required = [
+    "libcusparseLt.so.0",
+    "libnvshmem_host.so.3",
+    "libnccl.so.2",
+    "libcudnn.so.9",
+]
+missing = [name for name in required if not any(site.rglob(name))]
+if missing:
+    raise SystemExit(f"Missing required CUDA runtime libs: {', '.join(missing)}")
+PY
 }
 
 step5_launch_server() {
@@ -218,11 +271,11 @@ step7_if_still_slow() {
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts.sh all        # steps 1-5 (installs + launch, then blocks in server)
-  scripts.sh install    # steps 1-4 only
-  scripts.sh launch     # step 1 + step 5 only
-  scripts.sh timing     # step 6 only (reads LOG)
-  scripts.sh check-env  # step 7 only
+  kimik25_rtxpro6000.sh all        # steps 1-5 (installs + launch, then blocks in server)
+  kimik25_rtxpro6000.sh install    # steps 1-4 only
+  kimik25_rtxpro6000.sh launch     # step 1 + step 5 only
+  kimik25_rtxpro6000.sh timing     # step 6 only (reads LOG)
+  kimik25_rtxpro6000.sh check-env  # step 7 only
 
 Optional env overrides:
   VENV_PATH, CUDA_HOME, MODEL_PATH, SGLANG_COMMIT, API_KEY, HOST, PORT,
