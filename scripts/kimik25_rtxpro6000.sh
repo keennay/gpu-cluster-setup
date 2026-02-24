@@ -30,8 +30,126 @@ TP="${TP:-8}"
 LOG="${LOG:-/tmp/sglang_uv_kimi_fast.log}"
 ARCH="${ARCH:-$(uname -m)}"
 
+detect_torch_cuda_arch_list() {
+  local torch_arch=""
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    local gpu_name
+    gpu_name="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]')"
+
+    if [ -n "${gpu_name}" ]; then
+      if [[ "${gpu_name}" == *"V100"* ]]; then
+        torch_arch="7.0"
+      elif [[ "${gpu_name}" == *"T4"* ]] || \
+           ([[ "${gpu_name}" == *"RTX 5000"* ]] && [[ "${gpu_name}" != *"ADA"* ]]) || \
+           ([[ "${gpu_name}" == *"RTX 4000"* ]] && [[ "${gpu_name}" != *"ADA"* ]]) || \
+           ([[ "${gpu_name}" == *"RTX 6000"* ]] && [[ "${gpu_name}" != *"ADA"* ]]); then
+        torch_arch="7.5"
+      elif [[ "${gpu_name}" == *"A100"* ]] || [[ "${gpu_name}" == *"A30"* ]]; then
+        torch_arch="8.0"
+      elif [[ "${gpu_name}" == *"RTX 3090"* ]] || [[ "${gpu_name}" == *"3090"* ]] || \
+           [[ "${gpu_name}" == *"RTX 3080"* ]] || [[ "${gpu_name}" == *"3080"* ]] || \
+           [[ "${gpu_name}" == *"RTX 3070"* ]] || [[ "${gpu_name}" == *"3070"* ]] || \
+           [[ "${gpu_name}" == *"RTX A6000"* ]] || [[ "${gpu_name}" == *"A6000"* ]] || \
+           [[ "${gpu_name}" == *"RTX A5000"* ]] || [[ "${gpu_name}" == *"A5000"* ]] || \
+           [[ "${gpu_name}" == *"RTX A4500"* ]] || [[ "${gpu_name}" == *"A4500"* ]] || \
+           [[ "${gpu_name}" == *"RTX A4000"* ]] || [[ "${gpu_name}" == *"A4000"* ]] || \
+           [[ "${gpu_name}" == *"RTX A2000"* ]] || [[ "${gpu_name}" == *"A2000"* ]] || \
+           [[ "${gpu_name}" == *"A10"* ]] || [[ "${gpu_name}" == *"A40"* ]]; then
+        torch_arch="8.6"
+      elif [[ "${gpu_name}" == *"RTX 4090"* ]] || [[ "${gpu_name}" == *"4090"* ]] || \
+           [[ "${gpu_name}" == *"RTX 4070 TI"* ]] || [[ "${gpu_name}" == *"4070 TI"* ]] || \
+           [[ "${gpu_name}" == *"L40S"* ]] || [[ "${gpu_name}" == *"L40"* ]] || [[ "${gpu_name}" == *"L4"* ]] || \
+           ([[ "${gpu_name}" == *"RTX 6000"* ]] && [[ "${gpu_name}" == *"ADA"* ]]) || \
+           ([[ "${gpu_name}" == *"RTX 5000"* ]] && [[ "${gpu_name}" == *"ADA"* ]]) || \
+           ([[ "${gpu_name}" == *"RTX 4000"* ]] && [[ "${gpu_name}" == *"ADA"* ]]); then
+        torch_arch="8.9"
+      elif [[ "${gpu_name}" == *"H100"* ]] || [[ "${gpu_name}" == *"H200"* ]] || [[ "${gpu_name}" == *"GH200"* ]]; then
+        torch_arch="9.0"
+      elif [[ "${gpu_name}" == *"B200"* ]]; then
+        torch_arch="10.0"
+      elif [[ "${gpu_name}" == *"RTX 5090"* ]] || [[ "${gpu_name}" == *"5090"* ]] || \
+           ([[ "${gpu_name}" == *"RTX PRO 6000"* ]] && [[ "${gpu_name}" == *"BLACKWELL"* ]]); then
+        torch_arch="12.0"
+      fi
+    fi
+  fi
+
+  printf '%s' "${torch_arch}"
+}
+
+bootstrap_env_if_missing() {
+  if [ -d "${VENV_PATH}" ]; then
+    return 0
+  fi
+
+  echo "Environment not found at ${VENV_PATH}. Bootstrapping..."
+
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "uv is required to create the environment but was not found in PATH."
+    exit 1
+  fi
+
+  local default_hf_path="/workspace/models/huggingface"
+  local hf_path_input=""
+  local hf_path="${default_hf_path}"
+
+  echo ""
+  echo "Where would you like to store HuggingFace models?"
+  echo "Default: ${default_hf_path}"
+  read -r -p "Enter path (press Enter for default): " hf_path_input || true
+  if [ -n "${hf_path_input}" ]; then
+    hf_path="${hf_path_input/#\~/$HOME}"
+  fi
+  echo "Using HuggingFace path: ${hf_path}"
+
+  local python_bin
+  python_bin="$(command -v python)"
+  if [ -z "${python_bin}" ]; then
+    echo "python was not found in PATH."
+    exit 1
+  fi
+
+  uv venv "${VENV_PATH}" --python "${python_bin}"
+
+  local torch_arch
+  torch_arch="$(detect_torch_cuda_arch_list)"
+  if [ -n "${torch_arch}" ]; then
+    echo "Detected TORCH_CUDA_ARCH_LIST=${torch_arch}"
+  else
+    echo "Could not determine TORCH_CUDA_ARCH_LIST automatically; leaving unset."
+  fi
+
+  cat > "${VENV_PATH}/activate_ml" <<EOF
+#!/usr/bin/env bash
+source "${VENV_PATH}/bin/activate"
+export HF_HOME="${hf_path}"
+export HUGGINGFACE_HUB_CACHE="${hf_path}"
+if [ -n "${torch_arch}" ]; then
+  export TORCH_CUDA_ARCH_LIST="${torch_arch}"
+fi
+echo "ML environment activated:"
+echo "  - Virtual env: ${VENV_PATH}"
+echo "  - HF_HOME: ${hf_path}"
+if [ -n "${torch_arch}" ]; then
+  echo "  - TORCH_CUDA_ARCH_LIST: ${torch_arch}"
+fi
+echo "  - Python: \$(python --version)"
+EOF
+  chmod +x "${VENV_PATH}/activate_ml"
+
+  export HF_HOME="${hf_path}"
+  export HUGGINGFACE_HUB_CACHE="${hf_path}"
+  if [ -n "${torch_arch}" ]; then
+    export TORCH_CUDA_ARCH_LIST="${torch_arch}"
+  fi
+
+  mkdir -p "${hf_path}" /workspace/scripts /workspace/logs || true
+}
+
 step1_activate_env() {
   # 1) Activate env and set CUDA paths
+  bootstrap_env_if_missing
   source "${VENV_PATH}/bin/activate"
 
   export CUDA_HOME
