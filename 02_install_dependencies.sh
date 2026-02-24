@@ -542,8 +542,8 @@ echo ""
                 3)
                     CUDA_SELECTION="custom"
                     while true; do
-                        read -p "Enter desired CUDA version (e.g. 12.4): " CUSTOM_VERSION
-                        if [[ "$CUSTOM_VERSION" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                        read -p "Enter desired CUDA version (e.g. 12.4 or 13.0.1): " CUSTOM_VERSION
+                        if [[ "$CUSTOM_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
                             if [[ "$CUSTOM_VERSION" =~ ^[0-9]+$ ]]; then
                                 CUSTOM_VERSION="${CUSTOM_VERSION}.0"
                             fi
@@ -551,7 +551,7 @@ echo ""
                             CUDA_INSTALL_REQUESTED=true
                             break
                         else
-                            print_error "Invalid version number. Please enter a numeric value like 12.4"
+                            print_error "Invalid version number. Use major, major.minor, or major.minor.patch (e.g. 12.4 or 13.0.1)."
                         fi
                     done
                     ;;
@@ -566,11 +566,15 @@ echo ""
             TARGET_CUDA_VERSION_MAJOR=""
             TARGET_CUDA_VERSION_MINOR=""
             TARGET_CUDA_VERSION_NORMALIZED=""
+            TARGET_CUDA_EXACT_VERSION=""
             if [ -n "$TARGET_CUDA_VERSION" ]; then
-                TARGET_CUDA_VERSION_MAJOR=$(echo $TARGET_CUDA_VERSION | cut -d. -f1)
-                TARGET_CUDA_VERSION_MINOR=$(echo $TARGET_CUDA_VERSION | cut -d. -f2)
+                TARGET_CUDA_VERSION_MAJOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f1)
+                TARGET_CUDA_VERSION_MINOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f2)
                 TARGET_CUDA_VERSION_MINOR=${TARGET_CUDA_VERSION_MINOR:-0}
                 TARGET_CUDA_VERSION_NORMALIZED="${TARGET_CUDA_VERSION_MAJOR}.${TARGET_CUDA_VERSION_MINOR}"
+                if [[ "$TARGET_CUDA_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    TARGET_CUDA_EXACT_VERSION="$TARGET_CUDA_VERSION"
+                fi
             fi
 
             if [ "$CUDA_SELECTION" = "latest" ] && [ -n "$TARGET_CUDA_VERSION_NORMALIZED" ]; then
@@ -592,8 +596,9 @@ echo ""
             if [ "$CUDA_INSTALL_REQUESTED" = true ]; then
                 if [ -z "$TARGET_CUDA_VERSION" ]; then
                     TARGET_CUDA_VERSION="$TARGET_CUDA_VERSION_DEFAULT"
-                    TARGET_CUDA_VERSION_MAJOR=$(echo $TARGET_CUDA_VERSION | cut -d. -f1)
-                    TARGET_CUDA_VERSION_MINOR=$(echo $TARGET_CUDA_VERSION | cut -d. -f2)
+                    TARGET_CUDA_VERSION_MAJOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f1)
+                    TARGET_CUDA_VERSION_MINOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f2)
+                    TARGET_CUDA_EXACT_VERSION=""
                     TARGET_CUDA_VERSION_MINOR=${TARGET_CUDA_VERSION_MINOR:-0}
                     TARGET_CUDA_VERSION_NORMALIZED="${TARGET_CUDA_VERSION_MAJOR}.${TARGET_CUDA_VERSION_MINOR}"
                 fi
@@ -613,6 +618,7 @@ echo ""
                     print_warning "Driver capabilities unknown; proceeding with CUDA $TARGET_CUDA_VERSION."
                 fi
 
+                CUDA_PKG_VERSION=$(echo "$TARGET_CUDA_VERSION_NORMALIZED" | sed 's/\./-/g')
                 APT_UPDATED=false
                 DNF_REFRESHED=false
                 CUDA_INSTALLED=false
@@ -621,15 +627,34 @@ echo ""
                     print_info "Attempting CUDA download from NVIDIA repository: $REPO_VERSION"
 
                     if [ "$OS_TYPE" = "ubuntu" ]; then
-                        CUDA_PKG_VERSION=$(echo "$TARGET_CUDA_VERSION" | sed 's/\./-/g')
                         PACKAGES_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/Packages"
-                        PACKAGE_VERSION=$(curl -fsSL "$PACKAGES_URL" 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" '
+                        PACKAGE_VERSION=$(curl -fsSL "$PACKAGES_URL" 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
+                            function matches_requested(version, requested, len, next_char) {
+                                if (requested == "") {
+                                    return 1
+                                }
+                                len = length(requested)
+                                if (substr(version, 1, len) != requested) {
+                                    return 0
+                                }
+                                next_char = substr(version, len + 1, 1)
+                                return (next_char == "" || next_char !~ /[0-9]/)
+                            }
                             $1 == "Package:" && $2 == pkg { pkgmatch=1; next }
-                            pkgmatch && $1 == "Version:" { print $2; exit }
+                            pkgmatch && $1 == "Version:" {
+                                if (matches_requested($2, requested_version)) {
+                                    print $2
+                                    exit
+                                }
+                            }
                             pkgmatch && $0 == "" { pkgmatch=0 }
                         ')
                         if [ -z "$PACKAGE_VERSION" ]; then
-                            print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} from $REPO_VERSION"
+                            if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
+                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} matching $TARGET_CUDA_EXACT_VERSION from $REPO_VERSION"
+                            else
+                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} from $REPO_VERSION"
+                            fi
                             continue
                         fi
 
@@ -666,18 +691,46 @@ echo ""
                         fi
 
                     elif [ "$OS_TYPE" = "rhel" ]; then
-                        CUDA_PKG_VERSION=$(echo "$TARGET_CUDA_VERSION" | sed 's/\./-/g')
                         PRIMARY_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/repodata/primary.xml.gz"
-                        RPM_RELATIVE_PATH=$(curl -fsSL "$PRIMARY_URL" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" '
-                            /<package/ { pkgmatch=0 }
-                            /<name>/ && $0 ~ pkg { pkgmatch=1 }
+                        RPM_RELATIVE_PATH=$(curl -fsSL "$PRIMARY_URL" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
+                            function matches_requested(version, requested, len, next_char) {
+                                if (requested == "") {
+                                    return 1
+                                }
+                                len = length(requested)
+                                if (substr(version, 1, len) != requested) {
+                                    return 0
+                                }
+                                next_char = substr(version, len + 1, 1)
+                                return (next_char == "" || next_char !~ /[0-9]/)
+                            }
+                            /<package/ { pkgmatch=0; version_ok=0 }
+                            $0 ~ "<name>" pkg "</name>" {
+                                pkgmatch=1
+                                version_ok=0
+                                if (requested_version == "") {
+                                    version_ok=1
+                                }
+                            }
+                            pkgmatch && /<version / {
+                                version_ok=0
+                                if (match($0, /ver="([^"]+)"/, arr) && matches_requested(arr[1], requested_version)) {
+                                    version_ok=1
+                                }
+                            }
                             pkgmatch && /<location href=/ {
-                                match($0, /href="([^"]+)"/, arr)
-                                if (arr[1] != "") { print arr[1]; exit }
+                                if (version_ok == 1) {
+                                    match($0, /href="([^"]+)"/, arr)
+                                    if (arr[1] != "") { print arr[1]; exit }
+                                }
                             }
                         ')
                         if [ -z "$RPM_RELATIVE_PATH" ]; then
-                            print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION"
+                            if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
+                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION matching $TARGET_CUDA_EXACT_VERSION"
+                            else
+                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION"
+                            fi
                             continue
                         fi
 
