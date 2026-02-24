@@ -337,6 +337,21 @@ step5_launch_server() {
   # 5) Launch command that avoids the slow-start trap
   # Important: do NOT force DeepGEMM flags here. Match Docker launch semantics.
 
+  # Preflight launch deps. Launch should not install packages; fail fast if missing.
+  local missing
+  missing="$(python - <<'PY'
+import importlib.util
+mods = ("sglang", "IPython.display", "pydantic_core", "torch")
+missing = [m for m in mods if importlib.util.find_spec(m) is None]
+print(" ".join(missing))
+PY
+)"
+  if [ -n "${missing}" ]; then
+    echo "Launch dependency preflight failed. Missing: ${missing}"
+    echo "Run: ./scripts/kimik25_rtxpro6000.sh install"
+    exit 1
+  fi
+
   # Critical fix: neutralize inherited high-thread BLAS/OMP env
   unset OMP_NUM_THREADS MKL_NUM_THREADS OPENBLAS_NUM_THREADS NUMEXPR_NUM_THREADS VECLIB_MAXIMUM_THREADS OMP_PLACES OMP_PROC_BIND
   export OMP_NUM_THREADS=1
@@ -421,7 +436,7 @@ USAGE
 }
 
 main() {
-  local mode="${1:-all}"
+  local mode="${1:-launch}"
 
   case "${mode}" in
     init)
