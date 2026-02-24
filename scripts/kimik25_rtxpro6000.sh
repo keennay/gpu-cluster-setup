@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+  IS_SOURCED=1
+else
+  IS_SOURCED=0
+fi
+
 # Kimi-K2.5 + SGLang (UV, CUDA 13) - Fast Startup Parity with Docker
 # ===================================================================
 #
@@ -148,9 +154,8 @@ EOF
 }
 
 step1_activate_env() {
-  # 1) Activate env and set CUDA paths
-  bootstrap_env_if_missing
-  source "${VENV_PATH}/bin/activate"
+  # 1) Init/activate env and set CUDA paths
+  step0_init_env
 
   export CUDA_HOME
   export PATH="${CUDA_HOME}/bin:${CUDA_HOME}/nvvm/bin:${PATH}"
@@ -158,6 +163,19 @@ step1_activate_env() {
 
   nvcc --version
   python -V
+}
+
+step0_init_env() {
+  # Init mode: create env if missing (with HF prompt), else just activate.
+  bootstrap_env_if_missing
+
+  if [ -f "${VENV_PATH}/activate_ml" ]; then
+    # shellcheck disable=SC1090
+    source "${VENV_PATH}/activate_ml"
+  else
+    # shellcheck disable=SC1090
+    source "${VENV_PATH}/bin/activate"
+  fi
 }
 
 step2_install_parity_packages() {
@@ -389,6 +407,7 @@ step7_if_still_slow() {
 usage() {
   cat <<'USAGE'
 Usage:
+  kimik25_rtxpro6000.sh init       # create/activate env; opens activated subshell
   kimik25_rtxpro6000.sh all        # steps 1-5 (installs + launch, then blocks in server)
   kimik25_rtxpro6000.sh install    # steps 1-4 only
   kimik25_rtxpro6000.sh launch     # step 1 + step 5 only
@@ -405,6 +424,20 @@ main() {
   local mode="${1:-all}"
 
   case "${mode}" in
+    init)
+      step0_init_env
+      # If run as a script (not sourced), activation cannot persist in parent shell.
+      # Open an interactive subshell so user lands in an activated environment.
+      if [ "${IS_SOURCED}" -eq 0 ] && [ "${INIT_SPAWN_SHELL:-1}" = "1" ]; then
+        if [ -t 0 ] && [ -t 1 ]; then
+          echo "Opening activated shell at ${VENV_PATH}. Exit to return."
+          exec "${SHELL:-/bin/bash}" -i
+        else
+          echo "Environment initialized and activated for this process only."
+          echo "To activate in your current shell: source \"${VENV_PATH}/activate_ml\""
+        fi
+      fi
+      ;;
     all)
       step1_activate_env
       step2_install_parity_packages
@@ -412,7 +445,7 @@ main() {
       step4_verify_versions_and_libs
       step5_launch_server
       ;;
-    install)
+    install|instal)
       step1_activate_env
       step2_install_parity_packages
       step3_runtime_parity_fixes
