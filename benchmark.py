@@ -387,6 +387,7 @@ class RequestResult:
     output_len: int = 0
     input_bucket: str = ""
     output_bucket: str = ""
+    finish_reason: str = ""
     success: bool = True
     error: str = None
 
@@ -669,7 +670,9 @@ def build_coding_agent_prompt(input_bucket: str, output_bucket: str) -> tuple[st
     relevant_files = random.sample(repo_files, k=relevant_count)
 
     sections = [
-        random.choice(CODING_TASK_INTROS).format(output_expectation=OUTPUT_BUCKET_EXPECTATIONS[output_bucket]),
+        random.choice(CODING_TASK_INTROS).format(
+            output_expectation=OUTPUT_BUCKET_EXPECTATIONS.get(output_bucket, OUTPUT_BUCKET_EXPECTATIONS["standard_patch"])
+        ),
         generate_ticket_section(input_bucket),
         generate_repo_tree_section(repo_files),
         generate_relevant_files_section(relevant_files),
@@ -741,6 +744,33 @@ def print_sample_preview():
             print("\n...[truncated for preview]...")
 
 
+def _has_text_delta(delta) -> bool:
+    for attr in ("content", "reasoning_content"):
+        value = getattr(delta, attr, None)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            if value:
+                return True
+            continue
+        if isinstance(value, list):
+            for part in value:
+                if isinstance(part, str) and part:
+                    return True
+                if isinstance(part, dict):
+                    if part.get("text") or part.get("content") or part.get("reasoning_content"):
+                        return True
+                else:
+                    text = getattr(part, "text", None)
+                    if isinstance(text, str) and text:
+                        return True
+            continue
+    tool_calls = getattr(delta, "tool_calls", None)
+    if tool_calls:
+        return True
+    return False
+
+
 async def run_single_request_streaming(request_id: int, progress: dict) -> RequestResult:
     input_len, input_bucket = sample_input_tokens()
     output_len, output_bucket = sample_output_tokens()
@@ -750,6 +780,7 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
     ttft = 0
     completion_tokens = 0
     prompt_tokens = 0
+    finish_reason = ""
 
     try:
         request_params = {
@@ -768,14 +799,21 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
 
         first_token = True
         async for chunk in stream:
-            if first_token and chunk.choices and chunk.choices[0].delta.content:
-                ttft = time.perf_counter() - start
-                first_token = False
+            if first_token and chunk.choices:
+                delta = chunk.choices[0].delta
+                if _has_text_delta(delta):
+                    ttft = time.perf_counter() - start
+                    first_token = False
+            if chunk.choices:
+                chunk_finish_reason = chunk.choices[0].finish_reason
+                if chunk_finish_reason:
+                    finish_reason = chunk_finish_reason
             if chunk.usage:
                 prompt_tokens = chunk.usage.prompt_tokens
                 completion_tokens = chunk.usage.completion_tokens
 
         end = time.perf_counter()
+        is_abort = finish_reason in {"abort", "error"}
 
         result = RequestResult(
             request_id=request_id,
@@ -787,6 +825,9 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
             output_len=output_len,
             input_bucket=input_bucket,
             output_bucket=output_bucket,
+            finish_reason=finish_reason,
+            success=not is_abort,
+            error=f"finish_reason:{finish_reason}" if is_abort else None,
         )
     except asyncio.TimeoutError:
         result = RequestResult(
@@ -797,6 +838,7 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
             output_len=output_len,
             input_bucket=input_bucket,
             output_bucket=output_bucket,
+            finish_reason=finish_reason,
         )
     except Exception as exc:
         result = RequestResult(
@@ -807,6 +849,7 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
             output_len=output_len,
             input_bucket=input_bucket,
             output_bucket=output_bucket,
+            finish_reason=finish_reason,
         )
 
     progress["completed"] += 1
@@ -852,6 +895,19 @@ def summarize_bucket_counts(results: list[RequestResult], attr: str, expected_bu
         count = counts["uniform_clamped"]
         pct = (count / len(results) * 100) if results else 0
         lines.append(f"  {'uniform_clamped':<18} {count:>4} ({pct:>5.1f}%)")
+    return lines
+
+
+def summarize_finish_reasons(results: list[RequestResult]) -> list[str]:
+    counts = {}
+    for item in results:
+        key = item.finish_reason or "(none)"
+        counts[key] = counts.get(key, 0) + 1
+    lines = []
+    total = len(results)
+    for reason, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        pct = (count / total * 100) if total else 0
+        lines.append(f"  {reason:<18} {count:>4} ({pct:>5.1f}%)")
     return lines
 
 
@@ -952,18 +1008,26 @@ async def run_benchmark():
     print("Output buckets:")
     for line in summarize_bucket_counts(successful, "output_bucket", OUTPUT_TOKEN_BUCKETS):
         print(line)
+    print("Finish reasons (all):")
+    for line in summarize_finish_reasons(results):
+        print(line)
 
     print("\nTHROUGHPUT:")
     print(f"  Requests/sec:          {len(successful) / total_wall_time:.2f}")
     print(f"  Output tokens/sec:     {total_completion_tokens / total_wall_time:.2f}")
     print(f"  Total tokens/sec:      {total_tokens / total_wall_time:.2f}")
 
+    print("\nTIME TO FIRST TOKEN (TTFT):")
     if ttfts:
-        print("\nTIME TO FIRST TOKEN (TTFT):")
         print(f"  Mean:                  {statistics.mean(ttfts) * 1000:.0f}ms")
         print(f"  Median:                {statistics.median(ttfts) * 1000:.0f}ms")
         print(f"  P95:                   {percentile(ttfts, 0.95) * 1000:.0f}ms")
         print(f"  P99:                   {percentile(ttfts, 0.99) * 1000:.0f}ms")
+        missing_ttft = len(successful) - len(ttfts)
+        if missing_ttft:
+            print(f"  Missing:               {missing_ttft} requests (no streamed text/tool delta observed)")
+    else:
+        print("  Unavailable: no streamed text/tool deltas were observed on successful requests.")
 
     print("\nEND-TO-END LATENCY:")
     print(f"  Mean:                  {statistics.mean(latencies):.2f}s")

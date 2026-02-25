@@ -35,6 +35,13 @@ SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-kimi_k2}"
 TP="${TP:-8}"
 LOG="${LOG:-/tmp/sglang_uv_kimi_fast.log}"
 ARCH="${ARCH:-$(uname -m)}"
+MEM_FRACTION_STATIC="${MEM_FRACTION_STATIC:-}"
+MAX_TOTAL_TOKENS="${MAX_TOTAL_TOKENS:-}"
+MAX_RUNNING_REQUESTS="${MAX_RUNNING_REQUESTS:-}"
+CONTEXT_LENGTH="${CONTEXT_LENGTH:-}"
+CHUNKED_PREFILL_SIZE="${CHUNKED_PREFILL_SIZE:-}"
+CUDA_GRAPH_MAX_BS="${CUDA_GRAPH_MAX_BS:-}"
+ALLOW_AUTO_TRUNCATE="${ALLOW_AUTO_TRUNCATE:-0}"
 
 detect_torch_cuda_arch_list() {
   local torch_arch=""
@@ -362,20 +369,40 @@ PY
 
   rm -f "${LOG}"
 
-  python -m sglang.launch_server \
-    --model-path "${MODEL_PATH}" \
-    --served-model-name "${SERVED_MODEL_NAME}" \
-    --tp "${TP}" \
-    --trust-remote-code \
-    --tool-call-parser kimi_k2 \
-    --reasoning-parser kimi_k2 \
-    --disable-radix-cache \
-    --disable-chunked-prefix-cache \
-    --api-key "${API_KEY}" \
-    --host "${HOST}" \
-    --port "${PORT}" \
-    --show-time-cost \
-    2>&1 | awk '{ print strftime("%F %T"), $0; fflush(); }' | tee "${LOG}"
+  launch_args=(
+    --model-path "${MODEL_PATH}"
+    --served-model-name "${SERVED_MODEL_NAME}"
+    --tp "${TP}"
+    --trust-remote-code
+    --tool-call-parser kimi_k2
+    --reasoning-parser kimi_k2
+    --disable-radix-cache
+    --disable-chunked-prefix-cache
+    --api-key "${API_KEY}"
+    --host "${HOST}"
+    --port "${PORT}"
+    --show-time-cost
+  )
+
+  # Optional KV-cache and scheduler tuning knobs.
+  [ -n "${MEM_FRACTION_STATIC}" ] && launch_args+=(--mem-fraction-static "${MEM_FRACTION_STATIC}")
+  [ -n "${MAX_TOTAL_TOKENS}" ] && launch_args+=(--max-total-tokens "${MAX_TOTAL_TOKENS}")
+  [ -n "${MAX_RUNNING_REQUESTS}" ] && launch_args+=(--max-running-requests "${MAX_RUNNING_REQUESTS}")
+  [ -n "${CONTEXT_LENGTH}" ] && launch_args+=(--context-length "${CONTEXT_LENGTH}")
+  [ -n "${CHUNKED_PREFILL_SIZE}" ] && launch_args+=(--chunked-prefill-size "${CHUNKED_PREFILL_SIZE}")
+  [ -n "${CUDA_GRAPH_MAX_BS}" ] && launch_args+=(--cuda-graph-max-bs "${CUDA_GRAPH_MAX_BS}")
+  [ "${ALLOW_AUTO_TRUNCATE}" = "1" ] && launch_args+=(--allow-auto-truncate)
+
+  echo "Launch args (KV/scheduler tuning):"
+  [ -n "${MEM_FRACTION_STATIC}" ] && echo "  --mem-fraction-static ${MEM_FRACTION_STATIC}"
+  [ -n "${MAX_TOTAL_TOKENS}" ] && echo "  --max-total-tokens ${MAX_TOTAL_TOKENS}"
+  [ -n "${MAX_RUNNING_REQUESTS}" ] && echo "  --max-running-requests ${MAX_RUNNING_REQUESTS}"
+  [ -n "${CONTEXT_LENGTH}" ] && echo "  --context-length ${CONTEXT_LENGTH}"
+  [ -n "${CHUNKED_PREFILL_SIZE}" ] && echo "  --chunked-prefill-size ${CHUNKED_PREFILL_SIZE}"
+  [ -n "${CUDA_GRAPH_MAX_BS}" ] && echo "  --cuda-graph-max-bs ${CUDA_GRAPH_MAX_BS}"
+  [ "${ALLOW_AUTO_TRUNCATE}" = "1" ] && echo "  --allow-auto-truncate"
+
+  python -m sglang.launch_server "${launch_args[@]}" 2>&1 | awk '{ print strftime("%F %T"), $0; fflush(); }' | tee "${LOG}"
 }
 
 step6_timing_check() {
@@ -431,7 +458,9 @@ Usage:
 
 Optional env overrides:
   VENV_PATH, CUDA_HOME, MODEL_PATH, SGLANG_COMMIT, API_KEY, HOST, PORT,
-  SERVED_MODEL_NAME, TP, LOG, ARCH
+  SERVED_MODEL_NAME, TP, LOG, ARCH,
+  MEM_FRACTION_STATIC, MAX_TOTAL_TOKENS, MAX_RUNNING_REQUESTS, CONTEXT_LENGTH,
+  CHUNKED_PREFILL_SIZE, CUDA_GRAPH_MAX_BS, ALLOW_AUTO_TRUNCATE
 USAGE
 }
 
