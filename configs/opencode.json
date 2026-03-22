@@ -12,12 +12,15 @@
         "glm-4.7-flash": {
           "name": "GLM-4.7-Flash"
         },
-        "MiniMaxAI/MiniMax-M2.1": {
-          "name": "MiniMax-M2.1"
+        "MiniMaxAI/MiniMax-M2.5": {
+          "name": "MiniMax-M2.5"
         },
-	"moonshotai/Kimi-K2.5": {
-	  "name": "Kimi-K2.5"
-	}
+        "moonshotai/Kimi-K2.5": {
+          "name": "Kimi-K2.5"
+        },
+        "nvidia/nemotron-3-super": {
+          "name": "Nemotron 3 Super"
+        }
       }
     }
   },

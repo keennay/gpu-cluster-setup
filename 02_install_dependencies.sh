@@ -22,8 +22,9 @@ fi
 CUDA_PACKAGE_DOWNLOADS=()
 INSTALLED_CUDA_VERSIONS=()
 INSTALLED_CUDA_VERSIONS_DISPLAY="None"
+SUDO_PREFIX=""
 
-# Detect the highest CUDA toolkit version available in the provided repositories
+# Detect the highest CUDA package stream available in the provided repositories
 detect_latest_cuda_version() {
     local repo_list=("$@")
     local version_candidates=""
@@ -41,14 +42,18 @@ detect_latest_cuda_version() {
         if [ "$OS_TYPE" = "ubuntu" ]; then
             local packages_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/Packages"
             version_candidates=$(curl -fsSL "$packages_url" 2>/dev/null | \
-                grep -oP '^Package: cuda-toolkit-\K[0-9]+-[0-9]+$' | \
+                grep -oP '^Package: cuda-\K[0-9]+-[0-9]+$' | \
                 tr '-' '.' | \
                 sort -V | uniq)
         elif [ "$OS_TYPE" = "rhel" ]; then
-            local primary_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/repodata/primary.xml.gz"
+            local primary_url
+            primary_url=$(get_rhel_primary_url "$repo")
+            if [ -z "$primary_url" ]; then
+                continue
+            fi
             version_candidates=$(curl -fsSL "$primary_url" 2>/dev/null | \
                 gzip -dc 2>/dev/null | \
-                grep -oP '<name>cuda-toolkit-\K[0-9]+-[0-9]+' | \
+                grep -oP '<name>cuda-\K[0-9]+-[0-9]+(?=</name>)' | \
                 tr '-' '.' | \
                 sort -V | uniq)
         fi
@@ -63,29 +68,458 @@ detect_latest_cuda_version() {
     return 1
 }
 
+get_rhel_primary_url() {
+    local repo="$1"
+    local repomd_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/repodata/repomd.xml"
+    local primary_rel
+
+    primary_rel=$(curl -fsSL "$repomd_url" 2>/dev/null | awk '
+        BEGIN { RS="</data>" }
+        /<data type="primary">/ {
+            if (match($0, /location href="[^"]+"/)) {
+                rel = substr($0, RSTART, RLENGTH)
+                sub(/^.*href="/, "", rel)
+                sub(/"$/, "", rel)
+                print rel
+                exit
+            }
+        }
+    ')
+
+    if [ -z "$primary_rel" ]; then
+        echo ""
+        return 1
+    fi
+
+    echo "https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/${primary_rel}"
+    return 0
+}
+
+setup_ubuntu_cuda_repo() {
+    local repo="$1"
+    local packages_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/Packages"
+    local keyring_filename
+    local keyring_path
+    local keyring_basename
+    local keyring_file
+    local keyring_url
+
+    keyring_filename=$(curl -fsSL "$packages_url" 2>/dev/null | awk '
+        $1 == "Package:" && $2 == "cuda-keyring" { pkgmatch=1; next }
+        pkgmatch && $1 == "Filename:" { print $2; exit }
+        pkgmatch && $0 == "" { pkgmatch=0 }
+    ')
+
+    if [ -z "$keyring_filename" ]; then
+        print_warning "Could not determine cuda-keyring package for $repo"
+        return 1
+    fi
+
+    keyring_path=${keyring_filename#./}
+    keyring_basename=$(basename "$keyring_filename")
+    keyring_file="${CUDA_CACHE_DIR}/${repo}-${keyring_basename}"
+    keyring_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/${keyring_path}"
+
+    if [ ! -f "$keyring_file" ]; then
+        print_info "Downloading CUDA repository keyring from NVIDIA..."
+        if wget -O "$keyring_file" "$keyring_url"; then
+            CUDA_PACKAGE_DOWNLOADS+=("$keyring_file")
+        else
+            print_warning "Failed to download $keyring_url"
+            rm -f "$keyring_file"
+            return 1
+        fi
+    else
+        print_info "Using cached CUDA repository keyring: $keyring_file"
+    fi
+
+    print_info "Configuring NVIDIA CUDA APT repository for $repo..."
+    if ! ${SUDO_PREFIX}dpkg -i "$keyring_file"; then
+        print_warning "Failed to install CUDA repository keyring from $keyring_file"
+        return 1
+    fi
+
+    print_info "Updating package index before CUDA installation..."
+    if ! $PKG_UPDATE_CMD; then
+        print_warning "Package index update failed after enabling NVIDIA CUDA repository"
+        return 1
+    fi
+
+    return 0
+}
+
+resolve_ubuntu_driver_package() {
+    local cuda_stream="$1"
+
+    if ! command -v apt-cache &> /dev/null; then
+        echo ""
+        return 1
+    fi
+
+    local driver_branch=""
+    if [ -n "$cuda_stream" ]; then
+        local runtime_package="cuda-runtime-$(echo "$cuda_stream" | sed 's/\./-/g')"
+        driver_branch=$(apt-cache depends "$runtime_package" 2>/dev/null | awk '
+            $1 == "Depends:" {
+                if ($2 == "libnvidia-compute") {
+                    print "generic"
+                    exit
+                }
+                if ($2 ~ /^libnvidia-compute-[0-9]+$/) {
+                    sub(/^libnvidia-compute-/, "", $2)
+                    print $2
+                    exit
+                }
+            }
+        ')
+    fi
+
+    if [ -n "$driver_branch" ] && [ "$driver_branch" != "generic" ]; then
+        local versioned_cuda_driver_package="cuda-drivers-${driver_branch}"
+        local versioned_cuda_driver_candidate
+        versioned_cuda_driver_candidate=$(apt-cache policy "$versioned_cuda_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$versioned_cuda_driver_candidate" ] && [ "$versioned_cuda_driver_candidate" != "(none)" ]; then
+            echo "$versioned_cuda_driver_package"
+            return 0
+        fi
+
+        local versioned_nvidia_driver_package="nvidia-driver-${driver_branch}"
+        local versioned_nvidia_driver_candidate
+        versioned_nvidia_driver_candidate=$(apt-cache policy "$versioned_nvidia_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$versioned_nvidia_driver_candidate" ] && [ "$versioned_nvidia_driver_candidate" != "(none)" ]; then
+            echo "$versioned_nvidia_driver_package"
+            return 0
+        fi
+    fi
+
+    local fallback_package
+    for fallback_package in "cuda-drivers" "nvidia-driver"; do
+        local fallback_candidate
+        fallback_candidate=$(apt-cache policy "$fallback_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$fallback_candidate" ] && [ "$fallback_candidate" != "(none)" ]; then
+            echo "$fallback_package"
+            return 0
+        fi
+    done
+
+    echo ""
+    return 1
+}
+
+resolve_rhel_driver_package() {
+    local cuda_stream="$1"
+
+    if [ -z "$cuda_stream" ]; then
+        echo "cuda-drivers"
+        return 0
+    fi
+
+    local runtime_package="cuda-runtime-$(echo "$cuda_stream" | sed 's/\./-/g')"
+    local version_major
+    version_major=$(echo "$OS_VERSION_ID" | cut -d. -f1)
+    version_major=${version_major:-9}
+
+    local repo_candidates=("rhel${version_major}")
+    if [ "$version_major" -gt 8 ]; then
+        repo_candidates+=("rhel8")
+    fi
+
+    local repo
+    for repo in "${repo_candidates[@]}"; do
+        local primary_url
+        primary_url=$(get_rhel_primary_url "$repo")
+        if [ -z "$primary_url" ]; then
+            continue
+        fi
+
+        local required_driver_version
+        required_driver_version=$(curl -fsSL "$primary_url" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="$runtime_package" '
+            BEGIN { RS="</package>" }
+            $0 ~ "<name>" pkg "</name>" {
+                if (match($0, /name="nvidia-driver-cuda"[^>]*ver="[^"]+"/)) {
+                    dep = substr($0, RSTART, RLENGTH)
+                    sub(/^.*ver="/, "", dep)
+                    sub(/".*$/, "", dep)
+                    print dep
+                    exit
+                }
+            }
+        ')
+
+        if [ -z "$required_driver_version" ]; then
+            continue
+        fi
+
+        local candidate_lines
+        candidate_lines=$(curl -fsSL "$primary_url" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-drivers" '
+            BEGIN { RS="</package>" }
+            $0 ~ "<name>" pkg "</name>" {
+                version = ""
+                release = ""
+                location = ""
+                if (match($0, /<version [^>]*ver="[^"]+"/)) {
+                    tmp = substr($0, RSTART, RLENGTH)
+                    sub(/^.*ver="/, "", tmp)
+                    sub(/".*$/, "", tmp)
+                    version = tmp
+                }
+                if (match($0, /<version [^>]*rel="[^"]+"/)) {
+                    tmp = substr($0, RSTART, RLENGTH)
+                    sub(/^.*rel="/, "", tmp)
+                    sub(/".*$/, "", tmp)
+                    release = tmp
+                }
+                if (match($0, /<location href="[^"]+"/)) {
+                    tmp = substr($0, RSTART, RLENGTH)
+                    sub(/^.*href="/, "", tmp)
+                    sub(/".*$/, "", tmp)
+                    location = tmp
+                }
+                if (version != "" && location != "") {
+                    if (release != "") {
+                        version = version "-" release
+                    }
+                    print version "\t" location
+                }
+            }
+        ')
+
+        local selected_line=""
+        local candidate_version
+        local candidate_path
+        while IFS=$'\t' read -r candidate_version candidate_path; do
+            if [ -z "$candidate_version" ] || [ -z "$candidate_path" ]; then
+                continue
+            fi
+
+            if [ "$(printf "%s\n%s\n" "$required_driver_version" "$candidate_version" | sort -V | head -1)" = "$required_driver_version" ]; then
+                selected_line=$(printf "%s\t%s\n%s" "$candidate_version" "$candidate_path" "$selected_line")
+            fi
+        done <<< "$candidate_lines"
+
+        if [ -z "$selected_line" ]; then
+            continue
+        fi
+
+        local selected_driver_path
+        selected_driver_path=$(printf "%s" "$selected_line" | sort -V -k1,1 | head -1 | cut -f2)
+        if [ -z "$selected_driver_path" ]; then
+            continue
+        fi
+
+        local driver_rpm_basename
+        driver_rpm_basename=$(basename "$selected_driver_path")
+        local driver_rpm_file="${CUDA_CACHE_DIR}/${driver_rpm_basename}"
+        local driver_rpm_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/${selected_driver_path}"
+
+        if [ ! -f "$driver_rpm_file" ]; then
+            print_info "Downloading matching NVIDIA driver package from NVIDIA repository..."
+            if wget -O "$driver_rpm_file" "$driver_rpm_url"; then
+                CUDA_PACKAGE_DOWNLOADS+=("$driver_rpm_file")
+            else
+                print_warning "Failed to download $driver_rpm_url"
+                rm -f "$driver_rpm_file"
+                continue
+            fi
+        else
+            print_info "Using cached NVIDIA driver package: $driver_rpm_file"
+        fi
+
+        echo "$driver_rpm_file"
+        return 0
+    done
+
+    echo "cuda-drivers"
+    return 0
+}
+
+has_nvidia_pci_devices() {
+    if command -v lspci &> /dev/null && lspci 2>/dev/null | grep -qi 'NVIDIA'; then
+        return 0
+    fi
+
+    return 1
+}
+
+has_nvidia_kernel_driver() {
+    if command -v lsmod &> /dev/null && lsmod 2>/dev/null | grep -q '^nvidia'; then
+        return 0
+    fi
+
+    if [ -e /proc/driver/nvidia/version ] || [ -e /sys/module/nvidia/version ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+ensure_nvidia_driver_build_prereqs() {
+    if [ "$OS_TYPE" = "ubuntu" ]; then
+        local headers_pkg="linux-headers-$(uname -r)"
+        local headers_candidate
+        if dpkg -s "$headers_pkg" &> /dev/null; then
+            print_info "  ✓ Kernel headers already installed: $headers_pkg"
+            return 0
+        fi
+
+        headers_candidate=$(apt-cache policy "$headers_pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -z "$headers_candidate" ] || [ "$headers_candidate" = "(none)" ]; then
+            print_warning "Could not find $headers_pkg in APT metadata."
+            print_warning "DKMS may fail without matching kernel headers."
+            return 0
+        fi
+
+        print_info "Installing kernel headers required for NVIDIA DKMS: $headers_pkg"
+        if ! $PKG_INSTALL_CMD "$headers_pkg"; then
+            print_warning "Failed to install $headers_pkg."
+            return 1
+        fi
+
+        return 0
+    fi
+
+    if [ "$OS_TYPE" = "rhel" ]; then
+        local kernel_devel_pkg="kernel-devel-$(uname -r)"
+        local kernel_headers_pkg="kernel-headers-$(uname -r)"
+        local missing_prereqs=()
+
+        if ! rpm -q "$kernel_devel_pkg" &> /dev/null; then
+            missing_prereqs+=("$kernel_devel_pkg")
+        fi
+        if ! rpm -q "$kernel_headers_pkg" &> /dev/null; then
+            missing_prereqs+=("$kernel_headers_pkg")
+        fi
+
+        if [ ${#missing_prereqs[@]} -eq 0 ]; then
+            print_info "  ✓ Kernel headers already installed for $(uname -r)"
+            return 0
+        fi
+
+        print_info "Installing kernel development packages required for NVIDIA DKMS: ${missing_prereqs[*]}"
+        if ! $PKG_INSTALL_CMD "${missing_prereqs[@]}"; then
+            print_warning "Failed to install kernel development prerequisites: ${missing_prereqs[*]}"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+install_nvidia_driver_for_gpu_support() {
+    local cuda_stream="$1"
+
+    if ! command -v nvcc &> /dev/null; then
+        return 0
+    fi
+
+    if command -v nvidia-smi &> /dev/null && nvidia-smi >/dev/null 2>&1; then
+        print_info "NVIDIA driver is already active."
+        return 0
+    fi
+
+    if ! has_nvidia_pci_devices; then
+        print_info "No NVIDIA GPU detected via PCI enumeration; skipping driver installation."
+        return 0
+    fi
+
+    if has_nvidia_kernel_driver; then
+        print_info "NVIDIA kernel driver appears to be loaded already."
+        return 0
+    fi
+
+    print_warning "NVIDIA GPU detected, but the NVIDIA kernel driver is not loaded."
+    print_info "CUDA packages do not install the running kernel driver by themselves."
+
+    local driver_package=""
+    case "$OS_TYPE" in
+        ubuntu)
+            driver_package=$(resolve_ubuntu_driver_package "$cuda_stream")
+            ;;
+        rhel)
+            driver_package=$(resolve_rhel_driver_package "$cuda_stream")
+            ;;
+    esac
+
+    if [ -z "$driver_package" ]; then
+        print_warning "Could not resolve an NVIDIA driver package automatically."
+        print_warning "Install the full NVIDIA driver stack manually before using CUDA workloads."
+        return 0
+    fi
+
+    local install_driver="y"
+    if [ "$AUTO_YES" = true ]; then
+        print_info "Automatic mode enabled (-y): installing $driver_package"
+    else
+        read -p "Install $driver_package to enable the NVIDIA kernel driver? (y/n): " install_driver
+    fi
+
+    if [[ ! "$install_driver" =~ ^[Yy]$ ]]; then
+        print_warning "Skipped NVIDIA driver installation. CUDA apps may not work until the driver is installed."
+        return 0
+    fi
+
+    if ! ensure_nvidia_driver_build_prereqs; then
+        INSTALL_SUCCESS=false
+        return 0
+    fi
+
+    print_info "Installing NVIDIA driver package: $driver_package"
+    if ! $PKG_INSTALL_CMD "$driver_package"; then
+        print_warning "Failed to install $driver_package."
+        INSTALL_SUCCESS=false
+        return 0
+    fi
+
+    if command -v modprobe &> /dev/null; then
+        print_info "Attempting to load NVIDIA kernel modules..."
+        ${SUDO_PREFIX}modprobe nvidia >/dev/null 2>&1 || true
+        ${SUDO_PREFIX}modprobe nvidia_uvm >/dev/null 2>&1 || true
+    fi
+
+    if command -v nvidia-smi &> /dev/null && nvidia-smi >/dev/null 2>&1; then
+        print_info "✓ NVIDIA driver is active and responding to nvidia-smi"
+        return 0
+    fi
+
+    if has_nvidia_kernel_driver; then
+        print_warning "NVIDIA driver packages were installed, but nvidia-smi is still not ready."
+    else
+        print_warning "NVIDIA driver packages were installed, but the kernel module is still not loaded."
+    fi
+    print_warning "A reboot may be required before the NVIDIA driver becomes active."
+    return 0
+}
+
 collect_installed_cuda_versions() {
     INSTALLED_CUDA_VERSIONS=()
     local packages=()
 
     if [ "$OS_TYPE" = "ubuntu" ]; then
         if command -v dpkg &> /dev/null; then
-            mapfile -t packages < <(dpkg -l 'cuda-toolkit*' 2>/dev/null | awk '/^ii/ {print $2}')
+            mapfile -t packages < <(dpkg -l 'cuda' 'cuda-[0-9]*' 'cuda-toolkit*' 2>/dev/null | awk '/^ii/ {print $2}')
         fi
     elif [ "$OS_TYPE" = "rhel" ]; then
         if command -v rpm &> /dev/null; then
-            mapfile -t packages < <(rpm -qa 'cuda-toolkit*' 2>/dev/null)
+            mapfile -t packages < <(rpm -qa 'cuda' 'cuda-[0-9]*' 'cuda-toolkit*' 2>/dev/null)
         fi
     fi
 
     for pkg in "${packages[@]}"; do
-        if [[ $pkg =~ ^cuda-toolkit- ]]; then
+        if [[ $pkg =~ ^cuda-([0-9]+(-[0-9]+){1,3})$ ]]; then
+            local version_suffix=${pkg#cuda-}
+            version_suffix=${version_suffix%%.*}
+            if [[ $version_suffix =~ ^[0-9]+(-[0-9]+){1,3}$ ]]; then
+                local version=${version_suffix//-/.}
+                INSTALLED_CUDA_VERSIONS+=("$version")
+            fi
+        elif [[ $pkg =~ ^cuda-toolkit- ]]; then
             local version_suffix=${pkg#cuda-toolkit-}
             version_suffix=${version_suffix%%.*}
             if [[ $version_suffix =~ ^[0-9]+(-[0-9]+){1,3}$ ]]; then
                 local version=${version_suffix//-/.}
                 INSTALLED_CUDA_VERSIONS+=("$version")
             fi
-        elif [[ $pkg == cuda-toolkit ]]; then
+        elif [[ $pkg == cuda || $pkg == cuda-toolkit ]]; then
             if [ -n "$CURRENT_CUDA_VERSION_NORMALIZED" ]; then
                 INSTALLED_CUDA_VERSIONS+=("$CURRENT_CUDA_VERSION_NORMALIZED")
             fi
@@ -136,9 +570,9 @@ detect_os_package_manager() {
     local version_major
     version_major=$(echo "$VERSION_ID" | cut -d. -f1)
 
-    local sudo_prefix="sudo "
+    SUDO_PREFIX="sudo "
     if [ "$(id -u)" -eq 0 ]; then
-        sudo_prefix=""
+        SUDO_PREFIX=""
     fi
 
     if [ "$ID" = "ubuntu" ]; then
@@ -146,10 +580,10 @@ detect_os_package_manager() {
             return 1
         fi
         OS_TYPE="ubuntu"
-        PKG_INSTALL_CMD="${sudo_prefix}apt install -y"
-        PKG_UPDATE_CMD="${sudo_prefix}apt update"
+        PKG_INSTALL_CMD="${SUDO_PREFIX}apt install -y"
+        PKG_UPDATE_CMD="${SUDO_PREFIX}apt update"
         PKG_QUERY_CMD="dpkg -l"
-        PKG_CLEAN_CMD="${sudo_prefix}apt clean"
+        PKG_CLEAN_CMD="${SUDO_PREFIX}apt clean"
         return 0
     fi
 
@@ -159,13 +593,13 @@ detect_os_package_manager() {
         fi
         OS_TYPE="rhel"
         if command -v dnf &> /dev/null; then
-            PKG_INSTALL_CMD="${sudo_prefix}dnf install -y"
-            PKG_UPDATE_CMD="${sudo_prefix}dnf makecache"
-            PKG_CLEAN_CMD="${sudo_prefix}dnf clean all"
+            PKG_INSTALL_CMD="${SUDO_PREFIX}dnf install -y"
+            PKG_UPDATE_CMD="${SUDO_PREFIX}dnf makecache"
+            PKG_CLEAN_CMD="${SUDO_PREFIX}dnf clean all"
         else
-            PKG_INSTALL_CMD="${sudo_prefix}yum install -y"
-            PKG_UPDATE_CMD="${sudo_prefix}yum makecache"
-            PKG_CLEAN_CMD="${sudo_prefix}yum clean all"
+            PKG_INSTALL_CMD="${SUDO_PREFIX}yum install -y"
+            PKG_UPDATE_CMD="${SUDO_PREFIX}yum makecache"
+            PKG_CLEAN_CMD="${SUDO_PREFIX}yum clean all"
         fi
         PKG_QUERY_CMD="rpm -qa"
         return 0
@@ -542,8 +976,8 @@ echo ""
                 3)
                     CUDA_SELECTION="custom"
                     while true; do
-                        read -p "Enter desired CUDA version (e.g. 12.4 or 13.0.1): " CUSTOM_VERSION
-                        if [[ "$CUSTOM_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+                        read -p "Enter desired CUDA version (e.g. 13, 13.0, 13.0.1, or 13.0.2-1): " CUSTOM_VERSION
+                        if [[ "$CUSTOM_VERSION" =~ ^[0-9]+$ || "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+$ || "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
                             if [[ "$CUSTOM_VERSION" =~ ^[0-9]+$ ]]; then
                                 CUSTOM_VERSION="${CUSTOM_VERSION}.0"
                             fi
@@ -551,7 +985,7 @@ echo ""
                             CUDA_INSTALL_REQUESTED=true
                             break
                         else
-                            print_error "Invalid version number. Use major, major.minor, or major.minor.patch (e.g. 12.4 or 13.0.1)."
+                            print_error "Invalid version number. Use major, major.minor, major.minor.patch, or major.minor.patch-release (e.g. 13, 13.0, 13.0.1, or 13.0.2-1)."
                         fi
                     done
                     ;;
@@ -572,7 +1006,7 @@ echo ""
                 TARGET_CUDA_VERSION_MINOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f2)
                 TARGET_CUDA_VERSION_MINOR=${TARGET_CUDA_VERSION_MINOR:-0}
                 TARGET_CUDA_VERSION_NORMALIZED="${TARGET_CUDA_VERSION_MAJOR}.${TARGET_CUDA_VERSION_MINOR}"
-                if [[ "$TARGET_CUDA_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                if [[ "$TARGET_CUDA_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
                     TARGET_CUDA_EXACT_VERSION="$TARGET_CUDA_VERSION"
                 fi
             fi
@@ -619,16 +1053,15 @@ echo ""
                 fi
 
                 CUDA_PKG_VERSION=$(echo "$TARGET_CUDA_VERSION_NORMALIZED" | sed 's/\./-/g')
-                APT_UPDATED=false
                 DNF_REFRESHED=false
                 CUDA_INSTALLED=false
                 for REPO_VERSION in "${CUDA_REPO_VERSIONS[@]}"; do
                     [ -z "$REPO_VERSION" ] && continue
-                    print_info "Attempting CUDA download from NVIDIA repository: $REPO_VERSION"
+                    print_info "Attempting CUDA installation from NVIDIA repository: $REPO_VERSION"
 
                     if [ "$OS_TYPE" = "ubuntu" ]; then
                         PACKAGES_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/Packages"
-                        PACKAGE_VERSION=$(curl -fsSL "$PACKAGES_URL" 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
+                        PACKAGE_VERSION=$(curl -fsSL "$PACKAGES_URL" 2>/dev/null | awk -v pkg="cuda-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
                             function matches_requested(version, requested, len, next_char) {
                                 if (requested == "") {
                                     return 1
@@ -644,55 +1077,54 @@ echo ""
                             pkgmatch && $1 == "Version:" {
                                 if (matches_requested($2, requested_version)) {
                                     print $2
-                                    exit
                                 }
                             }
                             pkgmatch && $0 == "" { pkgmatch=0 }
-                        ')
+                        ' | sort -V | tail -1)
                         if [ -z "$PACKAGE_VERSION" ]; then
                             if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} matching $TARGET_CUDA_EXACT_VERSION from $REPO_VERSION"
+                                print_warning "Could not determine package version for cuda-${CUDA_PKG_VERSION} matching $TARGET_CUDA_EXACT_VERSION from $REPO_VERSION"
                             else
-                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} from $REPO_VERSION"
+                                print_warning "Could not determine package version for cuda-${CUDA_PKG_VERSION} from $REPO_VERSION"
                             fi
                             continue
                         fi
 
-                        CUDA_DEB_FILE="${CUDA_CACHE_DIR}/cuda-toolkit-${CUDA_PKG_VERSION}_${PACKAGE_VERSION}_amd64.deb"
-                        CUDA_DEB_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/cuda-toolkit-${CUDA_PKG_VERSION}_${PACKAGE_VERSION}_amd64.deb"
+                        if ! setup_ubuntu_cuda_repo "$REPO_VERSION"; then
+                            continue
+                        fi
 
-                        if [ ! -f "$CUDA_DEB_FILE" ]; then
-                            print_info "Downloading CUDA toolkit package from NVIDIA..."
-                            if wget -O "$CUDA_DEB_FILE" "$CUDA_DEB_URL"; then
-                                CUDA_PACKAGE_DOWNLOADS+=("$CUDA_DEB_FILE")
-                            else
-                                print_warning "Failed to download $CUDA_DEB_URL"
-                                rm -f "$CUDA_DEB_FILE"
-                                continue
-                            fi
+                        CUDA_APT_PACKAGE="cuda-${CUDA_PKG_VERSION}"
+                        CUDA_APT_PACKAGE_SPEC="$CUDA_APT_PACKAGE"
+                        if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
+                            CUDA_APT_PACKAGE_SPEC="${CUDA_APT_PACKAGE}=${PACKAGE_VERSION}"
+                            print_info "Resolved CUDA package version: $PACKAGE_VERSION"
                         else
-                            print_info "Using cached CUDA package: $CUDA_DEB_FILE"
+                            print_info "Resolved CUDA package stream: ${CUDA_APT_PACKAGE} (latest matching package version: $PACKAGE_VERSION)"
                         fi
 
-                        if [ "$APT_UPDATED" = false ]; then
-                            print_info "Updating package index before CUDA installation..."
-                            if ! $PKG_UPDATE_CMD; then
-                                print_warning "Package index update failed; CUDA installation may require manual dependency resolution"
+                        print_info "Installing CUDA package from NVIDIA repository..."
+                        if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
+                            if ${SUDO_PREFIX}apt install -y --allow-downgrades "$CUDA_APT_PACKAGE_SPEC"; then
+                                print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
+                                CUDA_INSTALLED=true
+                            else
+                                print_warning "Failed to install CUDA package $CUDA_APT_PACKAGE_SPEC"
                             fi
-                            APT_UPDATED=true
-                        fi
-
-                        print_info "Installing CUDA toolkit package..."
-                        if $PKG_INSTALL_CMD "$CUDA_DEB_FILE"; then
-                            print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
+                        elif $PKG_INSTALL_CMD "$CUDA_APT_PACKAGE_SPEC"; then
+                            print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
                             CUDA_INSTALLED=true
                         else
-                            print_warning "Failed to install CUDA toolkit from $CUDA_DEB_FILE"
+                            print_warning "Failed to install CUDA package $CUDA_APT_PACKAGE_SPEC"
                         fi
 
                     elif [ "$OS_TYPE" = "rhel" ]; then
-                        PRIMARY_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/repodata/primary.xml.gz"
-                        RPM_RELATIVE_PATH=$(curl -fsSL "$PRIMARY_URL" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
+                        PRIMARY_URL=$(get_rhel_primary_url "$REPO_VERSION")
+                        if [ -z "$PRIMARY_URL" ]; then
+                            print_warning "Could not locate repository metadata for $REPO_VERSION"
+                            continue
+                        fi
+                        RPM_RELATIVE_PATH=$(curl -fsSL "$PRIMARY_URL" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
                             function matches_requested(version, requested, len, next_char) {
                                 if (requested == "") {
                                     return 1
@@ -713,8 +1145,19 @@ echo ""
                                 }
                             }
                             pkgmatch && /<version / {
+                                version=""
+                                release=""
                                 version_ok=0
-                                if (match($0, /ver="([^"]+)"/, arr) && matches_requested(arr[1], requested_version)) {
+                                if (match($0, /ver="([^"]+)"/, arr)) {
+                                    version=arr[1]
+                                }
+                                if (match($0, /rel="([^"]+)"/, arr)) {
+                                    release=arr[1]
+                                }
+                                if (release != "") {
+                                    version=version "-" release
+                                }
+                                if (matches_requested(version, requested_version)) {
                                     version_ok=1
                                 }
                             }
@@ -727,9 +1170,9 @@ echo ""
                         ')
                         if [ -z "$RPM_RELATIVE_PATH" ]; then
                             if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION matching $TARGET_CUDA_EXACT_VERSION"
+                                print_warning "Could not locate CUDA package metadata for $REPO_VERSION matching $TARGET_CUDA_EXACT_VERSION"
                             else
-                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION"
+                                print_warning "Could not locate CUDA package metadata for $REPO_VERSION"
                             fi
                             continue
                         fi
@@ -739,7 +1182,7 @@ echo ""
                         CUDA_RPM_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/$RPM_RELATIVE_PATH"
 
                         if [ ! -f "$CUDA_RPM_FILE" ]; then
-                            print_info "Downloading CUDA toolkit package from NVIDIA..."
+                            print_info "Downloading CUDA package from NVIDIA..."
                             if wget -O "$CUDA_RPM_FILE" "$CUDA_RPM_URL"; then
                                 CUDA_PACKAGE_DOWNLOADS+=("$CUDA_RPM_FILE")
                             else
@@ -759,12 +1202,12 @@ echo ""
                             DNF_REFRESHED=true
                         fi
 
-                        print_info "Installing CUDA toolkit package..."
+                        print_info "Installing CUDA package..."
                         if $PKG_INSTALL_CMD "$CUDA_RPM_FILE"; then
-                            print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
+                            print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
                             CUDA_INSTALLED=true
                         else
-                            print_warning "Failed to install CUDA toolkit from $CUDA_RPM_FILE"
+                            print_warning "Failed to install CUDA from $CUDA_RPM_FILE"
                         fi
                     else
                         print_warning "Unsupported OS type $OS_TYPE for CUDA installation attempt"
@@ -796,19 +1239,27 @@ echo ""
                     fi
                     CUDA_MISSING=false
                 else
-                    print_error "Failed to install CUDA toolkit automatically"
+                    print_error "Failed to install CUDA automatically"
                     print_info "You may need to install it manually from:"
                     print_info "https://developer.nvidia.com/cuda-downloads"
                     print_info ""
                     if [ "$OS_TYPE" = "ubuntu" ]; then
-                        print_info "Select: Linux > x86_64 > Ubuntu > $VERSION_MAJOR > deb (network)"
+                        print_info "Select: Linux > x86_64 > Ubuntu > $OS_VERSION_ID > deb (network)"
                     elif [ "$OS_TYPE" = "rhel" ]; then
-                        print_info "Select: Linux > x86_64 > RHEL > $VERSION_MAJOR > rpm (network)"
+                        print_info "Select: Linux > x86_64 > RHEL > $OS_VERSION_ID > rpm (network)"
                     fi
                     INSTALL_SUCCESS=false
                 fi
             else
                 CUDA_MISSING=false
+            fi
+
+            if [ "$INSTALL_SUCCESS" = true ]; then
+                CUDA_DRIVER_MATCH_STREAM="$TARGET_CUDA_VERSION_NORMALIZED"
+                if [ -z "$CUDA_DRIVER_MATCH_STREAM" ]; then
+                    CUDA_DRIVER_MATCH_STREAM="$CURRENT_CUDA_VERSION_NORMALIZED"
+                fi
+                install_nvidia_driver_for_gpu_support "$CUDA_DRIVER_MATCH_STREAM"
             fi
         
         echo ""

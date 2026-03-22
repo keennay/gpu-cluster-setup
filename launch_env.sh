@@ -220,20 +220,6 @@ else
     export HF_HOME="$HF_PATH"
     export HUGGINGFACE_HUB_CACHE="$HF_PATH"
 
-    # CPU optimization for 32 cores
-    export OMP_NUM_THREADS=32
-    export MKL_NUM_THREADS=32
-    export OPENBLAS_NUM_THREADS=32
-    export VECLIB_MAXIMUM_THREADS=32
-    export NUMEXPR_NUM_THREADS=32
-    
-    # NUMA optimization
-    export OMP_PROC_BIND=true
-    export OMP_PLACES=cores
-    
-    # Memory optimization
-    export MALLOC_ARENA_MAX=2
-
     # Detect GPU architecture
     print_info "Detecting GPU architecture..."
     TORCH_CUDA_ARCH_LIST=""

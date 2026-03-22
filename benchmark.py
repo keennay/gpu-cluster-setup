@@ -285,6 +285,7 @@ def parse_args():
 Example usage:
   python benchmark.py --model glm-4.7-fp8
   python benchmark.py --model glm-4.5-air --concurrency 500 --num-prompts 500
+  python benchmark.py --model glm-4.7-fp8 --port 8001
   python benchmark.py --model glm-4.7-fp8 --api-key MY_REAL_KEY --base-url http://remote:8000/v1
   python benchmark.py --preview-samples 2
         """,
@@ -298,12 +299,20 @@ Example usage:
     optional.add_argument("--concurrency", type=int, default=100, help="Number of concurrent requests (default: 100)")
     optional.add_argument("--num-prompts", type=int, default=100, help="Total number of prompts to run (default: 100)")
     optional.add_argument("--base-url", type=str, default="http://localhost:8000/v1", help="API base URL (default: http://localhost:8000/v1)")
+    optional.add_argument("--port", type=int, default=8000, help="API port for the default localhost base URL (default: 8000)")
     optional.add_argument("--min-input", type=int, default=DEFAULT_MIN_INPUT, help=f"Minimum input tokens (default: {DEFAULT_MIN_INPUT})")
     optional.add_argument("--max-input", type=int, default=DEFAULT_MAX_INPUT, help=f"Maximum input tokens (default: {DEFAULT_MAX_INPUT})")
     optional.add_argument("--min-output", type=int, default=DEFAULT_MIN_OUTPUT, help=f"Minimum output tokens (default: {DEFAULT_MIN_OUTPUT})")
     optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum output tokens (default: {DEFAULT_MAX_OUTPUT})")
     optional.add_argument("--timeout", type=int, default=600, help="Timeout per request in seconds (default: 600)")
     optional.add_argument("--warmup", type=int, default=3, help="Number of warmup requests (default: 3)")
+    optional.add_argument(
+        "--stream",
+        type=str,
+        choices=("content", "reasoning"),
+        default="content",
+        help="TTFT stream to measure: content or reasoning (default: content)",
+    )
     optional.add_argument("--no-ignore-eos", action="store_true", help="Don't force full output length (default: force full output)")
     optional.add_argument(
         "--preview-samples",
@@ -315,6 +324,8 @@ Example usage:
     args = parser.parse_args()
 
     errors = []
+    if args.port < 1 or args.port > 65535:
+        errors.append("--port must be between 1 and 65535")
     if args.concurrency < 1:
         errors.append("--concurrency must be >= 1")
     if args.num_prompts < 1:
@@ -346,13 +357,16 @@ Example usage:
 
 args = parse_args()
 
-BASE_URL = args.base_url
+BASE_URL_WAS_EXPLICIT = any(arg == "--base-url" or arg.startswith("--base-url=") for arg in sys.argv[1:])
+BASE_URL = args.base_url if BASE_URL_WAS_EXPLICIT else f"http://localhost:{args.port}/v1"
 API_KEY = args.api_key
 MODEL = args.model
 NUM_PROMPTS = args.num_prompts
 CONCURRENCY = args.concurrency
+PORT = args.port
 TIMEOUT_PER_REQUEST = args.timeout
 WARMUP_REQUESTS = args.warmup
+STREAM_MODE = args.stream
 MIN_INPUT_TOKENS = args.min_input
 MAX_INPUT_TOKENS = args.max_input
 MIN_OUTPUT_TOKENS = args.min_output
@@ -744,30 +758,37 @@ def print_sample_preview():
             print("\n...[truncated for preview]...")
 
 
-def _has_text_delta(delta) -> bool:
-    for attr in ("content", "reasoning_content"):
-        value = getattr(delta, attr, None)
-        if value is None:
-            continue
-        if isinstance(value, str):
-            if value:
+def _value_has_text(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value)
+    if isinstance(value, list):
+        for part in value:
+            if isinstance(part, str) and part:
                 return True
-            continue
-        if isinstance(value, list):
-            for part in value:
-                if isinstance(part, str) and part:
+            if isinstance(part, dict):
+                if part.get("text") or part.get("content") or part.get("reasoning") or part.get("reasoning_content"):
                     return True
-                if isinstance(part, dict):
-                    if part.get("text") or part.get("content") or part.get("reasoning_content"):
-                        return True
-                else:
-                    text = getattr(part, "text", None)
+            else:
+                for attr in ("text", "content", "reasoning", "reasoning_content"):
+                    text = getattr(part, attr, None)
                     if isinstance(text, str) and text:
                         return True
-            continue
-    tool_calls = getattr(delta, "tool_calls", None)
-    if tool_calls:
-        return True
+        return False
+    return False
+
+
+def _has_selected_stream_delta(delta) -> bool:
+    attrs = ("reasoning", "reasoning_content") if STREAM_MODE == "reasoning" else ("content",)
+    for attr in attrs:
+        value = getattr(delta, attr, None)
+        if _value_has_text(value):
+            return True
+    if STREAM_MODE == "content":
+        tool_calls = getattr(delta, "tool_calls", None)
+        if tool_calls:
+            return True
     return False
 
 
@@ -801,7 +822,7 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
         async for chunk in stream:
             if first_token and chunk.choices:
                 delta = chunk.choices[0].delta
-                if _has_text_delta(delta):
+                if _has_selected_stream_delta(delta):
                     ttft = time.perf_counter() - start
                     first_token = False
             if chunk.choices:
@@ -932,6 +953,7 @@ async def run_benchmark():
     print("BENCHMARK CONFIG")
     print(f"{'=' * 60}")
     print(f"Model:               {MODEL}")
+    print(f"Port:                {PORT}")
     print(f"Base URL:            {BASE_URL}")
     print(f"Total requests:      {NUM_PROMPTS}")
     print(f"Concurrency:         {CONCURRENCY} (simulating {CONCURRENCY} agents)")
@@ -942,6 +964,7 @@ async def run_benchmark():
     print("Output profile (pre-clamp):")
     print_bucket_profile(OUTPUT_TOKEN_BUCKETS, OUTPUT_BUCKET_DESCRIPTIONS)
     print(f"Timeout per request: {TIMEOUT_PER_REQUEST}s")
+    print(f"TTFT stream mode:    {STREAM_MODE}")
     print(f"ignore_eos:          {IGNORE_EOS} {'(forces full output)' if IGNORE_EOS else '(natural stopping)'}")
     print(f"{'=' * 60}\n")
 
@@ -1017,7 +1040,9 @@ async def run_benchmark():
     print(f"  Output tokens/sec:     {total_completion_tokens / total_wall_time:.2f}")
     print(f"  Total tokens/sec:      {total_tokens / total_wall_time:.2f}")
 
-    print("\nTIME TO FIRST TOKEN (TTFT):")
+    ttft_label = "reasoning" if STREAM_MODE == "reasoning" else "content/tool"
+
+    print(f"\nTIME TO FIRST TOKEN (TTFT) [{STREAM_MODE}]:")
     if ttfts:
         print(f"  Mean:                  {statistics.mean(ttfts) * 1000:.0f}ms")
         print(f"  Median:                {statistics.median(ttfts) * 1000:.0f}ms")
@@ -1025,9 +1050,9 @@ async def run_benchmark():
         print(f"  P99:                   {percentile(ttfts, 0.99) * 1000:.0f}ms")
         missing_ttft = len(successful) - len(ttfts)
         if missing_ttft:
-            print(f"  Missing:               {missing_ttft} requests (no streamed text/tool delta observed)")
+            print(f"  Missing:               {missing_ttft} requests (no streamed {ttft_label} delta observed)")
     else:
-        print("  Unavailable: no streamed text/tool deltas were observed on successful requests.")
+        print(f"  Unavailable: no streamed {ttft_label} deltas were observed on successful requests.")
 
     print("\nEND-TO-END LATENCY:")
     print(f"  Mean:                  {statistics.mean(latencies):.2f}s")

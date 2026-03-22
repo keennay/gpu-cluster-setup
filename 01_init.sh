@@ -219,9 +219,9 @@ echo ""
 
 # Basic Linux essentials installed after upgrades to keep tooling current
 if [ "$OS_TYPE" = "ubuntu" ]; then
-    BASIC_LINUX_ESSENTIALS=(curl wget less vim nano tmux git git-lfs htop nvtop ripgrep)
+    BASIC_LINUX_ESSENTIALS=(curl wget less vim nano tmux git git-lfs htop nvtop ripgrep bubblewrap)
 else
-    BASIC_LINUX_ESSENTIALS=(curl wget less vim-enhanced nano tmux git git-lfs htop nvtop ripgrep)
+    BASIC_LINUX_ESSENTIALS=(curl wget less vim-enhanced nano tmux git git-lfs htop nvtop ripgrep bubblewrap)
 fi
 if [ "$AUTO_YES" = true ]; then
     INSTALL_BASICS="y"
@@ -375,7 +375,7 @@ if command -v npm &> /dev/null; then
         fi
         if [[ "$INSTALL_CLAUDE" =~ ^[Yy]$ ]]; then
             print_info "Installing Claude Code..."
-            npm install -g @anthropic-ai/claude-code
+            curl -fsSL https://claude.ai/install.sh | bash
             [ $? -eq 0 ] && print_info "✓ Claude Code installed" || print_warning "Failed to install Claude Code"
         fi
 
@@ -500,7 +500,7 @@ if command -v npm &> /dev/null; then
         fi
         if [[ "$INSTALL_OPENCODE" =~ ^[Yy]$ ]]; then
             print_info "Installing OpenCode AI..."
-            npm install -g opencode-ai@latest
+            curl -fsSL https://opencode.ai/install | bash
             if [ $? -eq 0 ]; then
                 print_info "✓ OpenCode AI installed"
 

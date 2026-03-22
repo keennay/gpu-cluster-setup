@@ -369,27 +369,12 @@ source "$ENV_PATH/bin/activate"
 export HF_HOME="$HF_PATH"
 export HUGGINGFACE_HUB_CACHE="$HF_PATH"
 
-# CPU optimization for 32 cores
-export OMP_NUM_THREADS=32
-export MKL_NUM_THREADS=32
-export OPENBLAS_NUM_THREADS=32
-export VECLIB_MAXIMUM_THREADS=32
-export NUMEXPR_NUM_THREADS=32
-
-# NUMA optimization
-export OMP_PROC_BIND=true
-export OMP_PLACES=cores
-
-# Memory optimization
-export MALLOC_ARENA_MAX=2
-
 # GPU architecture for PyTorch
 ${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
 
 echo "ML environment activated with:"
 echo "  - Virtual env: $ENV_PATH"
 echo "  - HF_HOME: $HF_PATH"
-echo "  - CPU threads: 32"
 ${TORCH_CUDA_ARCH_LIST:+echo "  - TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"}
 echo "  - Python: \$(python --version)"
 EOF
@@ -450,14 +435,6 @@ if [ "$BEING_SOURCED" = true ]; then
     # Set environment variables
     export HF_HOME="$HF_PATH"
     export HUGGINGFACE_HUB_CACHE="$HF_PATH"
-    export OMP_NUM_THREADS=32
-    export MKL_NUM_THREADS=32
-    export OPENBLAS_NUM_THREADS=32
-    export VECLIB_MAXIMUM_THREADS=32
-    export NUMEXPR_NUM_THREADS=32
-    export OMP_PROC_BIND=true
-    export OMP_PLACES=cores
-    export MALLOC_ARENA_MAX=2
     
     # Set GPU architecture if detected
     if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then
