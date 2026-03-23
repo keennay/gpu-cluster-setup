@@ -13,18 +13,17 @@ print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CUDA_CACHE_DIR="$SCRIPT_DIR/tmp"
+CUDA_CACHE_DIR="/tmp/cuda-cache"
 if ! mkdir -p "$CUDA_CACHE_DIR" 2>/dev/null; then
-    print_warning "Could not create $CUDA_CACHE_DIR; falling back to /tmp/cuda-cache"
-    CUDA_CACHE_DIR="/tmp/cuda-cache"
-    mkdir -p "$CUDA_CACHE_DIR" 2>/dev/null
+    print_warning "Could not create $CUDA_CACHE_DIR; falling back to /tmp"
+    CUDA_CACHE_DIR="/tmp"
 fi
 CUDA_PACKAGE_DOWNLOADS=()
 INSTALLED_CUDA_VERSIONS=()
 INSTALLED_CUDA_VERSIONS_DISPLAY="None"
 SUDO_PREFIX=""
 
-# Detect the highest CUDA package stream available in the provided repositories
+# Detect the highest CUDA toolkit package stream available in the provided repositories
 detect_latest_cuda_version() {
     local repo_list=("$@")
     local version_candidates=""
@@ -42,7 +41,7 @@ detect_latest_cuda_version() {
         if [ "$OS_TYPE" = "ubuntu" ]; then
             local packages_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/Packages"
             version_candidates=$(curl -fsSL "$packages_url" 2>/dev/null | \
-                grep -oP '^Package: cuda-\K[0-9]+-[0-9]+$' | \
+                grep -oP '^Package: cuda-toolkit-\K[0-9]+-[0-9]+$' | \
                 tr '-' '.' | \
                 sort -V | uniq)
         elif [ "$OS_TYPE" = "rhel" ]; then
@@ -53,7 +52,7 @@ detect_latest_cuda_version() {
             fi
             version_candidates=$(curl -fsSL "$primary_url" 2>/dev/null | \
                 gzip -dc 2>/dev/null | \
-                grep -oP '<name>cuda-\K[0-9]+-[0-9]+(?=</name>)' | \
+                grep -oP '<name>cuda-toolkit-\K[0-9]+-[0-9]+(?=</name>)' | \
                 tr '-' '.' | \
                 sort -V | uniq)
         fi
@@ -1061,7 +1060,7 @@ echo ""
 
                     if [ "$OS_TYPE" = "ubuntu" ]; then
                         PACKAGES_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/Packages"
-                        PACKAGE_VERSION=$(curl -fsSL "$PACKAGES_URL" 2>/dev/null | awk -v pkg="cuda-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
+                        PACKAGE_VERSION=$(curl -fsSL "$PACKAGES_URL" 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
                             function matches_requested(version, requested, len, next_char) {
                                 if (requested == "") {
                                     return 1
@@ -1083,9 +1082,9 @@ echo ""
                         ' | sort -V | tail -1)
                         if [ -z "$PACKAGE_VERSION" ]; then
                             if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                                print_warning "Could not determine package version for cuda-${CUDA_PKG_VERSION} matching $TARGET_CUDA_EXACT_VERSION from $REPO_VERSION"
+                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} matching $TARGET_CUDA_EXACT_VERSION from $REPO_VERSION"
                             else
-                                print_warning "Could not determine package version for cuda-${CUDA_PKG_VERSION} from $REPO_VERSION"
+                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} from $REPO_VERSION"
                             fi
                             continue
                         fi
@@ -1094,28 +1093,28 @@ echo ""
                             continue
                         fi
 
-                        CUDA_APT_PACKAGE="cuda-${CUDA_PKG_VERSION}"
+                        CUDA_APT_PACKAGE="cuda-toolkit-${CUDA_PKG_VERSION}"
                         CUDA_APT_PACKAGE_SPEC="$CUDA_APT_PACKAGE"
                         if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
                             CUDA_APT_PACKAGE_SPEC="${CUDA_APT_PACKAGE}=${PACKAGE_VERSION}"
-                            print_info "Resolved CUDA package version: $PACKAGE_VERSION"
+                            print_info "Resolved CUDA toolkit package version: $PACKAGE_VERSION"
                         else
-                            print_info "Resolved CUDA package stream: ${CUDA_APT_PACKAGE} (latest matching package version: $PACKAGE_VERSION)"
+                            print_info "Resolved CUDA toolkit package stream: ${CUDA_APT_PACKAGE} (latest matching package version: $PACKAGE_VERSION)"
                         fi
 
-                        print_info "Installing CUDA package from NVIDIA repository..."
+                        print_info "Installing CUDA toolkit package from NVIDIA repository..."
                         if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
                             if ${SUDO_PREFIX}apt install -y --allow-downgrades "$CUDA_APT_PACKAGE_SPEC"; then
                                 print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
                                 CUDA_INSTALLED=true
                             else
-                                print_warning "Failed to install CUDA package $CUDA_APT_PACKAGE_SPEC"
+                                print_warning "Failed to install CUDA toolkit package $CUDA_APT_PACKAGE_SPEC"
                             fi
                         elif $PKG_INSTALL_CMD "$CUDA_APT_PACKAGE_SPEC"; then
                             print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
                             CUDA_INSTALLED=true
                         else
-                            print_warning "Failed to install CUDA package $CUDA_APT_PACKAGE_SPEC"
+                            print_warning "Failed to install CUDA toolkit package $CUDA_APT_PACKAGE_SPEC"
                         fi
 
                     elif [ "$OS_TYPE" = "rhel" ]; then
@@ -1124,7 +1123,7 @@ echo ""
                             print_warning "Could not locate repository metadata for $REPO_VERSION"
                             continue
                         fi
-                        RPM_RELATIVE_PATH=$(curl -fsSL "$PRIMARY_URL" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
+                        RPM_RELATIVE_PATH=$(curl -fsSL "$PRIMARY_URL" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
                             function matches_requested(version, requested, len, next_char) {
                                 if (requested == "") {
                                     return 1
@@ -1170,9 +1169,9 @@ echo ""
                         ')
                         if [ -z "$RPM_RELATIVE_PATH" ]; then
                             if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                                print_warning "Could not locate CUDA package metadata for $REPO_VERSION matching $TARGET_CUDA_EXACT_VERSION"
+                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION matching $TARGET_CUDA_EXACT_VERSION"
                             else
-                                print_warning "Could not locate CUDA package metadata for $REPO_VERSION"
+                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION"
                             fi
                             continue
                         fi
@@ -1182,7 +1181,7 @@ echo ""
                         CUDA_RPM_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/$RPM_RELATIVE_PATH"
 
                         if [ ! -f "$CUDA_RPM_FILE" ]; then
-                            print_info "Downloading CUDA package from NVIDIA..."
+                            print_info "Downloading CUDA toolkit package from NVIDIA..."
                             if wget -O "$CUDA_RPM_FILE" "$CUDA_RPM_URL"; then
                                 CUDA_PACKAGE_DOWNLOADS+=("$CUDA_RPM_FILE")
                             else
@@ -1191,7 +1190,7 @@ echo ""
                                 continue
                             fi
                         else
-                            print_info "Using cached CUDA package: $CUDA_RPM_FILE"
+                            print_info "Using cached CUDA toolkit package: $CUDA_RPM_FILE"
                         fi
 
                         if [ "$DNF_REFRESHED" = false ]; then
@@ -1202,12 +1201,12 @@ echo ""
                             DNF_REFRESHED=true
                         fi
 
-                        print_info "Installing CUDA package..."
+                        print_info "Installing CUDA toolkit package..."
                         if $PKG_INSTALL_CMD "$CUDA_RPM_FILE"; then
                             print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
                             CUDA_INSTALLED=true
                         else
-                            print_warning "Failed to install CUDA from $CUDA_RPM_FILE"
+                            print_warning "Failed to install CUDA toolkit from $CUDA_RPM_FILE"
                         fi
                     else
                         print_warning "Unsupported OS type $OS_TYPE for CUDA installation attempt"
