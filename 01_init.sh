@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script: 01_init.sh
-# Purpose: Initialize environment with Node.js and various coding CLIs
+# Purpose: Initialize environment with system tools, Node.js, and editor tooling
 
 # Colors
 RED='\033[0;31m'
@@ -301,7 +301,7 @@ if [[ "$INSTALL_NVM" =~ ^[Yy]$ ]]; then
         print_info "✓ nvm is already installed"
     else
         print_info "Downloading and installing nvm..."
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
         if [ $? -ne 0 ]; then
             print_error "Failed to install nvm"
             exit 1
@@ -323,17 +323,17 @@ if [[ "$INSTALL_NVM" =~ ^[Yy]$ ]]; then
     if [ "$AUTO_YES" = true ]; then
         INSTALL_NODE="y"
     else
-        read -p "Install Node.js 22? (y/n): " INSTALL_NODE
+        read -p "Install Node.js 24? (y/n): " INSTALL_NODE
     fi
     
     if [[ "$INSTALL_NODE" =~ ^[Yy]$ ]]; then
-        print_info "Installing Node.js 22..."
-        nvm install 22
+        print_info "Installing Node.js 24..."
+        nvm install 24
         if [ $? -ne 0 ]; then
-            print_error "Failed to install Node.js 22"
+            print_error "Failed to install Node.js 24"
             exit 1
         fi
-        nvm use 22
+        nvm use 24
         print_info "✓ Node.js installed"
         
         # Verify installation
@@ -348,193 +348,10 @@ fi
 
 echo ""
 
-# Install coding CLIs
-if command -v npm &> /dev/null; then
-    print_info "Available coding CLIs to install:"
-    print_info "  1. Claude Code (@anthropic-ai/claude-code)"
-    print_info "  2. Claude Code Router (@musistudio/claude-code-router)"
-    print_info "  3. Gemini CLI (@google/gemini-cli)"
-    print_info "  4. OpenAI Codex (@openai/codex)"
-    print_info "  5. Kimi-CLI (curl installer)"
-    print_info "  6. Qwen Code (@qwen-code/qwen-code)"
-    print_info "  7. OpenCode AI (opencode-ai)"
-    echo ""
-    
-    if [ "$AUTO_YES" = true ]; then
-        INSTALL_CLIS="y"
-    else
-        read -p "Install coding CLIs? (y/n): " INSTALL_CLIS
-    fi
-    
-    if [[ "$INSTALL_CLIS" =~ ^[Yy]$ ]]; then
-        # Claude Code
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_CLAUDE="y"
-        else
-            read -p "  Install Claude Code? (y/n): " INSTALL_CLAUDE
-        fi
-        if [[ "$INSTALL_CLAUDE" =~ ^[Yy]$ ]]; then
-            print_info "Installing Claude Code..."
-            curl -fsSL https://claude.ai/install.sh | bash
-            [ $? -eq 0 ] && print_info "✓ Claude Code installed" || print_warning "Failed to install Claude Code"
-        fi
+print_info "Coding CLI installation has moved to ./02_install_coding_clis.sh"
+print_info "Run ./02_install_coding_clis.sh or ./02_install_coding_clis.sh -y after this script."
 
-	#Claude Code Router
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_CCR="y"
-        else
-            read -p "  Install Claude Code Router? (y/n): " INSTALL_CCR
-        fi
-        if [[ "$INSTALL_CCR" =~ ^[Yy]$ ]]; then
-            print_info "Installing Claude Code Router..."
-            npm install -g @musistudio/claude-code-router
-            if [ $? -eq 0 ]; then
-                print_info "✓ Claude Code Router installed"
-                
-                # Copy config file to ~/.claude-code-router/
-                CONFIG_SOURCE="$(dirname "$0")/configs/.claude-code-router/config.json"
-                CONFIG_DIR="$HOME/.claude-code-router"
-                CONFIG_TARGET="$CONFIG_DIR/config.json"
-                
-                if [ -f "$CONFIG_SOURCE" ]; then
-                    print_info "Setting up Claude Code Router config..."
-                    
-                    # Create directory if it doesn't exist
-                    mkdir -p "$CONFIG_DIR"
-                    
-                    # Copy config file
-                    cp "$CONFIG_SOURCE" "$CONFIG_TARGET"
-                    if [ $? -eq 0 ]; then
-                        print_info "✓ Config file copied to $CONFIG_TARGET"
-                    else
-                        print_warning "Failed to copy config file"
-                    fi
-                else
-                    print_warning "Config file not found at $CONFIG_SOURCE"
-                fi
-            else
-                print_warning "Failed to install Claude Code Router"
-            fi
-        fi
-        
-        # Gemini CLI
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_GEMINI="y"
-        else
-            read -p "  Install Gemini CLI? (y/n): " INSTALL_GEMINI
-        fi
-        if [[ "$INSTALL_GEMINI" =~ ^[Yy]$ ]]; then
-            print_info "Installing Gemini CLI..."
-            npm install -g @google/gemini-cli
-            [ $? -eq 0 ] && print_info "✓ Gemini CLI installed" || print_warning "Failed to install Gemini CLI"
-        fi
-        
-        # OpenAI Codex
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_CODEX="y"
-        else
-            read -p "  Install OpenAI Codex? (y/n): " INSTALL_CODEX
-        fi
-        if [[ "$INSTALL_CODEX" =~ ^[Yy]$ ]]; then
-            print_info "Installing OpenAI Codex..."
-            npm install -g @openai/codex
-            [ $? -eq 0 ] && print_info "✓ OpenAI Codex installed" || print_warning "Failed to install OpenAI Codex"
-        fi
-
-        # Kimi-CLI
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_KIMI="y"
-        else
-            read -p "  Install Kimi-CLI? (y/n): " INSTALL_KIMI
-        fi
-        if [[ "$INSTALL_KIMI" =~ ^[Yy]$ ]]; then
-            print_info "Installing Kimi-CLI..."
-            curl -LsSf https://code.kimi.com/install.sh | bash
-            if [ $? -eq 0 ]; then
-                print_info "✓ Kimi-CLI installed"
-
-                KIMI_CONFIG_SOURCE="$(dirname "$0")/configs/.kimi"
-                KIMI_CONFIG_TARGET="$HOME/.kimi"
-
-                if [ -d "$KIMI_CONFIG_SOURCE" ]; then
-                    if [ "$AUTO_YES" = true ]; then
-                        COPY_KIMI_CONFIG="y"
-                    else
-                        read -p "  Copy Kimi config directory to $KIMI_CONFIG_TARGET? (y/n): " COPY_KIMI_CONFIG
-                    fi
-                    if [[ "$COPY_KIMI_CONFIG" =~ ^[Yy]$ ]]; then
-                        print_info "Setting up Kimi config..."
-                        mkdir -p "$KIMI_CONFIG_TARGET"
-                        cp -r "$KIMI_CONFIG_SOURCE"/. "$KIMI_CONFIG_TARGET"/
-                        if [ $? -eq 0 ]; then
-                            print_info "✓ Kimi config copied to $KIMI_CONFIG_TARGET"
-                        else
-                            print_warning "Failed to copy Kimi config"
-                        fi
-                    fi
-                else
-                    print_warning "Kimi config directory not found at $KIMI_CONFIG_SOURCE"
-                fi
-            else
-                print_warning "Failed to install Kimi-CLI"
-            fi
-        fi
-        
-        # Qwen Code
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_QWEN="y"
-        else
-            read -p "  Install Qwen Code? (y/n): " INSTALL_QWEN
-        fi
-        if [[ "$INSTALL_QWEN" =~ ^[Yy]$ ]]; then
-            print_info "Installing Qwen Code..."
-            npm install -g @qwen-code/qwen-code
-            [ $? -eq 0 ] && print_info "✓ Qwen Code installed" || print_warning "Failed to install Qwen Code"
-        fi
-        
-        # OpenCode AI
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_OPENCODE="y"
-        else
-            read -p "  Install OpenCode AI? (y/n): " INSTALL_OPENCODE
-        fi
-        if [[ "$INSTALL_OPENCODE" =~ ^[Yy]$ ]]; then
-            print_info "Installing OpenCode AI..."
-            curl -fsSL https://opencode.ai/install | bash
-            if [ $? -eq 0 ]; then
-                print_info "✓ OpenCode AI installed"
-
-                # Set up OpenCode config to avoid runtime directory creation issues
-                OPENCODE_CONFIG_SOURCE="$(dirname "$0")/configs/opencode.json"
-
-                if [ -f "$OPENCODE_CONFIG_SOURCE" ]; then
-                    print_info "Setting up OpenCode config..."
-                    if ensure_config_ownership "$CONFIG_ROOT"; then
-                        OPENCODE_CONFIG_DIR="$CONFIG_ROOT/opencode"
-                        OPENCODE_CONFIG_TARGET="$OPENCODE_CONFIG_DIR/opencode.json"
-                        mkdir -p "$OPENCODE_CONFIG_DIR"
-                        if cp "$OPENCODE_CONFIG_SOURCE" "$OPENCODE_CONFIG_TARGET"; then
-                            print_info "✓ OpenCode config copied to $OPENCODE_CONFIG_TARGET"
-                        else
-                            print_warning "Failed to copy OpenCode config"
-                        fi
-                    else
-                        print_warning "Skipping OpenCode config setup due to ownership issues"
-                    fi
-                else
-                    print_warning "OpenCode config not found at $OPENCODE_CONFIG_SOURCE"
-                fi
-            else
-                print_warning "Failed to install OpenCode AI"
-            fi
-        fi
-    else
-        print_info "Skipped CLI installations"
-    fi
-else
-    print_warning "npm not found - skipping CLI installations"
-    print_info "Install Node.js first to install coding CLIs"
-fi
+echo ""
 
 NVIM_AVAILABLE=false
 

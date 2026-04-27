@@ -155,6 +155,16 @@ resolve_ubuntu_driver_package() {
         return 1
     fi
 
+    local fallback_package
+    for fallback_package in "cuda-drivers" "nvidia-driver"; do
+        local fallback_candidate
+        fallback_candidate=$(apt-cache policy "$fallback_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$fallback_candidate" ] && [ "$fallback_candidate" != "(none)" ]; then
+            echo "$fallback_package"
+            return 0
+        fi
+    done
+
     local driver_branch=""
     if [ -n "$cuda_stream" ]; then
         local runtime_package="cuda-runtime-$(echo "$cuda_stream" | sed 's/\./-/g')"
@@ -190,16 +200,6 @@ resolve_ubuntu_driver_package() {
             return 0
         fi
     fi
-
-    local fallback_package
-    for fallback_package in "cuda-drivers" "nvidia-driver"; do
-        local fallback_candidate
-        fallback_candidate=$(apt-cache policy "$fallback_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
-        if [ -n "$fallback_candidate" ] && [ "$fallback_candidate" != "(none)" ]; then
-            echo "$fallback_package"
-            return 0
-        fi
-    done
 
     echo ""
     return 1
@@ -301,7 +301,7 @@ resolve_rhel_driver_package() {
         fi
 
         local selected_driver_path
-        selected_driver_path=$(printf "%s" "$selected_line" | sort -V -k1,1 | head -1 | cut -f2)
+        selected_driver_path=$(printf "%s" "$selected_line" | sort -V -k1,1 | tail -1 | cut -f2)
         if [ -z "$selected_driver_path" ]; then
             continue
         fi
@@ -406,13 +406,17 @@ ensure_nvidia_driver_build_prereqs() {
 
 install_nvidia_driver_for_gpu_support() {
     local cuda_stream="$1"
+    local driver_package=""
+    local driver_package_display=""
+    local driver_package_installed_version=""
+    local driver_package_candidate_version=""
+    local driver_package_needs_update=false
+    local driver_install_reason=""
+    local driver_ready=false
+    local kernel_driver_loaded=false
+    local kernel_driver_was_loaded=false
 
     if ! command -v nvcc &> /dev/null; then
-        return 0
-    fi
-
-    if command -v nvidia-smi &> /dev/null && nvidia-smi >/dev/null 2>&1; then
-        print_info "NVIDIA driver is already active."
         return 0
     fi
 
@@ -421,15 +425,15 @@ install_nvidia_driver_for_gpu_support() {
         return 0
     fi
 
-    if has_nvidia_kernel_driver; then
-        print_info "NVIDIA kernel driver appears to be loaded already."
-        return 0
+    if command -v nvidia-smi &> /dev/null && nvidia-smi >/dev/null 2>&1; then
+        driver_ready=true
     fi
 
-    print_warning "NVIDIA GPU detected, but the NVIDIA kernel driver is not loaded."
-    print_info "CUDA packages do not install the running kernel driver by themselves."
+    if has_nvidia_kernel_driver; then
+        kernel_driver_loaded=true
+        kernel_driver_was_loaded=true
+    fi
 
-    local driver_package=""
     case "$OS_TYPE" in
         ubuntu)
             driver_package=$(resolve_ubuntu_driver_package "$cuda_stream")
@@ -445,28 +449,94 @@ install_nvidia_driver_for_gpu_support() {
         return 0
     fi
 
-    local install_driver="y"
-    if [ "$AUTO_YES" = true ]; then
-        print_info "Automatic mode enabled (-y): installing $driver_package"
+    driver_package_display="$driver_package"
+    if [ -f "$driver_package" ]; then
+        driver_package_display=$(basename "$driver_package")
+    fi
+
+    case "$OS_TYPE" in
+        ubuntu)
+            if command -v dpkg-query &> /dev/null; then
+                driver_package_installed_version=$(dpkg-query -W -f='${Status} ${Version}\n' "$driver_package" 2>/dev/null | awk '
+                    $1 == "install" && $2 == "ok" && $3 == "installed" {
+                        print $4
+                        exit
+                    }
+                ')
+            fi
+
+            if command -v apt-cache &> /dev/null; then
+                driver_package_candidate_version=$(apt-cache policy "$driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+            fi
+
+            if [ -z "$driver_package_installed_version" ]; then
+                driver_package_needs_update=true
+                driver_install_reason="required driver package is not installed"
+            elif [ -n "$driver_package_candidate_version" ] && [ "$driver_package_candidate_version" != "(none)" ] && [ "$driver_package_candidate_version" != "$driver_package_installed_version" ]; then
+                driver_package_needs_update=true
+                driver_install_reason="newer candidate $driver_package_candidate_version is available (installed: $driver_package_installed_version)"
+            fi
+            ;;
+        rhel)
+            if command -v rpm &> /dev/null; then
+                if [ -f "$driver_package" ]; then
+                    local rpm_name=""
+                    local rpm_version=""
+                    rpm_name=$(rpm -qp --qf '%{NAME}\n' "$driver_package" 2>/dev/null)
+                    rpm_version=$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$driver_package" 2>/dev/null)
+                    if [ -n "$rpm_name" ]; then
+                        driver_package_installed_version=$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' "$rpm_name" 2>/dev/null | head -1)
+                    fi
+                    if [ -z "$driver_package_installed_version" ]; then
+                        driver_package_needs_update=true
+                        driver_install_reason="required driver package is not installed"
+                    elif [ -n "$rpm_version" ] && [ "$driver_package_installed_version" != "$rpm_version" ]; then
+                        driver_package_needs_update=true
+                        driver_install_reason="newer candidate $rpm_version is available (installed: $driver_package_installed_version)"
+                    fi
+                elif ! rpm -q "$driver_package" &> /dev/null; then
+                    driver_package_needs_update=true
+                    driver_install_reason="required driver package is not installed"
+                fi
+            fi
+            ;;
+    esac
+
+    if [ "$driver_package_needs_update" = true ]; then
+        local install_driver="y"
+        if [ "$AUTO_YES" = true ]; then
+            print_info "Automatic mode enabled (-y): installing/upgrading $driver_package_display"
+        else
+            read -p "Install or upgrade $driver_package_display ($driver_install_reason)? (y/n): " install_driver
+        fi
+
+        if [[ ! "$install_driver" =~ ^[Yy]$ ]]; then
+            print_warning "Skipped NVIDIA driver installation/upgrade. CUDA apps may not work until the driver is installed."
+            return 0
+        fi
+
+        if ! ensure_nvidia_driver_build_prereqs; then
+            INSTALL_SUCCESS=false
+            return 0
+        fi
+
+        print_info "Installing/upgrading NVIDIA driver package: $driver_package_display"
+        if ! $PKG_INSTALL_CMD "$driver_package"; then
+            print_warning "Failed to install $driver_package_display."
+            INSTALL_SUCCESS=false
+            return 0
+        fi
+    elif [ "$driver_ready" = true ]; then
+        print_info "NVIDIA driver package is already active and up to date: $driver_package_display"
+        return 0
     else
-        read -p "Install $driver_package to enable the NVIDIA kernel driver? (y/n): " install_driver
-    fi
-
-    if [[ ! "$install_driver" =~ ^[Yy]$ ]]; then
-        print_warning "Skipped NVIDIA driver installation. CUDA apps may not work until the driver is installed."
-        return 0
-    fi
-
-    if ! ensure_nvidia_driver_build_prereqs; then
-        INSTALL_SUCCESS=false
-        return 0
-    fi
-
-    print_info "Installing NVIDIA driver package: $driver_package"
-    if ! $PKG_INSTALL_CMD "$driver_package"; then
-        print_warning "Failed to install $driver_package."
-        INSTALL_SUCCESS=false
-        return 0
+        if [ "$kernel_driver_loaded" = true ]; then
+            print_warning "NVIDIA kernel driver appears to be loaded, but nvidia-smi is not ready."
+        else
+            print_warning "NVIDIA GPU detected, but the NVIDIA kernel driver is not loaded."
+            print_info "CUDA packages do not install the running kernel driver by themselves."
+        fi
+        print_info "Desired NVIDIA driver package is already installed: $driver_package_display"
     fi
 
     if command -v modprobe &> /dev/null; then
@@ -476,14 +546,27 @@ install_nvidia_driver_for_gpu_support() {
     fi
 
     if command -v nvidia-smi &> /dev/null && nvidia-smi >/dev/null 2>&1; then
-        print_info "✓ NVIDIA driver is active and responding to nvidia-smi"
+        if [ "$driver_package_needs_update" = true ] && [ "$kernel_driver_was_loaded" = true ]; then
+            print_warning "NVIDIA driver packages were upgraded while a kernel driver was already loaded."
+            print_warning "A reboot is recommended before relying on the upgraded NVIDIA driver."
+        else
+            print_info "✓ NVIDIA driver is active and responding to nvidia-smi"
+        fi
         return 0
     fi
 
     if has_nvidia_kernel_driver; then
-        print_warning "NVIDIA driver packages were installed, but nvidia-smi is still not ready."
+        if [ "$driver_package_needs_update" = true ]; then
+            print_warning "NVIDIA driver packages were installed or upgraded, but nvidia-smi is still not ready."
+        else
+            print_warning "NVIDIA driver packages are installed, but nvidia-smi is still not ready."
+        fi
     else
-        print_warning "NVIDIA driver packages were installed, but the kernel module is still not loaded."
+        if [ "$driver_package_needs_update" = true ]; then
+            print_warning "NVIDIA driver packages were installed or upgraded, but the kernel module is still not loaded."
+        else
+            print_warning "NVIDIA kernel driver is still not loaded."
+        fi
     fi
     print_warning "A reboot may be required before the NVIDIA driver becomes active."
     return 0
@@ -1217,23 +1300,46 @@ echo ""
                     fi
                 done
                 if [ "$CUDA_INSTALLED" = true ]; then
-                    if ! grep -q "/usr/local/cuda/bin" ~/.bashrc; then
+                    CUDA_HOME_IN_BASHRC=false
+                    CUDA_PATH_IN_BASHRC=false
+                    CUDA_LD_LIBRARY_PATH_IN_BASHRC=false
+
+                    if grep -q 'CUDA_HOME="/usr/local/cuda"' ~/.bashrc; then
+                        CUDA_HOME_IN_BASHRC=true
+                    fi
+                    if grep -q "/usr/local/cuda/bin" ~/.bashrc; then
+                        CUDA_PATH_IN_BASHRC=true
+                    fi
+                    if grep -q "/usr/local/cuda/lib64" ~/.bashrc; then
+                        CUDA_LD_LIBRARY_PATH_IN_BASHRC=true
+                    fi
+
+                    if [ "$CUDA_HOME_IN_BASHRC" = false ] || [ "$CUDA_PATH_IN_BASHRC" = false ] || [ "$CUDA_LD_LIBRARY_PATH_IN_BASHRC" = false ]; then
                         if [ "$AUTO_YES" = true ]; then
-                            ADD_CUDA_PATH="y"
+                            ADD_CUDA_ENV="y"
                         else
-                            read -p "Add CUDA to PATH in ~/.bashrc? (y/n): " ADD_CUDA_PATH
+                            read -p "Add CUDA environment variables to ~/.bashrc? (y/n): " ADD_CUDA_ENV
                         fi
 
-                        if [[ "$ADD_CUDA_PATH" =~ ^[Yy]$ ]]; then
+                        if [[ "$ADD_CUDA_ENV" =~ ^[Yy]$ ]]; then
                             echo '' >> ~/.bashrc
-                            echo '# CUDA toolkit' >> ~/.bashrc
-                            echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
-                            echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
-                            print_info "Added CUDA to PATH in ~/.bashrc"
+                            if ! grep -q '^# CUDA toolkit$' ~/.bashrc; then
+                                echo '# CUDA toolkit' >> ~/.bashrc
+                            fi
+                            if [ "$CUDA_HOME_IN_BASHRC" = false ]; then
+                                echo 'export CUDA_HOME="/usr/local/cuda"' >> ~/.bashrc
+                            fi
+                            if [ "$CUDA_PATH_IN_BASHRC" = false ]; then
+                                echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
+                            fi
+                            if [ "$CUDA_LD_LIBRARY_PATH_IN_BASHRC" = false ]; then
+                                echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
+                            fi
+                            print_info "Added CUDA environment variables to ~/.bashrc"
                             print_info "Run 'source ~/.bashrc' or start a new terminal to use nvcc"
                         else
-                            print_info "Skipped adding CUDA to PATH"
-                            print_info "You can manually add /usr/local/cuda/bin to your PATH later"
+                            print_info "Skipped adding CUDA environment variables"
+                            print_info "You can manually add CUDA_HOME=/usr/local/cuda and /usr/local/cuda/bin to your PATH later"
                         fi
                     fi
                     CUDA_MISSING=false
@@ -1254,11 +1360,11 @@ echo ""
             fi
 
             if [ "$INSTALL_SUCCESS" = true ]; then
-                CUDA_DRIVER_MATCH_STREAM="$TARGET_CUDA_VERSION_NORMALIZED"
-                if [ -z "$CUDA_DRIVER_MATCH_STREAM" ]; then
-                    CUDA_DRIVER_MATCH_STREAM="$CURRENT_CUDA_VERSION_NORMALIZED"
+                DRIVER_CUDA_STREAM="$CURRENT_CUDA_VERSION_NORMALIZED"
+                if [ -n "$TARGET_CUDA_VERSION_NORMALIZED" ]; then
+                    DRIVER_CUDA_STREAM="$TARGET_CUDA_VERSION_NORMALIZED"
                 fi
-                install_nvidia_driver_for_gpu_support "$CUDA_DRIVER_MATCH_STREAM"
+                install_nvidia_driver_for_gpu_support "$DRIVER_CUDA_STREAM"
             fi
         
         echo ""

@@ -21,6 +21,43 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 
+fail_script() {
+    local message="$1"
+    print_error "$message"
+    if [ "$BEING_SOURCED" = false ]; then
+        exit 1
+    else
+        return 1
+    fi
+}
+
+run_env_uv_pip_install() {
+    local cmd=(uv pip install)
+    cmd+=("$@")
+
+    print_command "VIRTUAL_ENV=$ENV_PATH PATH=$ENV_PATH/bin:\$PATH $(printf '%q ' "${cmd[@]}")"
+    VIRTUAL_ENV="$ENV_PATH" PATH="$ENV_PATH/bin:$PATH" "${cmd[@]}"
+}
+
+install_huggingface_hub() {
+    print_info "Installing Hugging Face Hub Python library into $ENV_NAME..."
+    run_env_uv_pip_install -U huggingface_hub || return 1
+
+    VIRTUAL_ENV="$ENV_PATH" PATH="$ENV_PATH/bin:$PATH" python - <<'PY' || return 1
+from importlib.metadata import version
+import shutil
+
+import huggingface_hub
+
+print(f"huggingface_hub {version('huggingface_hub')} installed")
+if shutil.which("hf") is None:
+    raise SystemExit("hf CLI was not found on PATH")
+PY
+
+    VIRTUAL_ENV="$ENV_PATH" PATH="$ENV_PATH/bin:$PATH" hf --help >/dev/null || return 1
+    print_info "✓ Hugging Face Hub Python library and hf CLI installed"
+}
+
 resolve_env_type() {
     case "$1" in
         1|deepseek_lmdeploy|deepseek-lmdeploy)
@@ -279,6 +316,12 @@ if [ ! -d "$ENV_PATH" ]; then
             return 1
         fi
     fi
+fi
+
+# Install baseline Hugging Face Hub tooling into the selected uv environment.
+if ! install_huggingface_hub; then
+    fail_script "Failed to install Hugging Face Hub"
+    return 1 2>/dev/null || exit 1
 fi
 
 # Detect GPU architecture

@@ -210,8 +210,7 @@ run_uv_install() {
 install_glm_sglang() {
     print_info "Installing packages for GLM 4.X (SGLang)..."
     
-    run_uv_install sglang==0.3.2.dev9039+pr-17247.g90c446848 --extra-index-url https://sgl-project.github.io/whl/pr/
-    run_uv_install git+https://github.com/huggingface/transformers.git@76732b4e7120808ff989edbd16401f61fa6a0afa
+    run_uv_install sglang
 }
 
 install_glm_transformers() {

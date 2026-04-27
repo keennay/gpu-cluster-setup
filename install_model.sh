@@ -150,8 +150,7 @@ fi
 python3 -c "import huggingface_hub" 2>/dev/null
 if [ $? -ne 0 ]; then
     print_error "Required Python package not installed"
-    print_info "Please install with:"
-    print_info "  uv pip install huggingface-hub"
+    print_info "Run source ./04_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment."
     exit 1
 fi
 
@@ -303,7 +302,7 @@ try:
     from huggingface_hub.utils import LocalEntryNotFoundError
 except ImportError as e:
     print(f"Error: Missing required package: {e}")
-    print("Please install with: uv pip install huggingface-hub")
+    print("Run source ./04_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment.")
     sys.exit(1)
 
 model_name = "$MODEL_NAME"
