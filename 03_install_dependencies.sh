@@ -155,16 +155,6 @@ resolve_ubuntu_driver_package() {
         return 1
     fi
 
-    local fallback_package
-    for fallback_package in "cuda-drivers" "nvidia-driver"; do
-        local fallback_candidate
-        fallback_candidate=$(apt-cache policy "$fallback_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
-        if [ -n "$fallback_candidate" ] && [ "$fallback_candidate" != "(none)" ]; then
-            echo "$fallback_package"
-            return 0
-        fi
-    done
-
     local driver_branch=""
     if [ -n "$cuda_stream" ]; then
         local runtime_package="cuda-runtime-$(echo "$cuda_stream" | sed 's/\./-/g')"
@@ -182,6 +172,28 @@ resolve_ubuntu_driver_package() {
             }
         ')
     fi
+
+    local open_package
+    for open_package in "nvidia-open" "nvidia-driver-open"; do
+        local open_candidate
+        open_candidate=$(apt-cache policy "$open_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$open_candidate" ] && [ "$open_candidate" != "(none)" ]; then
+            echo "$open_package"
+            return 0
+        fi
+    done
+
+    if [ -n "$driver_branch" ] && [ "$driver_branch" != "generic" ]; then
+        local versioned_open_driver_package="nvidia-driver-${driver_branch}-open"
+        local versioned_open_driver_candidate
+        versioned_open_driver_candidate=$(apt-cache policy "$versioned_open_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$versioned_open_driver_candidate" ] && [ "$versioned_open_driver_candidate" != "(none)" ]; then
+            echo "$versioned_open_driver_package"
+            return 0
+        fi
+    fi
+
+    print_warning "Open NVIDIA driver packages were not found in APT metadata; falling back to proprietary packages."
 
     if [ -n "$driver_branch" ] && [ "$driver_branch" != "generic" ]; then
         local versioned_cuda_driver_package="cuda-drivers-${driver_branch}"
@@ -201,6 +213,16 @@ resolve_ubuntu_driver_package() {
         fi
     fi
 
+    local fallback_package
+    for fallback_package in "cuda-drivers" "nvidia-driver"; do
+        local fallback_candidate
+        fallback_candidate=$(apt-cache policy "$fallback_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$fallback_candidate" ] && [ "$fallback_candidate" != "(none)" ]; then
+            echo "$fallback_package"
+            return 0
+        fi
+    done
+
     echo ""
     return 1
 }
@@ -209,7 +231,7 @@ resolve_rhel_driver_package() {
     local cuda_stream="$1"
 
     if [ -z "$cuda_stream" ]; then
-        echo "cuda-drivers"
+        echo "nvidia-open"
         return 0
     fi
 
@@ -250,7 +272,7 @@ resolve_rhel_driver_package() {
         fi
 
         local candidate_lines
-        candidate_lines=$(curl -fsSL "$primary_url" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-drivers" '
+        candidate_lines=$(curl -fsSL "$primary_url" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="nvidia-open" '
             BEGIN { RS="</package>" }
             $0 ~ "<name>" pkg "</name>" {
                 version = ""
@@ -312,7 +334,7 @@ resolve_rhel_driver_package() {
         local driver_rpm_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/${selected_driver_path}"
 
         if [ ! -f "$driver_rpm_file" ]; then
-            print_info "Downloading matching NVIDIA driver package from NVIDIA repository..."
+            print_info "Downloading matching NVIDIA open driver package from NVIDIA repository..."
             if wget -O "$driver_rpm_file" "$driver_rpm_url"; then
                 CUDA_PACKAGE_DOWNLOADS+=("$driver_rpm_file")
             else
@@ -328,7 +350,7 @@ resolve_rhel_driver_package() {
         return 0
     done
 
-    echo "cuda-drivers"
+    echo "nvidia-open"
     return 0
 }
 
@@ -809,7 +831,7 @@ if command -v nvidia-smi &> /dev/null; then
     fi
 else
     print_warning "  ⚠ No NVIDIA driver detected (nvidia-smi not found)"
-    print_info "  Will default to CUDA 12.9 for H100/H200 compatibility"
+    print_info "  Will default to CUDA 12.9 for modern NVIDIA GPU compatibility"
 fi
 
 # Check for CUDA toolkit (nvcc)
