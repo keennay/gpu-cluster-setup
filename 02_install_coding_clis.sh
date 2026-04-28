@@ -126,9 +126,8 @@ print_info "  1. Claude Code (@anthropic-ai/claude-code)"
 print_info "  2. Claude Code Router (@musistudio/claude-code-router)"
 print_info "  3. Gemini CLI (@google/gemini-cli)"
 print_info "  4. OpenAI Codex (@openai/codex)"
-print_info "  5. Kimi-CLI (curl installer)"
-print_info "  6. Qwen Code (@qwen-code/qwen-code)"
-print_info "  7. OpenCode AI (opencode-ai)"
+print_info "  5. Qwen Code (@qwen-code/qwen-code)"
+print_info "  6. OpenCode AI (opencode-ai)"
 echo ""
 
 prompt_yes_no INSTALL_CLIS "Install coding CLIs? (y/n): "
@@ -187,36 +186,6 @@ if [[ "$INSTALL_CLIS" =~ ^[Yy]$ ]]; then
         print_info "Installing OpenAI Codex..."
         npm install -g @openai/codex
         [ $? -eq 0 ] && print_info "OpenAI Codex installed" || print_warning "Failed to install OpenAI Codex"
-    fi
-
-    # Kimi-CLI
-    prompt_yes_no INSTALL_KIMI "  Install Kimi-CLI? (y/n): "
-    if [[ "$INSTALL_KIMI" =~ ^[Yy]$ ]]; then
-        print_info "Installing Kimi-CLI..."
-        if curl -LsSf https://code.kimi.com/install.sh | bash; then
-            print_info "Kimi-CLI installed"
-
-            KIMI_CONFIG_SOURCE="$SCRIPT_DIR/configs/.kimi"
-            KIMI_CONFIG_TARGET="$CONFIG_HOME/.kimi"
-
-            if [ -d "$KIMI_CONFIG_SOURCE" ]; then
-                prompt_yes_no COPY_KIMI_CONFIG "  Copy Kimi config directory to $KIMI_CONFIG_TARGET? (y/n): "
-                if [[ "$COPY_KIMI_CONFIG" =~ ^[Yy]$ ]]; then
-                    print_info "Setting up Kimi config..."
-                    mkdir -p "$KIMI_CONFIG_TARGET"
-                    if cp -r "$KIMI_CONFIG_SOURCE"/. "$KIMI_CONFIG_TARGET"/; then
-                        set_target_ownership "$KIMI_CONFIG_TARGET"
-                        print_info "Kimi config copied to $KIMI_CONFIG_TARGET"
-                    else
-                        print_warning "Failed to copy Kimi config"
-                    fi
-                fi
-            else
-                print_warning "Kimi config directory not found at $KIMI_CONFIG_SOURCE"
-            fi
-        else
-            print_warning "Failed to install Kimi-CLI"
-        fi
     fi
 
     # Qwen Code
