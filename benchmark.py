@@ -287,6 +287,7 @@ Example usage:
   python benchmark.py --model glm-4.5-air --concurrency 500 --num-prompts 500
   python benchmark.py --model glm-4.7-fp8 --port 8001
   python benchmark.py --model glm-4.7-fp8 --api-key MY_REAL_KEY --base-url http://remote:8000/v1
+  python benchmark.py --model qwen3.5-27b --label "Qwen3.5-27B"
   python benchmark.py --preview-samples 2
         """,
     )
@@ -300,19 +301,13 @@ Example usage:
     optional.add_argument("--num-prompts", type=int, default=100, help="Total number of prompts to run (default: 100)")
     optional.add_argument("--base-url", type=str, default="http://localhost:8000/v1", help="API base URL (default: http://localhost:8000/v1)")
     optional.add_argument("--port", type=int, default=8000, help="API port for the default localhost base URL (default: 8000)")
+    optional.add_argument("--label", dest="run_label", type=str, help="Display label for benchmark/result headers (default: model name)")
     optional.add_argument("--min-input", type=int, default=DEFAULT_MIN_INPUT, help=f"Minimum input tokens (default: {DEFAULT_MIN_INPUT})")
     optional.add_argument("--max-input", type=int, default=DEFAULT_MAX_INPUT, help=f"Maximum input tokens (default: {DEFAULT_MAX_INPUT})")
     optional.add_argument("--min-output", type=int, default=DEFAULT_MIN_OUTPUT, help=f"Minimum output tokens (default: {DEFAULT_MIN_OUTPUT})")
     optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum output tokens (default: {DEFAULT_MAX_OUTPUT})")
     optional.add_argument("--timeout", type=int, default=600, help="Timeout per request in seconds (default: 600)")
     optional.add_argument("--warmup", type=int, default=3, help="Number of warmup requests (default: 3)")
-    optional.add_argument(
-        "--stream",
-        type=str,
-        choices=("content", "reasoning"),
-        default="content",
-        help="TTFT stream to measure: content or reasoning (default: content)",
-    )
     optional.add_argument("--no-ignore-eos", action="store_true", help="Don't force full output length (default: force full output)")
     optional.add_argument(
         "--preview-samples",
@@ -324,6 +319,10 @@ Example usage:
     args = parser.parse_args()
 
     errors = []
+    if args.run_label is not None:
+        args.run_label = args.run_label.strip()
+        if not args.run_label:
+            errors.append("--label must not be empty")
     if args.port < 1 or args.port > 65535:
         errors.append("--port must be between 1 and 65535")
     if args.concurrency < 1:
@@ -361,12 +360,12 @@ BASE_URL_WAS_EXPLICIT = any(arg == "--base-url" or arg.startswith("--base-url=")
 BASE_URL = args.base_url if BASE_URL_WAS_EXPLICIT else f"http://localhost:{args.port}/v1"
 API_KEY = args.api_key
 MODEL = args.model
+RUN_LABEL = args.run_label or MODEL
 NUM_PROMPTS = args.num_prompts
 CONCURRENCY = args.concurrency
 PORT = args.port
 TIMEOUT_PER_REQUEST = args.timeout
 WARMUP_REQUESTS = args.warmup
-STREAM_MODE = args.stream
 MIN_INPUT_TOKENS = args.min_input
 MAX_INPUT_TOKENS = args.max_input
 MIN_OUTPUT_TOKENS = args.min_output
@@ -396,7 +395,8 @@ class RequestResult:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_time: float = 0
-    ttft: float = 0
+    content_ttft: float = 0
+    reasoning_ttft: float = 0
     input_len: int = 0
     output_len: int = 0
     input_bucket: str = ""
@@ -779,15 +779,10 @@ def _value_has_text(value) -> bool:
     return False
 
 
-def _has_selected_stream_delta(delta) -> bool:
-    attrs = ("reasoning", "reasoning_content") if STREAM_MODE == "reasoning" else ("content",)
+def _delta_has_text(delta, attrs: tuple[str, ...]) -> bool:
     for attr in attrs:
         value = getattr(delta, attr, None)
         if _value_has_text(value):
-            return True
-    if STREAM_MODE == "content":
-        tool_calls = getattr(delta, "tool_calls", None)
-        if tool_calls:
             return True
     return False
 
@@ -798,7 +793,8 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
     prompt = generate_unique_prompt(input_len, input_bucket, output_bucket)
 
     start = time.perf_counter()
-    ttft = 0
+    content_ttft = 0
+    reasoning_ttft = 0
     completion_tokens = 0
     prompt_tokens = 0
     finish_reason = ""
@@ -818,14 +814,17 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
 
         stream = await client.chat.completions.create(**request_params)
 
-        first_token = True
         async for chunk in stream:
-            if first_token and chunk.choices:
-                delta = chunk.choices[0].delta
-                if _has_selected_stream_delta(delta):
-                    ttft = time.perf_counter() - start
-                    first_token = False
             if chunk.choices:
+                delta = chunk.choices[0].delta
+                observed_at = None
+                if content_ttft == 0 and _delta_has_text(delta, ("content",)):
+                    observed_at = time.perf_counter()
+                    content_ttft = observed_at - start
+                if reasoning_ttft == 0 and _delta_has_text(delta, ("reasoning", "reasoning_content")):
+                    if observed_at is None:
+                        observed_at = time.perf_counter()
+                    reasoning_ttft = observed_at - start
                 chunk_finish_reason = chunk.choices[0].finish_reason
                 if chunk_finish_reason:
                     finish_reason = chunk_finish_reason
@@ -841,7 +840,8 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_time=end - start,
-            ttft=ttft,
+            content_ttft=content_ttft,
+            reasoning_ttft=reasoning_ttft,
             input_len=input_len,
             output_len=output_len,
             input_bucket=input_bucket,
@@ -942,7 +942,7 @@ async def run_benchmark():
     print("\n" + "=" * 60)
     print("NOTE: For accurate benchmarks, start server with:")
     print("  SGLang: --disable-radix-cache")
-    print("  vLLM:   --disable-prefix-caching")
+    print("  vLLM:   --no-enable-prefix-caching")
     print("=" * 60 + "\n")
 
     await warmup()
@@ -950,7 +950,7 @@ async def run_benchmark():
     progress = {"completed": 0, "failed": 0, "start_time": time.perf_counter()}
 
     print(f"\n{'=' * 60}")
-    print("BENCHMARK CONFIG")
+    print(f"BENCHMARK: {RUN_LABEL}")
     print(f"{'=' * 60}")
     print(f"Model:               {MODEL}")
     print(f"Port:                {PORT}")
@@ -964,7 +964,6 @@ async def run_benchmark():
     print("Output profile (pre-clamp):")
     print_bucket_profile(OUTPUT_TOKEN_BUCKETS, OUTPUT_BUCKET_DESCRIPTIONS)
     print(f"Timeout per request: {TIMEOUT_PER_REQUEST}s")
-    print(f"TTFT stream mode:    {STREAM_MODE}")
     print(f"ignore_eos:          {IGNORE_EOS} {'(forces full output)' if IGNORE_EOS else '(natural stopping)'}")
     print(f"{'=' * 60}\n")
 
@@ -995,7 +994,8 @@ async def run_benchmark():
     total_wall_time = overall_end - overall_start
 
     latencies = [r.total_time for r in successful]
-    ttfts = [r.ttft for r in successful if r.ttft > 0]
+    content_ttfts = [r.content_ttft for r in successful if r.content_ttft > 0]
+    reasoning_ttfts = [r.reasoning_ttft for r in successful if r.reasoning_ttft > 0]
     tps_per_request = [r.completion_tokens / r.total_time for r in successful if r.total_time > 0]
 
     def percentile(data, p):
@@ -1012,7 +1012,7 @@ async def run_benchmark():
     actual_avg_output = statistics.mean([r.completion_tokens for r in successful])
 
     print(f"{'=' * 60}")
-    print(f"RESULTS - {MODEL}")
+    print(f"RESULTS: {RUN_LABEL}")
     print(f"{'=' * 60}")
     print(f"Successful requests:       {len(successful)}/{NUM_PROMPTS}")
     print(f"Failed requests:           {len(failed)}")
@@ -1040,19 +1040,23 @@ async def run_benchmark():
     print(f"  Output tokens/sec:     {total_completion_tokens / total_wall_time:.2f}")
     print(f"  Total tokens/sec:      {total_tokens / total_wall_time:.2f}")
 
-    ttft_label = "reasoning" if STREAM_MODE == "reasoning" else "content/tool"
+    def print_ttft_stats(label: str, ttft_values: list[float]):
+        print(f"{label}:")
+        if not ttft_values:
+            print("  Mean:                  N/A")
+            print("  Median:                N/A")
+            print("  P95:                   N/A")
+            print("  P99:                   N/A")
+            return
 
-    print(f"\nTIME TO FIRST TOKEN (TTFT) [{STREAM_MODE}]:")
-    if ttfts:
-        print(f"  Mean:                  {statistics.mean(ttfts) * 1000:.0f}ms")
-        print(f"  Median:                {statistics.median(ttfts) * 1000:.0f}ms")
-        print(f"  P95:                   {percentile(ttfts, 0.95) * 1000:.0f}ms")
-        print(f"  P99:                   {percentile(ttfts, 0.99) * 1000:.0f}ms")
-        missing_ttft = len(successful) - len(ttfts)
-        if missing_ttft:
-            print(f"  Missing:               {missing_ttft} requests (no streamed {ttft_label} delta observed)")
-    else:
-        print(f"  Unavailable: no streamed {ttft_label} deltas were observed on successful requests.")
+        print(f"  Mean:                  {statistics.mean(ttft_values) * 1000:.0f}ms")
+        print(f"  Median:                {statistics.median(ttft_values) * 1000:.0f}ms")
+        print(f"  P95:                   {percentile(ttft_values, 0.95) * 1000:.0f}ms")
+        print(f"  P99:                   {percentile(ttft_values, 0.99) * 1000:.0f}ms")
+
+    print("\nTIME TO FIRST TOKEN (TTFT):")
+    print_ttft_stats("Content", content_ttfts)
+    print_ttft_stats("Reasoning", reasoning_ttfts)
 
     print("\nEND-TO-END LATENCY:")
     print(f"  Mean:                  {statistics.mean(latencies):.2f}s")
