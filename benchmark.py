@@ -389,6 +389,10 @@ if PREVIEW_SAMPLES == 0:
     )
 
 
+def run_header(prefix: str) -> str:
+    return f"{prefix}: {RUN_LABEL} | Prompts: {NUM_PROMPTS} | Concurrency: {CONCURRENCY}"
+
+
 @dataclass
 class RequestResult:
     request_id: int
@@ -950,7 +954,7 @@ async def run_benchmark():
     progress = {"completed": 0, "failed": 0, "start_time": time.perf_counter()}
 
     print(f"\n{'=' * 60}")
-    print(f"BENCHMARK: {RUN_LABEL}")
+    print(run_header("BENCHMARK"))
     print(f"{'=' * 60}")
     print(f"Model:               {MODEL}")
     print(f"Port:                {PORT}")
@@ -1012,7 +1016,7 @@ async def run_benchmark():
     actual_avg_output = statistics.mean([r.completion_tokens for r in successful])
 
     print(f"{'=' * 60}")
-    print(f"RESULTS: {RUN_LABEL}")
+    print(run_header("RESULTS"))
     print(f"{'=' * 60}")
     print(f"Successful requests:       {len(successful)}/{NUM_PROMPTS}")
     print(f"Failed requests:           {len(failed)}")
