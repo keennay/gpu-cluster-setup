@@ -17,7 +17,7 @@ For this, it's assumed your working directory is either `/` or `/workspace`. Edi
 `./06_install_packages.sh`<br>
 
 ### 3.1 Template for Running Inference for Models (Also Downloads if model doesn't exist in HuggingFace PATH):
-`recipes/***.sh`
+`./recipes/***.sh`
 
 ### 3.2 Install any selection of open-weights models or input your desired repo:
 `./install_model.sh`
