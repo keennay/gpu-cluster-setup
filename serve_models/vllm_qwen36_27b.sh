@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
 INFERENCE_PROVIDER="vLLM"
-MODEL_REPO="Qwen/Qwen3.5-122B-A10B-GPTQ-Int4"
+MODEL_REPO="Qwen/Qwen3.6-27B"
 MODEL_NAME="qwen3"
 DEFAULT_TENSOR_PARALLEL_SIZE=1
 DEFAULT_PORT=8000
 GPU_MEM_UTIL=0.95
 
 SPECULATIVE='--speculative-config {"method":"qwen3_next_mtp","num_speculative_tokens":2}'
-QUANTIZATION="--quantization moe_wna16"
+QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 EXTRA_ARGS=""
 ENABLE_SPECULATIVE=0

@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 
 INFERENCE_PROVIDER="vLLM"
-MODEL_REPO="MiniMaxAI/MiniMax-M2.5"
-MODEL_NAME="minimax_m2"
-DEFAULT_TENSOR_PARALLEL_SIZE=4
+MODEL_REPO="Qwen/Qwen3.5-397B-A17B"
+MODEL_NAME="qwen3"
+DEFAULT_TENSOR_PARALLEL_SIZE=8
 DEFAULT_PORT=8000
+GPU_MEM_UTIL=0.95
+
+SPECULATIVE='--speculative-config {"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+QUANTIZATION=""
+NO_PREFIX_CACHE="--no-enable-prefix-caching"
+EXTRA_ARGS=""
+ENABLE_SPECULATIVE=0
+POSITIONAL_ARGS=()
 
 echo ""
 echo "$MODEL_REPO $INFERENCE_PROVIDER Launcher"
@@ -21,17 +29,48 @@ is_valid_gpu_list() {
 
 count_gpus() {
     local list="$1"
-    local count=0
     local IFS=,
+    local gpu_array=()
     read -ra gpu_array <<< "$list"
-    for _ in "${gpu_array[@]}"; do
-        count=$((count + 1))
-    done
-    echo "$count"
+    echo "${#gpu_array[@]}"
 }
 
 is_valid_port() {
     [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+parse_arguments() {
+    ENABLE_SPECULATIVE=0
+    POSITIONAL_ARGS=()
+
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --speculative)
+                ENABLE_SPECULATIVE=1
+                ;;
+            *)
+                POSITIONAL_ARGS+=("$arg")
+                ;;
+        esac
+    done
+}
+
+set_custom_gpus() {
+    local gpu_list="$1"
+    GPU_SELECTION_MODE="custom"
+    CUDA_VISIBLE_DEVICES_VALUE="$gpu_list"
+    TENSOR_PARALLEL_SIZE="$(count_gpus "$gpu_list")"
+}
+
+build_extra_args() {
+    EXTRA_ARGS=""
+
+    if [ "$ENABLE_SPECULATIVE" -eq 1 ]; then
+        EXTRA_ARGS+="$SPECULATIVE "
+    fi
+    EXTRA_ARGS+="$QUANTIZATION "
+    EXTRA_ARGS+="$NO_PREFIX_CACHE "
 }
 
 get_tensor_parallel_size() {
@@ -45,18 +84,14 @@ get_tensor_parallel_size() {
         elif [[ "$arg_value" =~ ^gpus?=(.*)$ ]]; then
             local gpu_list="${BASH_REMATCH[1]}"
             if is_valid_gpu_list "$gpu_list"; then
-                GPU_SELECTION_MODE="custom"
-                CUDA_VISIBLE_DEVICES_VALUE="$gpu_list"
-                TENSOR_PARALLEL_SIZE="$(count_gpus "$gpu_list")"
+                set_custom_gpus "$gpu_list"
                 return
             else
                 echo "Invalid GPU list in argument '$arg_value'. Expected format gpus=0,1,2."
                 exit 1
             fi
         elif [[ "$arg_value" == *","* ]] && is_valid_gpu_list "$arg_value"; then
-            GPU_SELECTION_MODE="custom"
-            CUDA_VISIBLE_DEVICES_VALUE="$arg_value"
-            TENSOR_PARALLEL_SIZE="$(count_gpus "$arg_value")"
+            set_custom_gpus "$arg_value"
             return
         else
             echo "Invalid tensor parallel argument '$arg_value'. Use 1/2/4/8 or gpus=0,1."
@@ -92,17 +127,13 @@ get_tensor_parallel_size() {
         elif [[ "$size" == "custom" || "$size" == "c" ]]; then
             read -r -p "Enter GPU IDs to use (comma-separated, e.g., 0,2,3): " custom_list
             if is_valid_gpu_list "$custom_list"; then
-                GPU_SELECTION_MODE="custom"
-                CUDA_VISIBLE_DEVICES_VALUE="$custom_list"
-                TENSOR_PARALLEL_SIZE="$(count_gpus "$custom_list")"
+                set_custom_gpus "$custom_list"
                 break
             else
                 echo "Invalid GPU list. Expected comma-separated integers (e.g., 0,1,3)."
             fi
         elif [[ "$size" == *","* ]] && is_valid_gpu_list "$size"; then
-            GPU_SELECTION_MODE="custom"
-            CUDA_VISIBLE_DEVICES_VALUE="$size"
-            TENSOR_PARALLEL_SIZE="$(count_gpus "$size")"
+            set_custom_gpus "$size"
             break
         else
             echo "Invalid choice. Please enter 1, 2, 4, 8, or a comma-separated GPU list."
@@ -145,8 +176,10 @@ get_port() {
 }
 
 main() {
-    get_tensor_parallel_size "$1"
-    get_port "$2"
+    parse_arguments "$@"
+    get_tensor_parallel_size "${POSITIONAL_ARGS[0]}"
+    get_port "${POSITIONAL_ARGS[1]}"
+    build_extra_args
 
     echo ""
     echo "============================================================"
@@ -160,7 +193,19 @@ main() {
     fi
     echo "Port: $INFERENCE_PORT"
     echo ""
-    local base_command="env SAFETENSORS_FAST_GPU=1 vllm serve $MODEL_REPO --trust-remote-code --tensor-parallel-size $TENSOR_PARALLEL_SIZE --enable-auto-tool-choice --tool-call-parser $MODEL_NAME --reasoning-parser minimax_m2_append_think --host 0.0.0.0 --port $INFERENCE_PORT --api-key YOUR_API_KEY"
+
+    local base_command="vllm serve $MODEL_REPO"
+    base_command+=" --served-model-name $MODEL_NAME"
+    base_command+=" --trust-remote-code"
+    base_command+=" --tensor-parallel-size $TENSOR_PARALLEL_SIZE"
+    base_command+=" --reasoning-parser $MODEL_NAME"
+    base_command+=" --enable-auto-tool-choice"
+    base_command+=" --tool-call-parser qwen3_coder"
+    base_command+=" --gpu-memory-utilization ${GPU_MEM_UTIL}"
+    base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
+    base_command+=" --port $INFERENCE_PORT"
+    base_command+=" --api-key YOUR_API_KEY"
+
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else
@@ -173,9 +218,9 @@ main() {
 
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_VALUE" \
-	$base_command
+            $base_command
     else
-	$base_command
+        $base_command
     fi
 }
 

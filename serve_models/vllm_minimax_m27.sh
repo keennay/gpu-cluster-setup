@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
 INFERENCE_PROVIDER="vLLM"
-MODEL_REPO="Qwen/Qwen3.5-122B-A10B-GPTQ-Int4"
-MODEL_NAME="qwen3"
-DEFAULT_TENSOR_PARALLEL_SIZE=1
+MODEL_REPO="MiniMaxAI/MiniMax-M2.7"
+MODEL_NAME="minimax_m2"
+DEFAULT_TENSOR_PARALLEL_SIZE=2
 DEFAULT_PORT=8000
-GPU_MEM_UTIL=0.95
+GPU_MEM_UTIL=0.98
 
-SPECULATIVE='--speculative-config {"method":"qwen3_next_mtp","num_speculative_tokens":2}'
-QUANTIZATION="--quantization moe_wna16"
+SPECULATIVE=''
+QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 EXTRA_ARGS=""
 ENABLE_SPECULATIVE=0
@@ -194,13 +194,14 @@ main() {
     echo "Port: $INFERENCE_PORT"
     echo ""
 
-    local base_command="vllm serve $MODEL_REPO"
+    local base_command="env SAFETENSORS_FAST_GPU=1"
+    base_command+=" vllm serve $MODEL_REPO"
     base_command+=" --served-model-name $MODEL_NAME"
     base_command+=" --trust-remote-code"
     base_command+=" --tensor-parallel-size $TENSOR_PARALLEL_SIZE"
-    base_command+=" --reasoning-parser $MODEL_NAME"
+    base_command+=" --reasoning-parser minimax_m2_append_think"
     base_command+=" --enable-auto-tool-choice"
-    base_command+=" --tool-call-parser qwen3_coder"
+    base_command+=" --tool-call-parser $MODEL_NAME"
     base_command+=" --gpu-memory-utilization ${GPU_MEM_UTIL}"
     base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
     base_command+=" --port $INFERENCE_PORT"
