@@ -1,3 +1,3 @@
 opencode -v
-npm i -g opencode-ai@latest
+curl -fsSL https://opencode.ai/install | bash
 opencode -v

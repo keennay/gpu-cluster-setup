@@ -1,3 +1,3 @@
 qwen --version
-npm install -g @qwen-code/qwen-code
+bash -c "$(curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.sh)"
 qwen --version

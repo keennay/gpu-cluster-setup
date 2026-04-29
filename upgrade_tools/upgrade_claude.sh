@@ -1,3 +1,3 @@
 claude -v
-npm install -g @anthropic-ai/claude-code
+curl -fsSL https://claude.ai/install.sh | bash
 claude -v

@@ -192,7 +192,7 @@ if [[ "$INSTALL_CLIS" =~ ^[Yy]$ ]]; then
     prompt_yes_no INSTALL_QWEN "  Install Qwen Code? (y/n): "
     if [[ "$INSTALL_QWEN" =~ ^[Yy]$ ]]; then
         print_info "Installing Qwen Code..."
-        npm install -g @qwen-code/qwen-code
+        bash -c "$(curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.sh)"
         [ $? -eq 0 ] && print_info "Qwen Code installed" || print_warning "Failed to install Qwen Code"
     fi
 
