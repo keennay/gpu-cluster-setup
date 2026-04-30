@@ -73,8 +73,11 @@ resolve_env_type() {
         18|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        19|custom)
-            echo "custom"
+        19|custom|custom_uv|custom-uv|custom_uv_env)
+            echo "custom_uv"
+            ;;
+        20|custom_pip|custom-pip|custom_pip_env)
+            echo "custom_pip"
             ;;
         *)
             if [[ "$1" =~ ^[0-9]+$ ]]; then
@@ -89,7 +92,7 @@ resolve_env_name() {
     local env_type="$1"
 
     if [ -z "$env_type" ]; then
-        echo "custom"
+        echo "custom_uv"
         return 0
     fi
 
@@ -145,14 +148,15 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "16) Qwen3 (SGLang)"
     echo "17) Qwen3 (Transformers)"
     echo "18) Qwen3 (vLLM)"
-    echo "19) Custom"
+    echo "19) Custom (uv)"
+    echo "20) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-19): " choice
+        read -p "Enter your choice (1-20): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 19."
+            print_error "Invalid choice. Please enter a number between 1 and 20."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then

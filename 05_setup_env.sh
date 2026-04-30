@@ -39,9 +39,21 @@ run_env_uv_pip_install() {
     VIRTUAL_ENV="$ENV_PATH" PATH="$ENV_PATH/bin:$PATH" "${cmd[@]}"
 }
 
+run_env_pip_install() {
+    local cmd=(python -m pip install)
+    cmd+=("$@")
+
+    print_command "VIRTUAL_ENV=$ENV_PATH PATH=$ENV_PATH/bin:\$PATH $(printf '%q ' "${cmd[@]}")"
+    VIRTUAL_ENV="$ENV_PATH" PATH="$ENV_PATH/bin:$PATH" "${cmd[@]}"
+}
+
 install_huggingface_hub() {
     print_info "Installing Hugging Face Hub Python library into $ENV_NAME..."
-    run_env_uv_pip_install -U huggingface_hub || return 1
+    if [ "$ENV_TYPE" = "custom_pip" ]; then
+        run_env_pip_install -U pip huggingface_hub || return 1
+    else
+        run_env_uv_pip_install -U huggingface_hub || return 1
+    fi
 
     VIRTUAL_ENV="$ENV_PATH" PATH="$ENV_PATH/bin:$PATH" python - <<'PY' || return 1
 from importlib.metadata import version
@@ -114,8 +126,11 @@ resolve_env_type() {
         18|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        19|custom)
-            echo "custom"
+        19|custom|custom_uv|custom-uv|custom_uv_env)
+            echo "custom_uv"
+            ;;
+        20|custom_pip|custom-pip|custom_pip_env)
+            echo "custom_pip"
             ;;
         *)
             if [[ "$1" =~ ^[0-9]+$ ]]; then
@@ -130,7 +145,7 @@ resolve_env_name() {
     local env_type="$1"
 
     if [ -z "$env_type" ]; then
-        echo "custom"
+        echo "custom_uv"
         return 0
     fi
 
@@ -183,14 +198,15 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "16) Qwen3 (SGLang)"
     echo "17) Qwen3 (Transformers)"
     echo "18) Qwen3 (vLLM)"
-    echo "19) Custom"
+    echo "19) Custom (uv)"
+    echo "20) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-19): " choice
+        read -p "Enter your choice (1-20): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 19."
+            print_error "Invalid choice. Please enter a number between 1 and 20."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
@@ -256,7 +272,7 @@ PYTHON_BIN=$(command -v python)
 PYTHON_VERSION=$($PYTHON_BIN --version 2>&1)
 print_info "Using Python from: $PYTHON_BIN ($PYTHON_VERSION)"
 
-if ! command -v uv &> /dev/null; then
+if [ "$ENV_TYPE" != "custom_pip" ] && ! command -v uv &> /dev/null; then
     print_error "uv is not installed. Please run check_python.sh first."
     if [ "$BEING_SOURCED" = false ]; then
         exit 1
@@ -303,8 +319,13 @@ if [ -d "$ENV_PATH" ]; then
 fi
 
 if [ ! -d "$ENV_PATH" ]; then
-    print_info "Creating virtual environment at $ENV_PATH using $PYTHON_BIN..."
-    uv venv "$ENV_PATH" --python "$PYTHON_BIN"
+    if [ "$ENV_TYPE" = "custom_pip" ]; then
+        print_info "Creating pip virtual environment at $ENV_PATH using $PYTHON_BIN..."
+        "$PYTHON_BIN" -m venv "$ENV_PATH"
+    else
+        print_info "Creating uv virtual environment at $ENV_PATH using $PYTHON_BIN..."
+        uv venv "$ENV_PATH" --python "$PYTHON_BIN"
+    fi
     
     if [ $? -eq 0 ]; then
         print_info "✓ Virtual environment created successfully"
