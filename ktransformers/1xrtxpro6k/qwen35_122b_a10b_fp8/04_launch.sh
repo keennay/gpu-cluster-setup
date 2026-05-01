@@ -31,14 +31,14 @@ exec env CUDA_VISIBLE_DEVICES=0 \
     --kt-weight-path "$model_path" \
     --kt-cpuinfer 32 \
     --kt-threadpool-count 1 \
-    --kt-num-gpu-experts 184 \
+    --kt-num-gpu-experts 176 \
     --kt-method FP8 \
     --kt-max-deferred-experts-per-token 2 \
     --kt-expert-placement-strategy frequency \
     --init-expert-location "$latest_expert_location" \
     --attention-backend triton \
     --trust-remote-code \
-    --mem-fraction-static 0.95 \
+    --mem-fraction-static 0.90 \
     --fp8-gemm-backend triton \
     --moe-runner-backend triton \
     --chunked-prefill-size 4096 \
