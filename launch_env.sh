@@ -222,7 +222,7 @@ else
     
     # Set ML environment variables
     export HF_HOME="$HF_PATH"
-    export HUGGINGFACE_HUB_CACHE="$HF_PATH"
+    export HF_HUB_CACHE="$HF_PATH/hub"
 
     # Detect GPU architecture
     print_info "Detecting GPU architecture..."
@@ -313,6 +313,7 @@ if [ ! -f "$ENV_PATH/activate_ml" ]; then
     echo "  - Virtual env: $ENV_PATH"
     echo "  - Python: $(which python) ($(python --version 2>&1))"
     echo "  - HF_HOME: $HF_HOME"
+    echo "  - HF_HUB_CACHE: $HF_HUB_CACHE"
     echo "  - CPU threads: $OMP_NUM_THREADS"
     if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then
         echo "  - TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"

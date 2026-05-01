@@ -42,6 +42,7 @@ setup_directory() {
 # Parse command line arguments
 MODEL_NAME=""
 HF_PATH=""
+HF_CACHE_PATH=""
 QUANTIZATION=""
 AUTO_MODE=false
 while [[ $# -gt 0 ]]; do
@@ -87,7 +88,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Determine HuggingFace path
-# Priority: 1) Command line arg, 2) HF_HOME env var, 3) HUGGINGFACE_HUB_CACHE env var, 4) Interactive prompt/default
+# Priority: 1) Command line arg, 2) HF_HOME env var, 3) HF_HUB_CACHE env var, 4) Interactive prompt/default
 if [ -n "$HF_PATH" ]; then
     # Use command line argument
     print_info "Using HuggingFace path from command line: $HF_PATH"
@@ -95,10 +96,12 @@ elif [ -n "$HF_HOME" ]; then
     # Use existing HF_HOME environment variable
     HF_PATH="$HF_HOME"
     print_info "Using existing HF_HOME environment variable: $HF_PATH"
-elif [ -n "$HUGGINGFACE_HUB_CACHE" ]; then
-    # Use existing HUGGINGFACE_HUB_CACHE environment variable
-    HF_PATH="$HUGGINGFACE_HUB_CACHE"
-    print_info "Using existing HUGGINGFACE_HUB_CACHE environment variable: $HF_PATH"
+elif [ -n "$HF_HUB_CACHE" ]; then
+    # Use existing HF_HUB_CACHE environment variable and infer HF_HOME from it
+    HF_CACHE_PATH="$HF_HUB_CACHE"
+    HF_PATH="$(dirname "$HF_HUB_CACHE")"
+    print_info "Using existing HF_HUB_CACHE environment variable: $HF_CACHE_PATH"
+    print_info "Inferred HF_HOME: $HF_PATH"
 else
     # No environment variable set, ask user (same logic as 03_setup_env.sh)
     if [ "$AUTO_MODE" = false ]; then
@@ -119,6 +122,10 @@ else
         HF_PATH="$DEFAULT_HF_PATH"
         print_info "Using default HuggingFace path: $HF_PATH"
     fi
+fi
+
+if [ -z "$HF_CACHE_PATH" ]; then
+    HF_CACHE_PATH="$HF_PATH/hub"
 fi
 
 # Check if required tools are installed
@@ -274,14 +281,15 @@ fi
 # Setup directories
 print_info "Setting up model directory..."
 setup_directory "$HF_PATH"
-setup_directory "$HF_PATH/hub"
+setup_directory "$HF_CACHE_PATH"
 
-# Export environment variables (use only HF_HOME to avoid deprecation warning)
+# Export environment variables using the standard Hugging Face cache layout.
 export HF_HOME="$HF_PATH"
-export HUGGINGFACE_HUB_CACHE="$HF_PATH"
+export HF_HUB_CACHE="$HF_CACHE_PATH"
 
 print_info "Environment variables set:"
 print_info "  HF_HOME=$HF_HOME"
+print_info "  HF_HUB_CACHE=$HF_HUB_CACHE"
 
 # Create Python download script
 PYTHON_SCRIPT=$(mktemp /tmp/download_model_XXXXXX.py)
@@ -296,6 +304,7 @@ from datetime import datetime
 
 # Set environment variables before imports
 os.environ['HF_HOME'] = '$HF_PATH'
+os.environ['HF_HUB_CACHE'] = '$HF_CACHE_PATH'
 
 try:
     from huggingface_hub import snapshot_download, HfApi, scan_cache_dir
@@ -309,7 +318,7 @@ model_name = "$MODEL_NAME"
 
 print(f"\\n{'='*60}")
 print(f"Model: {model_name}")
-print(f"Download location: {os.environ['HF_HOME']}")
+print(f"Download location: {os.environ['HF_HUB_CACHE']}")
 print(f"{'='*60}\\n")
 
 def check_model_completeness(model_name, cache_dir):
@@ -420,7 +429,7 @@ def check_model_completeness(model_name, cache_dir):
         return False, {}, 0
 
 # Check if model is already downloaded
-result = check_model_completeness(model_name, os.environ['HF_HOME'])
+result = check_model_completeness(model_name, os.environ['HF_HUB_CACHE'])
 
 if len(result) == 4 and result[0]:  # Model is complete
     is_complete, expected_files, local_size, local_path = result
@@ -438,7 +447,7 @@ if len(result) == 4 and result[0]:  # Model is complete
     model_info_data = {
         "model_name": model_name,
         "local_path": local_path if local_path else "cached",
-        "cache_dir": os.environ['HF_HOME'],
+        "cache_dir": os.environ['HF_HUB_CACHE'],
         "size_gb": local_size / 1e9,
         "verified_at": datetime.now().isoformat()
     }
@@ -491,7 +500,7 @@ try:
     # Download with resume capability
     local_path = snapshot_download(
         repo_id=model_name,
-        cache_dir=os.environ['HF_HOME'],
+        cache_dir=os.environ['HF_HUB_CACHE'],
         max_workers=8,
         force_download=False,  # This allows resuming
         local_files_only=False
@@ -501,7 +510,7 @@ try:
     
     # Verify completeness after download
     print("\\nVerifying download...")
-    final_check = check_model_completeness(model_name, os.environ['HF_HOME'])
+    final_check = check_model_completeness(model_name, os.environ['HF_HUB_CACHE'])
     
     if final_check[0]:
         print("\\n✅ Download completed and verified successfully!")
@@ -518,7 +527,7 @@ try:
         model_info_data = {
             "model_name": model_name,
             "local_path": local_path,
-            "cache_dir": os.environ['HF_HOME'],
+            "cache_dir": os.environ['HF_HUB_CACHE'],
             "downloaded_at": datetime.now().isoformat()
         }
         
@@ -601,8 +610,9 @@ if [ $RESULT -eq 0 ]; then
 #!/bin/bash
 # Auto-generated script to load $MODEL_NAME
 export HF_HOME="$HF_PATH"
+export HF_HUB_CACHE="$HF_CACHE_PATH"
 echo "Environment set for $MODEL_NAME"
-echo "Model location: \$HF_HOME"
+echo "Model cache location: \$HF_HUB_CACHE"
 echo ""
 echo "To use in Python:"
 echo "from transformers import AutoModelForCausalLM, AutoTokenizer"
@@ -629,6 +639,7 @@ EOF
     echo "To use this model in the future:"
     echo "1. Set environment variable:"
     echo "   export HF_HOME='$HF_PATH'"
+    echo "   export HF_HUB_CACHE='$HF_CACHE_PATH'"
     echo ""
     echo "2. Or source the load script:"
     echo "   source $LOAD_SCRIPT"

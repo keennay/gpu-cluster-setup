@@ -431,7 +431,7 @@ source "$ENV_PATH/bin/activate"
 
 # Set ML environment variables
 export HF_HOME="$HF_PATH"
-export HUGGINGFACE_HUB_CACHE="$HF_PATH"
+export HF_HUB_CACHE="$HF_PATH/hub"
 
 # GPU architecture for PyTorch
 ${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
@@ -439,6 +439,7 @@ ${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
 echo "ML environment activated with:"
 echo "  - Virtual env: $ENV_PATH"
 echo "  - HF_HOME: $HF_PATH"
+echo "  - HF_HUB_CACHE: $HF_PATH/hub"
 ${TORCH_CUDA_ARCH_LIST:+echo "  - TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"}
 echo "  - Python: \$(python --version)"
 EOF
@@ -453,7 +454,7 @@ if ! grep -q "HF_HOME=" ~/.bashrc; then
 
 # ML Environment Variables
 export HF_HOME="$HF_PATH"
-export HUGGINGFACE_HUB_CACHE="$HF_PATH"
+export HF_HUB_CACHE="$HF_PATH/hub"
 ${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
 EOF
     print_info "Added HF_HOME to ~/.bashrc"
@@ -473,6 +474,7 @@ DIRS=(
     "$HF_GRANDPARENT"
     "$HF_PARENT"
     "$HF_PATH"
+    "$HF_PATH/hub"
     "/workspace/scripts"
     "/workspace/logs"
 )
@@ -498,7 +500,7 @@ if [ "$BEING_SOURCED" = true ]; then
     
     # Set environment variables
     export HF_HOME="$HF_PATH"
-    export HUGGINGFACE_HUB_CACHE="$HF_PATH"
+    export HF_HUB_CACHE="$HF_PATH/hub"
     
     # Set GPU architecture if detected
     if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then

@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+: "${HF_HOME:?HF_HOME must be set to the Hugging Face model cache path}"
+HF_HUB_CACHE="${HF_HUB_CACHE:-$HF_HOME/hub}"
+model_path="$HF_HUB_CACHE/models--Qwen--Qwen3.5-122B-A10B-FP8/snapshots/a099dee70ccfcd8d5dda56aaa0b60cb8ecadabc9"
+
 exec env CUDA_VISIBLE_DEVICES=0 \
-  SGLANG_CPU_OMP_THREADS_BIND='0-29|30-59|60-89|90-119|120-149|150-179|180-209|210-239' \
+  SGLANG_CPU_OMP_THREADS_BIND='0-59' \
   SGLANG_DISABLE_DEEP_GEMM=1 \
   numactl --cpunodebind=0 --membind=0 \
   python -m sglang.launch_server \
     --host 0.0.0.0 \
     --port 8000 \
     --api-key YOUR_API_KEY \
-    --model-path /workspace/models/huggingface/models--Qwen--Qwen3.5-122B-A10B-FP8/snapshots/a099dee70ccfcd8d5dda56aaa0b60cb8ecadabc9 \
-    --kt-weight-path /workspace/models/huggingface/models--Qwen--Qwen3.5-122B-A10B-FP8/snapshots/a099dee70ccfcd8d5dda56aaa0b60cb8ecadabc9 \
+    --model-path "$model_path" \
+    --kt-weight-path "$model_path" \
     --kt-cpuinfer 32 \
     --kt-threadpool-count 1 \
     --kt-num-gpu-experts 184 \

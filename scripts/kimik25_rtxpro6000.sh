@@ -22,11 +22,13 @@ fi
 # - The shard progress bar is misleading: major loading work continues after 100%.
 #
 # Model path used below
-# - /workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1
+# - ${HF_HUB_CACHE}/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1
 
 VENV_PATH="${VENV_PATH:-${VIRTUAL_ENV:-/root/kimi-sglang_env}}"
 CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
-MODEL_PATH="${MODEL_PATH:-/workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1}"
+HF_HOME="${HF_HOME:-/workspace/models/huggingface}"
+HF_HUB_CACHE="${HF_HUB_CACHE:-${HF_HOME}/hub}"
+MODEL_PATH="${MODEL_PATH:-${HF_HUB_CACHE}/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1}"
 SGLANG_COMMIT="${SGLANG_COMMIT:-c3d78ded2ebf0c38abdde0266a31a2a147a9b9cb}"
 API_KEY="${API_KEY:-YOUR_API_KEY}"
 HOST="${HOST:-0.0.0.0}"
@@ -137,13 +139,14 @@ bootstrap_env_if_missing() {
 #!/usr/bin/env bash
 source "${VENV_PATH}/bin/activate"
 export HF_HOME="${hf_path}"
-export HUGGINGFACE_HUB_CACHE="${hf_path}"
+export HF_HUB_CACHE="${hf_path}/hub"
 if [ -n "${torch_arch}" ]; then
   export TORCH_CUDA_ARCH_LIST="${torch_arch}"
 fi
 echo "ML environment activated:"
 echo "  - Virtual env: ${VENV_PATH}"
 echo "  - HF_HOME: ${hf_path}"
+echo "  - HF_HUB_CACHE: ${hf_path}/hub"
 if [ -n "${torch_arch}" ]; then
   echo "  - TORCH_CUDA_ARCH_LIST: ${torch_arch}"
 fi
@@ -152,12 +155,12 @@ EOF
   chmod +x "${VENV_PATH}/activate_ml"
 
   export HF_HOME="${hf_path}"
-  export HUGGINGFACE_HUB_CACHE="${hf_path}"
+  export HF_HUB_CACHE="${hf_path}/hub"
   if [ -n "${torch_arch}" ]; then
     export TORCH_CUDA_ARCH_LIST="${torch_arch}"
   fi
 
-  mkdir -p "${hf_path}" /workspace/scripts /workspace/logs || true
+  mkdir -p "${hf_path}/hub" /workspace/scripts /workspace/logs || true
 }
 
 step1_activate_env() {

@@ -13,7 +13,7 @@ Primary root cause found
 - The shard progress bar is misleading: major loading work continues after `100%`.
 
 Model path used below
-- `/workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1`
+- `${HF_HUB_CACHE}/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1`
 
 1) Activate env and set CUDA paths
 ----------------------------------
@@ -140,10 +140,13 @@ export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
 export LOG=/tmp/sglang_uv_kimi_fast.log
+export HF_HOME="${HF_HOME:-/workspace/models/huggingface}"
+export HF_HUB_CACHE="${HF_HUB_CACHE:-${HF_HOME}/hub}"
+export MODEL_PATH="${MODEL_PATH:-${HF_HUB_CACHE}/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1}"
 rm -f "$LOG"
 
 python -m sglang.launch_server \
-  --model-path /workspace/models/huggingface/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1 \
+  --model-path "$MODEL_PATH" \
   --served-model-name kimi_k2 \
   --tp 8 \
   --trust-remote-code \
