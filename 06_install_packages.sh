@@ -269,7 +269,23 @@ install_deepseek_sglang() {
 
 install_deepseek_vllm() {
     print_info "Installing vLLM for DeepSeek..."
-    run_uv_install vllm
+    run_uv_install -U vllm --torch-backend auto || return 1
+
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        print_error "No active virtual environment detected for DeepGEMM install."
+        return 1
+    fi
+
+    local deepgemm_installer="$VIRTUAL_ENV/install_deepgemm.sh"
+    local deepgemm_installer_url="https://raw.githubusercontent.com/vllm-project/vllm/main/tools/install_deepgemm.sh"
+
+    print_info "Downloading vLLM DeepGEMM installer into $VIRTUAL_ENV..."
+    run_command curl -fsSL "$deepgemm_installer_url" -o "$deepgemm_installer" || return 1
+    run_command chmod +x "$deepgemm_installer" || return 1
+
+    print_info "Installing DeepGEMM for DeepSeek vLLM..."
+    run_command env VIRTUAL_ENV="$VIRTUAL_ENV" PATH="$VIRTUAL_ENV/bin:$PATH" \
+        bash -c 'cd "$1" && bash "$2"' _ "$VIRTUAL_ENV" "$deepgemm_installer" || return 1
 }
 
 install_gptoss_transformers() {
