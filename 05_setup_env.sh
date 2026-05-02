@@ -132,19 +132,28 @@ resolve_env_type() {
         18|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        19|qwen3_sglang|qwen3-sglang)
+        19|nemotron_sglang|nemotron-sglang)
+            echo "nemotron-sglang"
+            ;;
+        20|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+            echo "nemotron-trtllm"
+            ;;
+        21|nemotron_vllm|nemotron-vllm)
+            echo "nemotron-vllm"
+            ;;
+        22|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        20|qwen3_transformers|qwen3-transformers)
+        23|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        21|qwen3_vllm|qwen3-vllm)
+        24|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        22|custom|custom_uv|custom-uv|env_custom_uv)
+        25|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        23|custom_pip|custom-pip|env_custom_pip)
+        26|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -213,18 +222,21 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "16) MiniMax-M2.X (SGLang)"
     echo "17) MiniMax-M2.X (Transformers)"
     echo "18) MiniMax-M2.X (vLLM)"
-    echo "19) Qwen3 (SGLang)"
-    echo "20) Qwen3 (Transformers)"
-    echo "21) Qwen3 (vLLM)"
-    echo "22) Custom (uv)"
-    echo "23) Custom (pip)"
+    echo "19) Nemotron-3 (SGLang)"
+    echo "20) Nemotron-3 (TRT-LLM)"
+    echo "21) Nemotron-3 (vLLM)"
+    echo "22) Qwen3 (SGLang)"
+    echo "23) Qwen3 (Transformers)"
+    echo "24) Qwen3 (vLLM)"
+    echo "25) Custom (uv)"
+    echo "26) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-23): " choice
+        read -p "Enter your choice (1-26): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 23."
+            print_error "Invalid choice. Please enter a number between 1 and 26."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then

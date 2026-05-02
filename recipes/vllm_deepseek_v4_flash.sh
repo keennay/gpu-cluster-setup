@@ -194,8 +194,7 @@ main() {
     echo "Port: $INFERENCE_PORT"
     echo ""
 
-    local base_command="env SAFETENSORS_FAST_GPU=1"
-    base_command+=" vllm serve $MODEL_REPO"
+    local base_command+=" vllm serve $MODEL_REPO"
     base_command+=" --served-model-name $MODEL_NAME"
     base_command+=" --kv-cache-dtype fp8"
     base_command+=" --block-size 256"

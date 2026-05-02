@@ -40,6 +40,9 @@ ENV_TYPES=(
   "minimax-sglang"
   "minimax-transformers"
   "minimax-vllm"
+  "nemotron-sglang"
+  "nemotron-trtllm"
+  "nemotron-vllm"
   "qwen3-sglang"
   "qwen3-transformers"
   "qwen3-vllm"
@@ -64,6 +67,9 @@ declare -A ENV_DESCRIPTIONS=(
   ["minimax-sglang"]="MiniMax-M2.X (SGLang)"
   ["minimax-transformers"]="MiniMax-M2.X (Transformers)"
   ["minimax-vllm"]="MiniMax-M2.X (vLLM)"
+  ["nemotron-sglang"]="Nemotron-3 (SGLang)"
+  ["nemotron-trtllm"]="Nemotron-3 (TRT-LLM)"
+  ["nemotron-vllm"]="Nemotron-3 (vLLM)"
   ["qwen3-sglang"]="Qwen3 (SGLang)"
   ["qwen3-transformers"]="Qwen3 (Transformers)"
   ["qwen3-vllm"]="Qwen3 (vLLM)"
@@ -127,13 +133,22 @@ resolve_env_type() {
         18|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        19|qwen3_sglang|qwen3-sglang)
+        19|nemotron_sglang|nemotron-sglang)
+            echo "nemotron-sglang"
+            ;;
+        20|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+            echo "nemotron-trtllm"
+            ;;
+        21|nemotron_vllm|nemotron-vllm)
+            echo "nemotron-vllm"
+            ;;
+        22|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        20|qwen3_transformers|qwen3-transformers)
+        23|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        21|qwen3_vllm|qwen3-vllm)
+        24|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
         *)
@@ -517,6 +532,21 @@ install_minimax_vllm() {
     run_uv_install -U vllm --extra-index-url https://wheels.vllm.ai/nightly
 }
 
+install_nemotron_sglang() {
+    print_info "Installing SGLang for Nemotron-3..."
+    run_uv_install sglang==0.5.9 torch==2.9.1
+}
+
+install_nemotron_trtllm() {
+    print_info "Installing TRT-LLM dependencies for Nemotron-3..."
+    run_uv_install torch==2.9.1 openai==2.6.1 requests
+}
+
+install_nemotron_vllm() {
+    print_info "Installing vLLM for Nemotron-3..."
+    run_uv_install vllm==0.20.0 --torch-backend=auto
+}
+
 install_qwen3_sglang() {
     print_info "Installing SGLang for Qwen3..."
     run_uv_install "git+https://github.com/sgl-project/sglang.git#subdirectory=python&egg=sglang[all]"
@@ -607,6 +637,18 @@ perform_environment_action() {
             ;;
         minimax-vllm)
             install_minimax_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        nemotron-sglang)
+            install_nemotron_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        nemotron-trtllm)
+            install_nemotron_trtllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        nemotron-vllm)
+            install_nemotron_vllm || return 1
             ACTION_TAKEN=true
             ;;
         qwen3-sglang)

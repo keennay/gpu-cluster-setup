@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
 INFERENCE_PROVIDER="vLLM"
-MODEL_REPO="inclusionAI/Ling-2.6-flash"
-MODEL_NAME="ling"
-DEFAULT_TENSOR_PARALLEL_SIZE=2
+MODEL_REPO="nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
+MODEL_NAME="nemotron_v3"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REASONING_PARSER_PLUGIN="$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py"
+DEFAULT_TENSOR_PARALLEL_SIZE=1
 DEFAULT_PORT=8000
 GPU_MEM_UTIL=0.95
 
@@ -194,13 +196,29 @@ main() {
     echo "Port: $INFERENCE_PORT"
     echo ""
 
-    local base_command+=" vllm serve $MODEL_REPO"
+    if [ ! -f "$REASONING_PARSER_PLUGIN" ]; then
+        echo "Missing reasoning parser plugin: $REASONING_PARSER_PLUGIN"
+        exit 1
+    fi
+
+    local base_command="env VLLM_ALLOW_LONG_MAX_MODEL_LEN=1"
+    base_command+=" vllm serve $MODEL_REPO"
     base_command+=" --served-model-name $MODEL_NAME"
-    base_command+=" --trust-remote-code"
-    base_command+=" --enable-auto-tool-choice"
-    base_command+=" --tool-call-parser hermes"
+    base_command+=" --async-scheduling"
+    base_command+=" --dtype auto"
+    base_command+=" --kv-cache-dtype fp8"
     base_command+=" --tensor-parallel-size $TENSOR_PARALLEL_SIZE"
+    base_command+=" --max-model-len 1048576"
+    base_command+=" --trust-remote-code"
+    base_command+=" --attention-backend TRITON_ATTN"
     base_command+=" --gpu-memory-utilization ${GPU_MEM_UTIL}"
+    base_command+=" --max-cudagraph-capture-size 128"
+    base_command+=" --enable-chunked-prefill"
+    base_command+=" --mamba-ssm-cache-dtype float16"
+    base_command+=" --reasoning-parser-plugin $REASONING_PARSER_PLUGIN"
+    base_command+=" --reasoning-parser super_v3"
+    base_command+=" --enable-auto-tool-choice"
+    base_command+=" --tool-call-parser qwen3_coder"
     base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
     base_command+=" --port $INFERENCE_PORT"
     base_command+=" --api-key YOUR_API_KEY"
