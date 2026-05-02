@@ -18,7 +18,9 @@ print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 resolve_env_type() {
-    case "$1" in
+    local input="${1#env_}"
+
+    case "$input" in
         1|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
@@ -73,10 +75,10 @@ resolve_env_type() {
         18|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        19|custom|custom_uv|custom-uv|custom_uv_env)
+        19|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        20|custom_pip|custom-pip|custom_pip_env)
+        20|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -179,12 +181,12 @@ fi
 # Set environment name based on type
 ENV_NAME=$(resolve_env_name "$ENV_TYPE")
 
-ENV_PATH="$HOME/${ENV_NAME}_env"
+ENV_PATH="$HOME/env_${ENV_NAME}"
 
 # Check if environment exists
 if [ ! -d "$ENV_PATH" ]; then
     print_error "Environment '$ENV_NAME' not found at $ENV_PATH"
-    print_info "Run 03_setup_env.sh first to create it"
+    print_info "Run 05_setup_env.sh first to create it"
     return 1
 fi
 
@@ -325,4 +327,4 @@ fi
 
 echo ""
 print_info "To deactivate: deactivate"
-print_info "To check packages: ./04_check_ml_packages.sh"
+print_info "To install or configure environment packages: ./06_install_packages.sh"

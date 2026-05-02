@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script: 05_install_packages.sh
+# Script: 06_install_packages.sh
 # Purpose: Provide environment placeholders without installing packages.
-# Usage: ./05_install_packages.sh [--env ENV_NAME]
+# Usage: ./06_install_packages.sh [--env ENV_NAME]
 
 if [ -f ~/.bashrc ]; then
     source ~/.bashrc
@@ -64,7 +64,9 @@ declare -A ENV_DESCRIPTIONS=(
 )
 
 resolve_env_type() {
-    case "$1" in
+    local input="${1#env_}"
+
+    case "$input" in
         1|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
@@ -129,7 +131,7 @@ resolve_env_type() {
 }
 
 print_env_options() {
-    print_info "Available environments from 04_setup_env.sh:"
+    print_info "Available environments from 05_setup_env.sh:"
     local index=1
     for key in "${ENV_TYPES[@]}"; do
         printf "  %2d) %s (%s)\n" "$index" "${ENV_DESCRIPTIONS[$key]}" "$key"
@@ -141,7 +143,7 @@ normalize_env_name() {
     local raw="$1"
     raw="${raw%/}"
     raw=$(basename "$raw")
-    raw="${raw%_env}"
+    raw="${raw#env_}"
     echo "$raw"
 }
 
@@ -160,7 +162,7 @@ detect_environment() {
     fi
 
     for key in "${ENV_TYPES[@]}"; do
-        if [[ "$virtual_env" == *"/${key}_env"* ]] || [[ "$virtual_env" == *"/$key"* ]]; then
+        if [[ "$virtual_env" == *"/env_${key}"* ]] || [[ "$virtual_env" == *"/$key"* ]]; then
             echo "$key"
             return 0
         fi
@@ -550,7 +552,7 @@ main() {
     done
 
     if [ "$show_help" = true ]; then
-        echo "Usage: ./05_install_packages.sh [--env ENV_NAME]"
+        echo "Usage: ./06_install_packages.sh [--env ENV_NAME]"
         echo
         print_env_options
         return 0
@@ -563,7 +565,7 @@ main() {
             print_info "Environment override provided: $env_type"
         else
             print_warning "Environment override '$override' is not managed by this script."
-            print_info "Nothing to configure in 05_install_packages.sh."
+            print_info "Nothing to configure in 06_install_packages.sh."
             return 0
         fi
     else
@@ -573,7 +575,7 @@ main() {
             else
                 print_info "No active virtual environment detected."
             fi
-            print_info "Nothing to configure in 05_install_packages.sh."
+            print_info "Nothing to configure in 06_install_packages.sh."
             return 0
         fi
     fi

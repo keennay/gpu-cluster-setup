@@ -18,7 +18,7 @@ Model path used below
 1) Activate env and set CUDA paths
 ----------------------------------
 ```bash
-source /root/kimi-sglang_env/bin/activate
+source /root/env_kimi-sglang/bin/activate
 
 export CUDA_HOME=/usr/local/cuda
 export PATH="$CUDA_HOME/bin:$CUDA_HOME/nvvm/bin:$PATH"

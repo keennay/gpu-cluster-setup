@@ -103,7 +103,7 @@ elif [ -n "$HF_HUB_CACHE" ]; then
     print_info "Using existing HF_HUB_CACHE environment variable: $HF_CACHE_PATH"
     print_info "Inferred HF_HOME: $HF_PATH"
 else
-    # No environment variable set, ask user (same logic as 03_setup_env.sh)
+    # No environment variable set, ask user (same logic as 05_setup_env.sh)
     if [ "$AUTO_MODE" = false ]; then
         echo ""
         print_info "Where would you like to store HuggingFace models?"
@@ -149,7 +149,7 @@ fi
 if [ -z "$VIRTUAL_ENV" ]; then
     print_warning "No virtual environment activated"
     print_info "Please activate your virtual environment first:"
-    print_info "  source ~/ml_env/bin/activate"
+    print_info "  source ./launch_env.sh"
     exit 1
 fi
 
@@ -157,7 +157,7 @@ fi
 python3 -c "import huggingface_hub" 2>/dev/null
 if [ $? -ne 0 ]; then
     print_error "Required Python package not installed"
-    print_info "Run source ./04_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment."
+    print_info "Run source ./05_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment."
     exit 1
 fi
 
@@ -311,7 +311,7 @@ try:
     from huggingface_hub.utils import LocalEntryNotFoundError
 except ImportError as e:
     print(f"Error: Missing required package: {e}")
-    print("Run source ./04_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment.")
+    print("Run source ./05_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment.")
     sys.exit(1)
 
 model_name = "$MODEL_NAME"

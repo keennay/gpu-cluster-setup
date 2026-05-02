@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script: 04_setup_env.sh
+# Script: 05_setup_env.sh
 # Purpose: Create ML virtual environment and set up environment variables
-# Usage: source 04_setup_env.sh [--auto] [env_name]
+# Usage: source 05_setup_env.sh [--auto] [env_name]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f ~/.bashrc ]; then
@@ -71,7 +71,9 @@ PY
 }
 
 resolve_env_type() {
-    case "$1" in
+    local input="${1#env_}"
+
+    case "$input" in
         1|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
@@ -126,10 +128,10 @@ resolve_env_type() {
         18|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        19|custom|custom_uv|custom-uv|custom_uv_env)
+        19|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        20|custom_pip|custom-pip|custom_pip_env)
+        20|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -233,7 +235,7 @@ fi
 # Set environment name based on type
 ENV_NAME=$(resolve_env_name "$ENV_TYPE")
 
-ENV_PATH="$HOME/${ENV_NAME}_env"
+ENV_PATH="$HOME/env_${ENV_NAME}"
 
 # Ask for HuggingFace model storage location
 DEFAULT_HF_PATH="/workspace/models/huggingface"
@@ -273,7 +275,7 @@ PYTHON_VERSION=$($PYTHON_BIN --version 2>&1)
 print_info "Using Python from: $PYTHON_BIN ($PYTHON_VERSION)"
 
 if [ "$ENV_TYPE" != "custom_pip" ] && ! command -v uv &> /dev/null; then
-    print_error "uv is not installed. Please run check_python.sh first."
+    print_error "uv is not installed. Please run 04_install_python.sh first."
     if [ "$BEING_SOURCED" = false ]; then
         exit 1
     else

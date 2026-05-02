@@ -24,7 +24,7 @@ fi
 # Model path used below
 # - ${HF_HUB_CACHE}/models--moonshotai--Kimi-K2.5/snapshots/3367c8d1c68584429fab7faf845a32d5195b6ac1
 
-VENV_PATH="${VENV_PATH:-${VIRTUAL_ENV:-/root/kimi-sglang_env}}"
+VENV_PATH="${VENV_PATH:-${VIRTUAL_ENV:-/root/env_kimi-sglang}}"
 CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 HF_HOME="${HF_HOME:-/workspace/models/huggingface}"
 HF_HUB_CACHE="${HF_HUB_CACHE:-${HF_HOME}/hub}"

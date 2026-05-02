@@ -24,7 +24,7 @@ ENV_NAME=""
 
 if [ -n "$ENV_PATH" ]; then
     ENV_NAME=$(basename "$ENV_PATH")
-    ENV_NAME="${ENV_NAME%_env}"
+    ENV_NAME="${ENV_NAME#env_}"
 fi
 
 run_env_uv_pip_install() {
