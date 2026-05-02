@@ -326,7 +326,11 @@ if [ ! -d "$ENV_PATH" ]; then
         "$PYTHON_BIN" -m venv "$ENV_PATH"
     else
         print_info "Creating uv virtual environment at $ENV_PATH using $PYTHON_BIN..."
-        uv venv "$ENV_PATH" --python "$PYTHON_BIN"
+        UV_VENV_ARGS=()
+        if [[ "${RECREATE:-n}" =~ ^([Yy]|[Yy][Ee][Ss])$ ]]; then
+            UV_VENV_ARGS+=(--clear)
+        fi
+        uv venv "${UV_VENV_ARGS[@]}" "$ENV_PATH" --python "$PYTHON_BIN"
     fi
     
     if [ $? -eq 0 ]; then
@@ -430,6 +434,17 @@ cat > "$ENV_PATH/activate_ml" << EOF
 #!/bin/bash
 # Activate virtual environment
 source "$ENV_PATH/bin/activate"
+export DG_JIT_CACHE_DIR="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
+export FLASHINFER_WORKSPACE_BASE="\${VIRTUAL_ENV:-$ENV_PATH}"
+export SGLANG_DG_CACHE_DIR="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
+export TORCH_EXTENSIONS_DIR="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch_extensions"
+export TORCH_HOME="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch"
+export TORCHINDUCTOR_CACHE_DIR="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/torchinductor"
+export TRITON_CACHE_DIR="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/triton"
+export TRITON_HOME="\${VIRTUAL_ENV:-$ENV_PATH}"
+export TVM_FFI_CACHE_DIR="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/tvm-ffi"
+export VLLM_CACHE_ROOT="\${VIRTUAL_ENV:-$ENV_PATH}/.cache/vllm"
+export XDG_CACHE_HOME="\${VIRTUAL_ENV:-$ENV_PATH}/.cache"
 
 # Set ML environment variables
 export HF_HOME="$HF_PATH"
@@ -499,6 +514,17 @@ echo ""
 if [ "$BEING_SOURCED" = true ]; then
     print_info "Activating ML environment..."
     source "$ENV_PATH/bin/activate"
+    export DG_JIT_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
+    export FLASHINFER_WORKSPACE_BASE="${VIRTUAL_ENV:-$ENV_PATH}"
+    export SGLANG_DG_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
+    export TORCH_EXTENSIONS_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch_extensions"
+    export TORCH_HOME="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch"
+    export TORCHINDUCTOR_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torchinductor"
+    export TRITON_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/triton"
+    export TRITON_HOME="${VIRTUAL_ENV:-$ENV_PATH}"
+    export TVM_FFI_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/tvm-ffi"
+    export VLLM_CACHE_ROOT="${VIRTUAL_ENV:-$ENV_PATH}/.cache/vllm"
+    export XDG_CACHE_HOME="${VIRTUAL_ENV:-$ENV_PATH}/.cache"
     
     # Set environment variables
     export HF_HOME="$HF_PATH"

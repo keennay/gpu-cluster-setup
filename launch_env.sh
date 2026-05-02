@@ -308,6 +308,18 @@ else
     fi
 fi
 
+export DG_JIT_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
+export FLASHINFER_WORKSPACE_BASE="${VIRTUAL_ENV:-$ENV_PATH}"
+export SGLANG_DG_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
+export TORCH_EXTENSIONS_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch_extensions"
+export TORCH_HOME="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch"
+export TORCHINDUCTOR_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torchinductor"
+export TRITON_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/triton"
+export TRITON_HOME="${VIRTUAL_ENV:-$ENV_PATH}"
+export TVM_FFI_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/tvm-ffi"
+export VLLM_CACHE_ROOT="${VIRTUAL_ENV:-$ENV_PATH}/.cache/vllm"
+export XDG_CACHE_HOME="${VIRTUAL_ENV:-$ENV_PATH}/.cache"
+
 # Display activation info if not using activate_ml script
 if [ ! -f "$ENV_PATH/activate_ml" ]; then
     echo ""
