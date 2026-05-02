@@ -756,6 +756,7 @@ if [ "$OS_TYPE" = "ubuntu" ]; then
         "make"
         "cmake"
         "pkg-config"
+        "protobuf-compiler"
 
         # NUMA optimization
         "numactl"
@@ -779,6 +780,7 @@ elif [ "$OS_TYPE" = "rhel" ]; then
         "make"
         "cmake"
         "pkgconf-pkg-config"
+        "protobuf-compiler"
 
         # NUMA optimization
         "numactl"

@@ -47,9 +47,13 @@ run_env_pip_install() {
     VIRTUAL_ENV="$ENV_PATH" PATH="$ENV_PATH/bin:$PATH" "${cmd[@]}"
 }
 
+uses_pip_venv() {
+    [ "$ENV_TYPE" = "custom_pip" ]
+}
+
 install_huggingface_hub() {
     print_info "Installing Hugging Face Hub Python library into $ENV_NAME..."
-    if [ "$ENV_TYPE" = "custom_pip" ]; then
+    if uses_pip_venv; then
         run_env_pip_install -U pip huggingface_hub || return 1
     else
         run_env_uv_pip_install -U huggingface_hub || return 1
@@ -107,31 +111,40 @@ resolve_env_type() {
         11|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        12|minimax_ktransformers|minimax-ktransformers)
+        12|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+            echo "ling-sglang"
+            ;;
+        13|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+            echo "ling-transformers"
+            ;;
+        14|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+            echo "ling-vllm"
+            ;;
+        15|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        13|minimax_sglang|minimax-sglang)
+        16|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        14|minimax_transformers|minimax-transformers)
+        17|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        15|minimax_vllm|minimax-vllm)
+        18|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        16|qwen3_sglang|qwen3-sglang)
+        19|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        17|qwen3_transformers|qwen3-transformers)
+        20|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        18|qwen3_vllm|qwen3-vllm)
+        21|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        19|custom|custom_uv|custom-uv|env_custom_uv)
+        22|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        20|custom_pip|custom-pip|env_custom_pip)
+        23|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -182,37 +195,40 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) DeepSeek-V3.X/R1/OCR (LMDeploy)"
-    echo "2) DeepSeek-V3.X/R1/OCR (SGLang)"
-    echo "3) DeepSeek-V3.X/R1/OCR (vLLM)"
-    echo "4) GLM 4.X (SGLang)"
-    echo "5) GLM 4.X (Transformers)"
-    echo "6) GLM 4.X (vLLM)"
+    echo "1) DeepSeek-V3/V4/R1/OCR (LMDeploy)"
+    echo "2) DeepSeek-V3/V4/R1/OCR (SGLang)"
+    echo "3) DeepSeek-V3/V4/R1/OCR (vLLM)"
+    echo "4) GLM-4/5 (SGLang)"
+    echo "5) GLM-4/5 (Transformers)"
+    echo "6) GLM-4/5 (vLLM)"
     echo "7) gpt-oss (Transformers)"
     echo "8) gpt-oss (vLLM)"
     echo "9) Kimi K2.X (KTransformers)"
     echo "10) Kimi K2.X (SGLang)"
     echo "11) Kimi K2.X (vLLM)"
-    echo "12) MiniMax-M2.X (KTransformers)"
-    echo "13) MiniMax-M2.X (SGLang)"
-    echo "14) MiniMax-M2.X (Transformers)"
-    echo "15) MiniMax-M2.X (vLLM)"
-    echo "16) Qwen3 (SGLang)"
-    echo "17) Qwen3 (Transformers)"
-    echo "18) Qwen3 (vLLM)"
-    echo "19) Custom (uv)"
-    echo "20) Custom (pip)"
+    echo "12) Ling-2.6 (SGLang)"
+    echo "13) Ling-2.6 (Transformers)"
+    echo "14) Ling-2.6 (vLLM)"
+    echo "15) MiniMax-M2.X (KTransformers)"
+    echo "16) MiniMax-M2.X (SGLang)"
+    echo "17) MiniMax-M2.X (Transformers)"
+    echo "18) MiniMax-M2.X (vLLM)"
+    echo "19) Qwen3 (SGLang)"
+    echo "20) Qwen3 (Transformers)"
+    echo "21) Qwen3 (vLLM)"
+    echo "22) Custom (uv)"
+    echo "23) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-20): " choice
+        read -p "Enter your choice (1-23): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 20."
+            print_error "Invalid choice. Please enter a number between 1 and 23."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
-    # Default to GLM 4.X (SGLang) in auto mode
+    # Default to GLM-4/5 (SGLang) in auto mode
     ENV_TYPE="glm_sglang"
 fi
 
@@ -274,7 +290,7 @@ PYTHON_BIN=$(command -v python)
 PYTHON_VERSION=$($PYTHON_BIN --version 2>&1)
 print_info "Using Python from: $PYTHON_BIN ($PYTHON_VERSION)"
 
-if [ "$ENV_TYPE" != "custom_pip" ] && ! command -v uv &> /dev/null; then
+if ! uses_pip_venv && ! command -v uv &> /dev/null; then
     print_error "uv is not installed. Please run 04_install_python.sh first."
     if [ "$BEING_SOURCED" = false ]; then
         exit 1
@@ -321,7 +337,7 @@ if [ -d "$ENV_PATH" ]; then
 fi
 
 if [ ! -d "$ENV_PATH" ]; then
-    if [ "$ENV_TYPE" = "custom_pip" ]; then
+    if uses_pip_venv; then
         print_info "Creating pip virtual environment at $ENV_PATH using $PYTHON_BIN..."
         "$PYTHON_BIN" -m venv "$ENV_PATH"
     else

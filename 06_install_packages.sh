@@ -33,6 +33,9 @@ ENV_TYPES=(
   "kimi-ktransformers"
   "kimi-sglang"
   "kimi-vllm"
+  "ling-sglang"
+  "ling-transformers"
+  "ling-vllm"
   "minimax-ktransformers"
   "minimax-sglang"
   "minimax-transformers"
@@ -43,17 +46,20 @@ ENV_TYPES=(
 )
 
 declare -A ENV_DESCRIPTIONS=(
-  ["deepseek-lmdeploy"]="DeepSeek-V3.X/R1/OCR (LMDeploy)"
-  ["deepseek-sglang"]="DeepSeek-V3.X/R1/OCR (SGLang)"
-  ["deepseek-vllm"]="DeepSeek-V3.X/R1/OCR (vLLM)"
-  ["glm-sglang"]="GLM 4.X (SGLang)"
-  ["glm-transformers"]="GLM 4.X (Transformers)"
-  ["glm-vllm"]="GLM 4.X (vLLM)"
+  ["deepseek-lmdeploy"]="DeepSeek-V3/V4/R1/OCR (LMDeploy)"
+  ["deepseek-sglang"]="DeepSeek-V3/V4/R1/OCR (SGLang)"
+  ["deepseek-vllm"]="DeepSeek-V3/V4/R1/OCR (vLLM)"
+  ["glm-sglang"]="GLM-4/5 (SGLang)"
+  ["glm-transformers"]="GLM-4/5 (Transformers)"
+  ["glm-vllm"]="GLM-4/5 (vLLM)"
   ["gpt-oss-transformers"]="gpt-oss (Transformers)"
   ["gpt-oss-vllm"]="gpt-oss (vLLM)"
   ["kimi-ktransformers"]="Kimi K2.X (KTransformers)"
   ["kimi-sglang"]="Kimi K2.X (SGLang)"
   ["kimi-vllm"]="Kimi K2.X (vLLM)"
+  ["ling-sglang"]="Ling-2.6 (SGLang)"
+  ["ling-transformers"]="Ling-2.6 (Transformers)"
+  ["ling-vllm"]="Ling-2.6 (vLLM)"
   ["minimax-ktransformers"]="MiniMax-M2.X (KTransformers)"
   ["minimax-sglang"]="MiniMax-M2.X (SGLang)"
   ["minimax-transformers"]="MiniMax-M2.X (Transformers)"
@@ -100,25 +106,34 @@ resolve_env_type() {
         11|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        12|minimax_ktransformers|minimax-ktransformers)
+        12|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+            echo "ling-sglang"
+            ;;
+        13|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+            echo "ling-transformers"
+            ;;
+        14|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+            echo "ling-vllm"
+            ;;
+        15|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        13|minimax_sglang|minimax-sglang)
+        16|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        14|minimax_transformers|minimax-transformers)
+        17|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        15|minimax_vllm|minimax-vllm)
+        18|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        16|qwen3_sglang|qwen3-sglang)
+        19|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        17|qwen3_transformers|qwen3-transformers)
+        20|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        18|qwen3_vllm|qwen3-vllm)
+        21|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
         *)
@@ -210,19 +225,19 @@ run_uv_install() {
 }
 
 install_glm_sglang() {
-    print_info "Installing packages for GLM 4.X (SGLang)..."
+    print_info "Installing packages for GLM-4/5 (SGLang)..."
     
     run_uv_install sglang
 }
 
 install_glm_transformers() {
-    print_info "Installing packages for GLM 4.X (Transformers)..."
+    print_info "Installing packages for GLM-4/5 (Transformers)..."
 
     run_uv_install git+https://github.com/huggingface/transformers.git@76732b4e7120808ff989edbd16401f61fa6a0afa
 }
 
 install_glm_vllm() {
-    print_info "Installing packages for GLM 4.X (vLLM)..."
+    print_info "Installing packages for GLM-4/5 (vLLM)..."
     local packages=(
         "git+https://github.com/huggingface/transformers.git"
         "pre-commit>=4.2.0"
@@ -372,6 +387,70 @@ install_kimi_vllm() {
     run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
+install_ling_sglang() {
+    print_info "Installing SGLang for Ling-2.6..."
+
+    local target_dir=""
+    if [ -n "${SGLANG_DIR:-}" ]; then
+        target_dir="$SGLANG_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        target_dir="$VIRTUAL_ENV/sglang"
+    else
+        print_error "No active virtual environment detected for Ling-2.6 SGLang clone."
+        return 1
+    fi
+
+    if [ -d "$target_dir/.git" ]; then
+        print_info "Updating existing repository at $target_dir"
+        run_command git -C "$target_dir" fetch origin || return 1
+        run_command git -C "$target_dir" checkout ling_2_6 || return 1
+        run_command git -C "$target_dir" pull --ff-only || return 1
+    else
+        local parent_dir
+        parent_dir=$(dirname "$target_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone -b ling_2_6 git@github.com:antgroup/sglang.git "$target_dir" || return 1
+    fi
+
+    run_uv_install --upgrade pip || return 1
+    run_uv_install -e "$target_dir/python" || return 1
+}
+
+install_ling_transformers() {
+    print_info "No package install configured for Ling-2.6 (Transformers) yet."
+}
+
+install_ling_vllm() {
+    print_info "Installing vLLM for Ling-2.6..."
+
+    local target_dir=""
+    if [ -n "${VLLM_DIR:-}" ]; then
+        target_dir="$VLLM_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        target_dir="$VIRTUAL_ENV/vllm"
+    else
+        print_error "No active virtual environment detected for Ling-2.6 vLLM clone."
+        return 1
+    fi
+
+    if [ -d "$target_dir/.git" ]; then
+        print_info "Updating existing repository at $target_dir"
+        run_command git -C "$target_dir" fetch origin || return 1
+        run_command git -C "$target_dir" pull --ff-only || return 1
+    else
+        local parent_dir
+        parent_dir=$(dirname "$target_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/vllm-project/vllm.git "$target_dir" || return 1
+    fi
+
+    run_command env VLLM_USE_PRECOMPILED=1 uv pip install --editable "$target_dir" --torch-backend=auto || return 1
+}
+
 install_minimax_ktransformers() {
     print_info "Installing KTransformers for MiniMax-M2.X..."
 
@@ -500,6 +579,18 @@ perform_environment_action() {
             ;;
         kimi-vllm)
             install_kimi_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        ling-sglang)
+            install_ling_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        ling-transformers)
+            install_ling_transformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        ling-vllm)
+            install_ling_vllm || return 1
             ACTION_TAKEN=true
             ;;
         minimax-ktransformers)
