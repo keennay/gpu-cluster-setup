@@ -3,7 +3,9 @@ Step 1:
 	$HOME/env_qwen3-ktransformers
 	If not, activate it it.
 
-	Ensure all new files & directories created from this script are created within the same directory as this script's location, with new file & directory suggestions in this script shown as ./<file> or ./<directory>, unless specified otherwise.
+	Ensure all new files & directories specifically instructed for creation within this script are created within the same directory as this script's location, with new file & directory suggestions in this script shown as ./<file> or ./<directory>, unless specified otherwise.
+	Any files created by the agent for temporary work should only be in /tmp.
+	Do not modify pre-existing files.
 	Prepare 2 agents.
 Step 2:
 	Agent 1:
