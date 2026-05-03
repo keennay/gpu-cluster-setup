@@ -45,6 +45,7 @@ ENV_TYPES=(
   "nemotron-sglang"
   "nemotron-trtllm"
   "nemotron-vllm"
+  "qwen3-ktransformers"
   "qwen3-sglang"
   "qwen3-transformers"
   "qwen3-vllm"
@@ -74,6 +75,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["nemotron-sglang"]="Nemotron-3 (SGLang)"
   ["nemotron-trtllm"]="Nemotron-3 (TRT-LLM)"
   ["nemotron-vllm"]="Nemotron-3 (vLLM)"
+  ["qwen3-ktransformers"]="Qwen3 (KTransformers)"
   ["qwen3-sglang"]="Qwen3 (SGLang)"
   ["qwen3-transformers"]="Qwen3 (Transformers)"
   ["qwen3-vllm"]="Qwen3 (vLLM)"
@@ -152,14 +154,23 @@ resolve_env_type() {
         23|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        24|qwen3_sglang|qwen3-sglang)
+        24|qwen3_ktransformers|qwen3-ktransformers)
+            echo "qwen3-ktransformers"
+            ;;
+        25|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        25|qwen3_transformers|qwen3-transformers)
+        26|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        26|qwen3_vllm|qwen3-vllm)
+        27|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
+            ;;
+        28|custom|custom_uv|custom-uv|env_custom_uv)
+            echo "custom_uv"
+            ;;
+        29|custom_pip|custom-pip|env_custom_pip)
+            echo "custom_pip"
             ;;
         *)
             if [[ "$1" =~ ^[0-9]+$ ]]; then
@@ -211,6 +222,30 @@ detect_environment() {
     return 1
 }
 
+ensure_active_environment_matches() {
+    local expected="$1"
+
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        print_error "No active virtual environment detected."
+        print_info "Activate the environment first: source ./launch_env.sh $expected"
+        return 1
+    fi
+
+    local active=""
+    if active=$(detect_environment); then
+        if [ "$active" != "$expected" ]; then
+            print_error "Active virtual environment is '$active', but requested '$expected'."
+            print_info "Activate the requested environment first: source ./launch_env.sh $expected"
+            return 1
+        fi
+        return 0
+    fi
+
+    print_error "Active virtual environment '$VIRTUAL_ENV' is not managed by this script."
+    print_info "Activate the requested environment first: source ./launch_env.sh $expected"
+    return 1
+}
+
 handle_environment() {
     local env="$1"
     local desc="${ENV_DESCRIPTIONS[$env]}"
@@ -238,6 +273,32 @@ run_uv_install() {
     fi
 
     local cmd=(uv pip install)
+    cmd+=("$@")
+
+    if run_command "${cmd[@]}"; then
+        print_info "Packages installed successfully."
+        return 0
+    fi
+
+    print_error "Package installation failed."
+    return 1
+}
+
+run_pip_install() {
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        print_error "No active virtual environment detected for pip install."
+        return 1
+    fi
+
+    local python_path
+    python_path=$(command -v python 2>/dev/null || true)
+    if [[ "$python_path" != "$VIRTUAL_ENV/bin/python" ]]; then
+        print_error "Active python is not from VIRTUAL_ENV: ${python_path:-not found}"
+        print_info "Activate the environment first: source ./launch_env.sh qwen3-ktransformers"
+        return 1
+    fi
+
+    local cmd=(python -m pip install)
     cmd+=("$@")
 
     if run_command "${cmd[@]}"; then
@@ -573,6 +634,20 @@ install_nemotron_vllm() {
     run_uv_install vllm==0.20.0 --torch-backend=auto
 }
 
+install_qwen3_ktransformers() {
+    print_info "Installing KTransformers stack for Qwen3..."
+    ensure_active_environment_matches qwen3-ktransformers || return 1
+
+    run_pip_install --upgrade --force-reinstall \
+        'torch==2.9.1' \
+        'torchvision==0.24.1' \
+        'torchaudio==2.9.1' \
+        'sglang-kt==0.5.2.post2' \
+        'kt-kernel==0.5.2' || return 1
+
+    run_pip_install --force-reinstall --no-deps 'nvidia-cudnn-cu12==9.16.0.29'
+}
+
 install_qwen3_sglang() {
     print_info "Installing SGLang for Qwen3..."
     run_uv_install "git+https://github.com/sgl-project/sglang.git#subdirectory=python&egg=sglang[all]"
@@ -683,6 +758,10 @@ perform_environment_action() {
             ;;
         nemotron-vllm)
             install_nemotron_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        qwen3-ktransformers)
+            install_qwen3_ktransformers || return 1
             ACTION_TAKEN=true
             ;;
         qwen3-sglang)

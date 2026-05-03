@@ -90,19 +90,22 @@ resolve_env_type() {
         23|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        24|qwen3_sglang|qwen3-sglang)
+        24|qwen3_ktransformers|qwen3-ktransformers)
+            echo "qwen3-ktransformers"
+            ;;
+        25|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        25|qwen3_transformers|qwen3-transformers)
+        26|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        26|qwen3_vllm|qwen3-vllm)
+        27|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        27|custom|custom_uv|custom-uv|env_custom_uv)
+        28|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        28|custom_pip|custom-pip|env_custom_pip)
+        29|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -179,18 +182,19 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "21) Nemotron-3 (SGLang)"
     echo "22) Nemotron-3 (TRT-LLM)"
     echo "23) Nemotron-3 (vLLM)"
-    echo "24) Qwen3 (SGLang)"
-    echo "25) Qwen3 (Transformers)"
-    echo "26) Qwen3 (vLLM)"
-    echo "27) Custom (uv)"
-    echo "28) Custom (pip)"
+    echo "24) Qwen3 (KTransformers)"
+    echo "25) Qwen3 (SGLang)"
+    echo "26) Qwen3 (Transformers)"
+    echo "27) Qwen3 (vLLM)"
+    echo "28) Custom (uv)"
+    echo "29) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-28): " choice
+        read -p "Enter your choice (1-29): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 28."
+            print_error "Invalid choice. Please enter a number between 1 and 29."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
