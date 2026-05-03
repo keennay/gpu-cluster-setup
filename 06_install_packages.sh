@@ -25,6 +25,8 @@ ENV_TYPES=(
   "deepseek-lmdeploy"
   "deepseek-sglang"
   "deepseek-vllm"
+  "gemma-sglang"
+  "gemma-vllm"
   "glm-sglang"
   "glm-transformers"
   "glm-vllm"
@@ -52,6 +54,8 @@ declare -A ENV_DESCRIPTIONS=(
   ["deepseek-lmdeploy"]="DeepSeek-V3/V4/R1/OCR (LMDeploy)"
   ["deepseek-sglang"]="DeepSeek-V3/V4/R1/OCR (SGLang)"
   ["deepseek-vllm"]="DeepSeek-V3/V4/R1/OCR (vLLM)"
+  ["gemma-sglang"]="Gemma-4 (SGLang)"
+  ["gemma-vllm"]="Gemma-4 (vLLM)"
   ["glm-sglang"]="GLM-4/5 (SGLang)"
   ["glm-transformers"]="GLM-4/5 (Transformers)"
   ["glm-vllm"]="GLM-4/5 (vLLM)"
@@ -88,67 +92,73 @@ resolve_env_type() {
         3|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        4|glm_sglang|glm-sglang)
+        4|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+            echo "gemma-sglang"
+            ;;
+        5|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+            echo "gemma-vllm"
+            ;;
+        6|glm_sglang|glm-sglang)
             echo "glm-sglang"
             ;;
-        5|glm_transformers|glm-transformers)
+        7|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        6|glm_vllm|glm-vllm)
+        8|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        7|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        9|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        8|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        10|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        9|kimi_ktransformers|kimi-ktransformers)
+        11|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        10|kimi_sglang|kimi-sglang)
+        12|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        11|kimi_vllm|kimi-vllm)
+        13|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        12|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+        14|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
             echo "ling-sglang"
             ;;
-        13|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+        15|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
             echo "ling-transformers"
             ;;
-        14|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+        16|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
             echo "ling-vllm"
             ;;
-        15|minimax_ktransformers|minimax-ktransformers)
+        17|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        16|minimax_sglang|minimax-sglang)
+        18|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        17|minimax_transformers|minimax-transformers)
+        19|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        18|minimax_vllm|minimax-vllm)
+        20|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        19|nemotron_sglang|nemotron-sglang)
+        21|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        20|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        22|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        21|nemotron_vllm|nemotron-vllm)
+        23|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        22|qwen3_sglang|qwen3-sglang)
+        24|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        23|qwen3_transformers|qwen3-transformers)
+        25|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        24|qwen3_vllm|qwen3-vllm)
+        26|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
         *)
@@ -237,6 +247,22 @@ run_uv_install() {
 
     print_error "Package installation failed."
     return 1
+}
+
+install_gemma_sglang() {
+    print_info "Installing packages for Gemma-4 (SGLang)..."
+
+    run_uv_install "git+https://github.com/sgl-project/sglang.git#subdirectory=python" || return 1
+    run_uv_install "git+https://github.com/huggingface/transformers.git@91b1ab1fdfa81a552644a92fbe3e8d88de40e167"
+}
+
+install_gemma_vllm() {
+    print_info "Installing packages for Gemma-4 (vLLM)..."
+
+    run_uv_install -U vllm --pre \
+        --extra-index-url https://wheels.vllm.ai/nightly/cu129 \
+        --extra-index-url https://download.pytorch.org/whl/cu129 \
+        --index-strategy unsafe-best-match
 }
 
 install_glm_sglang() {
@@ -463,7 +489,7 @@ install_ling_vllm() {
         run_command git clone https://github.com/vllm-project/vllm.git "$target_dir" || return 1
     fi
 
-    run_command env VLLM_USE_PRECOMPILED=1 uv pip install --editable "$target_dir" --torch-backend=auto || return 1
+    run_command env VLLM_USE_PRECOMPILED=1 bash -c 'cd "$1" && uv pip install --editable . --torch-backend=auto' _ "$target_dir" || return 1
 }
 
 install_minimax_ktransformers() {
@@ -577,6 +603,14 @@ perform_environment_action() {
             ;;
         deepseek-vllm)
             install_deepseek_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        gemma-sglang)
+            install_gemma_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        gemma-vllm)
+            install_gemma_vllm || return 1
             ACTION_TAKEN=true
             ;;
         glm-sglang)
