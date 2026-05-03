@@ -1,0 +1,2 @@
+Read test_steps_for_codex.txt and create a working plan in test_plan_for_codex.md for codex to follow and work autonomously.
+Follow the plan in test_plan_for_codex.md until completion.

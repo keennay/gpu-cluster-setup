@@ -1,0 +1,123 @@
+Step 1:
+	Ensure the terminal has already activated the following pip env:
+	$HOME/env_qwen3-ktransformers
+	If not, activate it it.
+
+	Ensure all new files & directories created from this script are created within the same directory as this script's location, with new file & directory suggestions in this script shown as ./<file> or ./<directory>, unless specified otherwise.
+	Prepare 2 agents.
+Step 2:
+	Agent 1:
+	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Run ./01_launch.sh
+	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
+
+Step 3:
+	Agent 2:
+	Launch `python /workspace/scripts/benchmark.py --num-prompts 100 --concurrency 10 --model qwen3`
+	Wait until completion, the window should show `RESULTS`
+	Export that window from `RESULTS` to ./results_01.txt
+	Stop the python instance of benchmark.py
+	If benchmark.py crashed at any moment during this step, restart: `python /workspace/scripts/benchmark.py --num-prompts 100 --concurrency 10 --model qwen3`
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 2.
+	If successful, proceed to Step 4.
+
+Step 4:
+	Return to Agent 1:
+	Stop ./01_launch.sh
+
+Step 5:
+	Return to Agent 1 if not already there.
+	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Launch ./02_record.sh
+	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
+
+Step 6:
+	Agent 2:
+	Start the SGLang recorder:
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/start_expert_distribution_record \
+  		-d '{}'
+
+	Launch `python /workspace/scripts/benchmark.py --num-prompts 100 --concurrency 10 --model qwen3`
+	Wait until completion, the window should show `RESULTS`
+	If benchmark.py crashed at any moment during this step, restart: `python /workspace/scripts/benchmark.py --num-prompts 100 --concurrency 10 --model qwen3`
+	Stop & Dump the SGLang recorder stats:
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/stop_expert_distribution_record \
+  		-d '{}'
+
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/dump_expert_distribution_record \
+  		-d '{}'
+	Stop the python instance of benchmark.py.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 5.
+	If successful, proceed to step 7.
+	
+Step 7:
+	If successfully reached this point and already successfully repeated step 5 nine times, proceed to Step 8. Otherwise repeat Step 5 nine more times.
+Step 8:
+	Run `python ./combine_expert_distrbution_recordings.py 01` (This script should launch Python and run that file which exists in the same directory as this script.
+Step 9:
+	Return to Agent 1:
+	Stop ./02_record.sh
+
+Step 10:
+	Return to Agent 1 if not already there.
+	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Launch ./03_record.sh
+	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
+
+Step 11:
+	Agent 2:
+	Start the SGLang recorder:
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/start_expert_distribution_record \
+  		-d '{}'
+
+	Launch `python /workspace/scripts/benchmark.py --num-prompts 100 --concurrency 10 --model qwen3`
+	Wait until completion, the window should show `RESULTS`
+	If benchmark.py crashed at any moment during this step, restart: `python /workspace/scripts/benchmark.py --num-prompts 100 --concurrency 10 --model qwen3`
+	Stop & Dump the SGLang recorder stats:
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/stop_expert_distribution_record \
+  		-d '{}'
+
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/dump_expert_distribution_record \
+  		-d '{}'
+	Stop the python instance of benchmark.py.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 10.
+	If successful, proceed to Step 12.
+
+Step 12:
+	If successfully reached this point and already successfully repeated step 10 nine times, proceed to Step 13. Otherwise repeat Step 10 nine more times.
+Step 13:
+	Run `python ./combine_expert_distrbution_recordings.py 02` (This script should launch Python and run that file which exists in the same directory as this script.
+Step 14:
+	Return to Agent 1:
+	Stop ./03_record.sh
+	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Launch ./04_launch.sh
+	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
+Step 15:
+	Agent 2:
+	Launch `python /workspace/scripts/benchmark.py --num-prompts 100 --concurrency 10 --model qwen3`
+	Wait until completion, the window should show `RESULTS`
+	If benchmark.py crashed at any moment during this step, restart Step 15.
+	If succesffully reached this point, export that window from `RESULTS` to ./results_02.txt
+	Stop the python instance of benchmark.py
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 14.
+Step 16:
+	Output "COMPLETE"

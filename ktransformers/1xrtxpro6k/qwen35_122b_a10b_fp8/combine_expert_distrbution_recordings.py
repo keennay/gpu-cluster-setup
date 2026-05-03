@@ -23,8 +23,14 @@ def main():
     args = parse_args()
     rec_dir = Path(args.recording_dir)
 
-    files = sorted(rec_dir.glob("expert_distribution_recorder_*.pt"))
-    files = [path for path in files if "combined" not in path.name]
+    files = []
+    for path in sorted(rec_dir.glob("expert_distribution_recorder_*.pt")):
+        if "combined" in path.name:
+            continue
+        timestamp = path.stem.removeprefix("expert_distribution_recorder_")
+        gpu_path = rec_dir / f"gpu_expert_distribution_{timestamp}.pt"
+        if gpu_path.exists():
+            files.append(path)
     if not files:
         raise SystemExit(f"No expert_distribution_recorder_*.pt files found in {rec_dir}")
 
@@ -37,8 +43,8 @@ def main():
         total = chunk_total if total is None else total + chunk_total
         used.append(str(path))
 
-    out = rec_dir / f"expert_distribution_recorder_combined_{time.time()}.pt"
-    torch.save({"logical_count": total, "combined_from": used}, out)
+    out = rec_dir / f"expert_distribution_recorder_{time.time()}.pt"
+    torch.save({"logical_count": total}, out)
 
     print(f"wrote {out}")
     print(f"combined {len(used)} chunks")
