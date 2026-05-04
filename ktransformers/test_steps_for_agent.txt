@@ -126,4 +126,4 @@ Step 15:
 	Stop the python instance of benchmark.py
 	If Agent 1's SGLang instance failed at any point before completion, restart from Step 14.
 Step 16:
-	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the two results files, if any improvements were made.
+	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the two results files in great detail, and if any improvements were made. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
