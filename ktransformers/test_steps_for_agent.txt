@@ -1,4 +1,4 @@
-KT_EXPERTS_PATH="qwen35_122b_a10b_fp8/h200"
+KT_EXPERTS_PATH="qwen35_122b_a10b_fp8/h200_mtp"
 KT_PYTHON_ENV=$HOME/env_qwen3-ktransformers
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
 KT_BENCHMARK_MODEL="qwen3"
