@@ -3,4 +3,5 @@ __pycache__/
 ktransformers/test_plan_for_agent.md
 ktransformers/experts
 ktransformers/results
+logs/
 tmp/
