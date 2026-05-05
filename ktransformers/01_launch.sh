@@ -8,7 +8,6 @@ load_launch_config "$@"
 
 cmd=(
   env CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES"
-  SGLANG_CPU_OMP_THREADS_BIND="$SGLANG_CPU_OMP_THREADS_BIND" \
   "${ADDITIONAL_SGLANG_ENV_ARGS[@]}"
   numactl --cpunodebind="$NUMACTL_CPUNODEBIND" --membind="$NUMACTL_MEMBIND"
   python -m sglang.launch_server \

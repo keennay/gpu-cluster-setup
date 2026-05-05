@@ -22,6 +22,7 @@ print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 ACTION_TAKEN=false
 
 ENV_TYPES=(
+  "deepseek-ktransformers"
   "deepseek-lmdeploy"
   "deepseek-sglang"
   "deepseek-vllm"
@@ -52,6 +53,7 @@ ENV_TYPES=(
 )
 
 declare -A ENV_DESCRIPTIONS=(
+  ["deepseek-ktransformers"]="DeepSeek-V3/V4/R1/OCR (KTransformers)"
   ["deepseek-lmdeploy"]="DeepSeek-V3/V4/R1/OCR (LMDeploy)"
   ["deepseek-sglang"]="DeepSeek-V3/V4/R1/OCR (SGLang)"
   ["deepseek-vllm"]="DeepSeek-V3/V4/R1/OCR (vLLM)"
@@ -85,91 +87,94 @@ resolve_env_type() {
     local input="${1#env_}"
 
     case "$input" in
-        1|deepseek_lmdeploy|deepseek-lmdeploy)
+        1|deepseek_ktransformers|deepseek-ktransformers)
+            echo "deepseek-ktransformers"
+            ;;
+        2|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
-        2|deepseek_sglang|deepseek-sglang)
+        3|deepseek_sglang|deepseek-sglang)
             echo "deepseek-sglang"
             ;;
-        3|deepseek_vllm|deepseek-vllm)
+        4|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        4|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+        5|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
             echo "gemma-sglang"
             ;;
-        5|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+        6|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
             echo "gemma-vllm"
             ;;
-        6|glm_sglang|glm-sglang)
+        7|glm_sglang|glm-sglang)
             echo "glm-sglang"
             ;;
-        7|glm_transformers|glm-transformers)
+        8|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        8|glm_vllm|glm-vllm)
+        9|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        9|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        10|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        10|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        11|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        11|kimi_ktransformers|kimi-ktransformers)
+        12|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        12|kimi_sglang|kimi-sglang)
+        13|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        13|kimi_vllm|kimi-vllm)
+        14|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        14|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+        15|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
             echo "ling-sglang"
             ;;
-        15|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+        16|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
             echo "ling-transformers"
             ;;
-        16|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+        17|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
             echo "ling-vllm"
             ;;
-        17|minimax_ktransformers|minimax-ktransformers)
+        18|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        18|minimax_sglang|minimax-sglang)
+        19|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        19|minimax_transformers|minimax-transformers)
+        20|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        20|minimax_vllm|minimax-vllm)
+        21|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        21|nemotron_sglang|nemotron-sglang)
+        22|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        22|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        23|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        23|nemotron_vllm|nemotron-vllm)
+        24|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        24|qwen3_ktransformers|qwen3-ktransformers)
+        25|qwen3_ktransformers|qwen3-ktransformers)
             echo "qwen3-ktransformers"
             ;;
-        25|qwen3_sglang|qwen3-sglang)
+        26|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        26|qwen3_transformers|qwen3-transformers)
+        27|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        27|qwen3_vllm|qwen3-vllm)
+        28|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        28|custom|custom_uv|custom-uv|env_custom_uv)
+        29|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        29|custom_pip|custom-pip|env_custom_pip)
+        30|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -294,7 +299,7 @@ run_pip_install() {
     python_path=$(command -v python 2>/dev/null || true)
     if [[ "$python_path" != "$VIRTUAL_ENV/bin/python" ]]; then
         print_error "Active python is not from VIRTUAL_ENV: ${python_path:-not found}"
-        print_info "Activate the environment first: source ./launch_env.sh qwen3-ktransformers"
+        print_info "Activate the expected environment first with ./launch_env.sh."
         return 1
     fi
 
@@ -379,6 +384,66 @@ install_deepseek_lmdeploy() {
     run_uv_install -e "$target_dir"
 }
 
+install_deepseek_ktransformers() {
+    print_info "Installing KTransformers for DeepSeek-V3/V4/R1/OCR..."
+    ensure_active_environment_matches deepseek-ktransformers || return 1
+
+    local ktransformers_dir=""
+    if [ -n "${KTRANSFORMERS_DIR:-}" ]; then
+        ktransformers_dir="$KTRANSFORMERS_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        ktransformers_dir="$VIRTUAL_ENV/ktransformers"
+    else
+        ktransformers_dir="$HOME/ktransformers"
+    fi
+
+    if [ ! -d "$ktransformers_dir/.git" ]; then
+        local parent_dir
+        parent_dir=$(dirname "$ktransformers_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/kvcache-ai/ktransformers.git "$ktransformers_dir" || return 1
+    fi
+
+    run_command git -C "$ktransformers_dir" submodule update --init --recursive || return 1
+
+    if [ -d "$ktransformers_dir/kt-kernel" ]; then
+        run_command bash -c "cd \"$ktransformers_dir/kt-kernel\" && ./install.sh" || return 1
+    else
+        print_warning "kt-kernel directory not found at $ktransformers_dir/kt-kernel"
+        return 1
+    fi
+
+    print_info "Installing SGLang for DeepSeek-V3/V4/R1/OCR..."
+
+    local sglang_dir=""
+    if [ -n "${SGLANG_DIR:-}" ]; then
+        sglang_dir="$SGLANG_DIR"
+    elif [ -n "${VIRTUAL_ENV:-}" ]; then
+        sglang_dir="$VIRTUAL_ENV/sglang"
+    else
+        sglang_dir="$HOME/sglang"
+    fi
+
+    if [ ! -d "$sglang_dir/.git" ]; then
+        local parent_dir
+        parent_dir=$(dirname "$sglang_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/kvcache-ai/sglang.git "$sglang_dir" || return 1
+    fi
+
+    run_pip_install -e "$sglang_dir/python[all]" || return 1
+    run_pip_install "tilelang==0.1.7.post3" || return 1
+    run_pip_install "apache-tvm-ffi==0.1.9" || return 1
+    run_pip_install --upgrade flashinfer-python flashinfer-cubin || return 1
+    run_pip_install "transformers==4.57.1" || return 1
+
+    run_pip_install nvidia-cudnn-cu12==9.16.0.29 || return 1
+}
+
 install_deepseek_sglang() {
     print_info "Installing SGLang for DeepSeek..."
     run_uv_install "sglang[all]>=0.5.3rc0"
@@ -442,8 +507,6 @@ install_kimi_ktransformers() {
     run_command git -C "$ktransformers_dir" submodule update --init --recursive || return 1
 
     if [ -d "$ktransformers_dir/kt-kernel" ]; then
-        # kt-kernel install script calls python -m pip; ensure pip exists in uv venvs.
-        run_uv_install pip || return 1
         run_command bash -c "cd \"$ktransformers_dir/kt-kernel\" && ./install.sh" || return 1
     else
         print_warning "kt-kernel directory not found at $ktransformers_dir/kt-kernel"
@@ -470,8 +533,8 @@ install_kimi_ktransformers() {
         run_command git clone https://github.com/kvcache-ai/sglang.git "$sglang_dir" || return 1
     fi
 
-    run_uv_install -e "$sglang_dir/python[all]" || return 1
-    run_uv_install nvidia-cudnn-cu12==9.16.0.29 || return 1
+    run_pip_install -e "$sglang_dir/python[all]" || return 1
+    run_pip_install nvidia-cudnn-cu12==9.16.0.29 || return 1
 }
 install_kimi_sglang() {
     print_info "Installing SGLang for Kimi K2.X..."
@@ -643,6 +706,7 @@ install_qwen3_ktransformers() {
         'torchvision==0.24.1' \
         'torchaudio==2.9.1' \
         'sglang-kt==0.5.2.post2' \
+        'tilelang' \
         'kt-kernel==0.5.2' || return 1
 
     run_pip_install --force-reinstall --no-deps 'nvidia-cudnn-cu12==9.16.0.29'
@@ -668,6 +732,10 @@ perform_environment_action() {
     ACTION_TAKEN=false
 
     case "$1" in
+        deepseek-ktransformers)
+            install_deepseek_ktransformers || return 1
+            ACTION_TAKEN=true
+            ;;
         deepseek-lmdeploy)
             install_deepseek_lmdeploy || return 1
             ACTION_TAKEN=true

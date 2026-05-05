@@ -33,7 +33,6 @@ load_launch_config() {
 
   : "${MODEL:?MODEL must be set in $config_file}"
   : "${CUDA_VISIBLE_DEVICES:?CUDA_VISIBLE_DEVICES must be set in $config_file}"
-  : "${SGLANG_CPU_OMP_THREADS_BIND:?SGLANG_CPU_OMP_THREADS_BIND must be set in $config_file}"
   : "${NUMACTL_CPUNODEBIND:?NUMACTL_CPUNODEBIND must be set in $config_file}"
   : "${NUMACTL_MEMBIND:?NUMACTL_MEMBIND must be set in $config_file}"
   : "${KT_CPUINFER:?KT_CPUINFER must be set in $config_file}"
