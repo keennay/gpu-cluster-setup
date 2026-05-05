@@ -29,7 +29,6 @@ cmd=(
     --api-key YOUR_API_KEY \
     --model-path "$model_path" \
     --kt-weight-path "$model_path" \
-    --kt-numa-nodes "${KT_NUMA_NODE_ARGS[@]}" \
     --kt-cpuinfer "$KT_CPUINFER" \
     --kt-threadpool-count "$KT_THREADPOOL_COUNT" \
     --kt-num-gpu-experts "$KT_NUM_GPU_EXPERTS" \
