@@ -35,6 +35,7 @@ load_launch_config() {
   : "${CUDA_VISIBLE_DEVICES:?CUDA_VISIBLE_DEVICES must be set in $config_file}"
   : "${NUMACTL_CPUNODEBIND:?NUMACTL_CPUNODEBIND must be set in $config_file}"
   : "${NUMACTL_MEMBIND:?NUMACTL_MEMBIND must be set in $config_file}"
+  : "${KT_NUMA_NODE:?KT_NUMA_NODE must be set in $config_file}"
   : "${KT_CPUINFER:?KT_CPUINFER must be set in $config_file}"
   : "${KT_THREADPOOL_COUNT:?KT_THREADPOOL_COUNT must be set in $config_file}"
   : "${KT_NUM_GPU_EXPERTS:?KT_NUM_GPU_EXPERTS must be set in $config_file}"
@@ -63,6 +64,7 @@ load_launch_config() {
     exit 2
   fi
 
+  read -r -a KT_NUMA_NODE_ARGS <<< "$KT_NUMA_NODE"
   read -r -a NUMA_NODE_ARGS <<< "$NUMA_NODE"
   ADDITIONAL_SGLANG_ENV_ARGS=()
   if [[ -n "$ADDITIONAL_SGLANG_ENVS" ]]; then
