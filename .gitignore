@@ -1,7 +1,6 @@
 .codex
 __pycache__/
-ktransformers/test_plan_for_codex.md
-ktransformers/test_plan_for_hermes.md
+ktransformers/test_plan_for_agent.md
 ktransformers/experts
 ktransformers/results
 logs/

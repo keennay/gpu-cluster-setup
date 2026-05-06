@@ -21,11 +21,10 @@ Step 3:
 	Agent 2:
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Wait until completion, the window should show `RESULTS`
-	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/results_01.txt
-	Export that window to Discord with the title: `Run: 01_launch.sh`.
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/01_launch.txt
 	Stop the python instance of benchmark.py
 	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
-	If Agent 1's SGLang instance failed at any point before completion, export to Discord `Fail: 01_launch.sh` & restart from Step 2.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 2.
 	If successful, proceed to Step 4.
 
 Step 4:
@@ -49,6 +48,7 @@ Step 6:
 
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Wait until completion, the window should show `RESULTS`
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/02_record_<iteration>.txt where <iteration> is the current iteration starting from 01 and incrementing from Step 7 when tasked to repeat from Step 5.
 	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
@@ -62,13 +62,12 @@ Step 6:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
-	Export that window to Discord with the title: `Run: 02_record.sh x/10` where x is the current iteration.
 	Stop the python instance of benchmark.py.
-	If Agent 1's SGLang instance failed at any point before completion, export to Discord `Fail: 02_record.sh x/10` where x is the current iteration & restart from Step 5.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 5.
 	If successful, proceed to step 7.
 	
 Step 7:
-	If successfully reached this point and already successfully repeated step 5 nine times, proceed to Step 8. Otherwise repeat Step 5 nine more times.
+	If successfully reached this point and already successfully repeated Step 5 nine times, proceed to Step 8. Otherwise repeat Step 5 nine more times.
 Step 8:
 	Run `python ./tools/combine_expert_distrbution_recordings.py experts/${KT_EXPERTS_PATH}/01` (This script should launch Python and run that file which exists in the tools directory under this script.
 Step 9:
@@ -84,10 +83,10 @@ Step 11:
 	Agent 2:
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Wait until completion, the window should show `RESULTS`
-	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/results_02.txt
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_launch.txt
 	Stop the python instance of benchmark.py
 	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
-	If Agent 1's SGLang instance failed at any point before completion, export to Discord `Fail: 03_launch.sh` & restart from Step 10.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 10.
 	If successful, proceed to Step 12.
 
 Step 12:
@@ -111,6 +110,7 @@ Step 14:
 
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Wait until completion, the window should show `RESULTS`
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_record_<iteration>.txt where <iteration> is the current iteration starting from 01 and incrementing from Step 15 when tasked to repeat from Step 13.
 	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
@@ -124,13 +124,12 @@ Step 14:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
-	Export that window to Discord with the title: `Run: 03_record.sh x/10` where x is the current iteration.
 	Stop the python instance of benchmark.py.
-	If Agent 1's SGLang instance failed at any point before completion, export to Discord `Fail: 03_record.sh x/10` where x is the current iteration & restart from Step 13.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 13.
 	If successful, proceed to Step 15.
 
 Step 15:
-	If successfully reached this point and already successfully repeated step 13 nine times, proceed to Step 16. Otherwise repeat Step 13 nine more times.
+	If successfully reached this point and already successfully repeated Step 13 nine times, proceed to Step 16. Otherwise repeat Step 13 nine more times.
 Step 16:
 	Run `python ./tools/combine_expert_distrbution_recordings.py experts/${KT_EXPERTS_PATH}/02` (This script should launch Python and run that file which exists in the tools directory under this script.
 Step 17:
@@ -144,9 +143,8 @@ Step 18:
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Wait until completion, the window should show `RESULTS`
 	If benchmark.py crashed at any moment during this step, restart Step 18.
-	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/results_03.txt
-	Export that window to Discord with the title: `Run: 04_launch.sh`.
+	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/04_launch.txt
 	Stop the python instance of benchmark.py
-	If Agent 1's SGLang instance failed at any point before completion, export to Discord `Fail: 04_launch.sh` where x is the current iteration & restart from Step 17.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 17.
 Step 19:
-	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 3 results files in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/results_03.txt`. Export this to Discord. Also write this to ./results/${KT_EXPERTS_PATH}/summary.txt
+	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 3 results files: 01_launch.txt, 03_launch.txt, 04_launch.txt, in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/04_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
