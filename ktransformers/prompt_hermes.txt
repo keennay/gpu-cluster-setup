@@ -4,4 +4,4 @@
 
 3. Read test_plan_for_agent.md: there are multiple sections where completed benchmarks results are written to new text files. For each completed benchmark file written, insert a prompt to instruct Hermes to output the entirety of that newly created benchmark file to Discord.
 
-4. Follow the plan in test_plan_for_hermes.md.
+4. Follow the plan in test_plan_for_agent.md.
