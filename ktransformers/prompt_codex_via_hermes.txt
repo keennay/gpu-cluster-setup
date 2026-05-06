@@ -1,3 +1,5 @@
+Hermes: send the following message to Discord with the `send_message` tool while ensuring success=true: "Starting the KTransformers Script Now!"
+
 Have `codex --yolo` read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously.
 
 For Hermes: in each section in the plan there is a completed benchmark, resulting in `RESULTS`. Hermes must send the full RESULTS information to Discord with the `send_message` tool while ensuring success=true.
