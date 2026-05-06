@@ -1,7 +1,40 @@
-1. Send the following message in Discord: "Starting the KTransformers Script Now!"
+    Send the startup message to Discord using the send_message tool:
 
-2. Read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously.
+    "Starting the KTransformers Script Now!"
 
-3. Read test_plan_for_agent.md: there are multiple sections where completed benchmarks results are written to new text files. For each completed benchmark file written, insert a prompt to instruct Hermes to output the entirety of that newly created benchmark file to Discord.
+    Then read test_steps_for_agent.txt and create an autonomous agentic coding work plan in test_plan_for_agent.md.
 
-4. Follow the plan in test_plan_for_agent.md.
+    After creating the plan, read test_plan_for_agent.md and ensure it includes explicit instructions that every completed benchmark result file must be published to Discord.
+
+    For every benchmark result file created, publish the entire contents of that file to Discord by explicitly calling the send_message tool with target discord.
+
+    Do not rely on cron final-response delivery, deliver: local, local output files, queues, or ledgers as proof of Discord delivery.
+
+    A benchmark result file is considered published only after send_message returns:
+    - success: true
+    - a Discord message_id
+
+    If you create any queue or ledger system, the ledger must record:
+    - benchmark file path
+    - Discord message id
+    - send timestamp
+
+    Only add a benchmark file to the published ledger after Discord returns a successful message_id.
+
+    If a file path exists in the queue or ledger but has no Discord message id, treat it as unpublished and retry sending it.
+
+    Do not create a cron job with deliver: local for Discord publishing.
+
+    If a cron job is used for publishing, it must either:
+    1. deliver directly to Discord, or
+    2. explicitly call the send_message tool and only mark files published after receiving a Discord message_id.
+
+    Follow test_plan_for_agent.md autonomously until the full benchmark sequence is complete.
+
+    For each completed benchmark stage:
+    1. write the result file,
+    2. read the full result file,
+    3. send the full result file contents to Discord with send_message,
+    4. verify the tool response includes a Discord message_id,
+    5. record that message id in the published ledger,
+    6. then continue to the next benchmark stage.
