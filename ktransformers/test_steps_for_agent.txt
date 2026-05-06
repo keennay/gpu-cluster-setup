@@ -19,11 +19,11 @@ Step 2:
 
 Step 3:
 	Agent 2:
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "01_launch"`
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/01_launch.txt
 	Stop the python instance of benchmark.py
-	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "01_launch"`
 	If Agent 1's SGLang instance failed at any point before completion, restart from Step 2.
 	If successful, proceed to Step 4.
 
@@ -45,11 +45,11 @@ Step 6:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/start_expert_distribution_record \
   		-d '{}'
-
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 7 when tasked to repeat from Step 5.
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "02_record_<iteration>"`
 	Wait until completion, the window should show `RESULTS`
-	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/02_record_<iteration>.txt where <iteration> is the current iteration starting from 01 and incrementing from Step 7 when tasked to repeat from Step 5.
-	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/02_record_<iteration>.txt.
+	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "02_record_<iteration>"`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
   		-H 'Content-Type: application/json' \
@@ -81,11 +81,11 @@ Step 10:
 
 Step 11:
 	Agent 2:
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "03_launch"`
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_launch.txt
 	Stop the python instance of benchmark.py
-	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "03_launch"`
 	If Agent 1's SGLang instance failed at any point before completion, restart from Step 10.
 	If successful, proceed to Step 12.
 
@@ -107,11 +107,11 @@ Step 14:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/start_expert_distribution_record \
   		-d '{}'
-
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 15 when tasked to repeat from Step 13.
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "03_record_<iteration>"`
 	Wait until completion, the window should show `RESULTS`
-	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_record_<iteration>.txt where <iteration> is the current iteration starting from 01 and incrementing from Step 15 when tasked to repeat from Step 13.
-	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_record_<iteration>.txt.
+	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "03_record_<iteration>"`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
   		-H 'Content-Type: application/json' \
@@ -140,7 +140,7 @@ Step 17:
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 Step 18:
 	Agent 2:
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "04_launch"`
 	Wait until completion, the window should show `RESULTS`
 	If benchmark.py crashed at any moment during this step, restart Step 18.
 	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/04_launch.txt
