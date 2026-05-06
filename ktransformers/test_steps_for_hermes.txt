@@ -5,7 +5,13 @@ KT_BENCHMARK_MODEL="qwen3"
 KT_BENCHMARK_PATH="/workspace/scripts/benchmark.py"
 KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 10"
 
-Script assumes you the agent have the ability to send messages in Discord. Before continuing, send a `ready to go? (yes / no)` message in Discord & only continue once `yes` in any case is received. Otherwise exit.
+Script assumes you the agent have the ability to send messages in Discord. Before continuing, send the follwing in Discord:
+
+Ready to go?
+Reply /approve to continue
+Reply /deny to stop
+
+If `/approve` is received, continue to Step 1. Otherwise exist the program.
 
 Step 1:
 	Ensure the terminal has already activated the following pip env: ${KT_PYTHON_ENV}. If not, activate it it.
