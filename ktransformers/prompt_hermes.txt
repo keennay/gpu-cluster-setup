@@ -38,5 +38,3 @@
     4. verify the tool response includes a Discord message_id,
     5. record that message id in the published ledger,
     6. then continue to the next benchmark stage.
-
-    OK NOW START
