@@ -1,2 +1,1 @@
-Read test_steps_for_codex.txt and create an agentic coding work plan in test_plan_for_codex.md to work autonomously.
-Follow the plan in test_plan_for_codex.md until completion.
+Read test_steps_for_codex.txt and create an agentic coding work plan in test_plan_for_codex.md to work autonomously. Follow the plan in test_plan_for_codex.md until completion.
