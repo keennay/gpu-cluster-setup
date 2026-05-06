@@ -1,4 +1,4 @@
-KT_EXPERTS_PATH="qwen35_122b_a10b_fp8/h200_mtp"
+KT_EXPERTS_PATH="qwen35_122b_a10b_fp8/h200"
 KT_PYTHON_ENV=$HOME/env_qwen3-ktransformers
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
 KT_BENCHMARK_MODEL="qwen3"
@@ -141,7 +141,7 @@ Step 18:
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL`
 	Wait until completion, the window should show `RESULTS`
 	If benchmark.py crashed at any moment during this step, restart Step 18.
-	If succesffully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/results_03.txt
+	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/results_03.txt
 	Stop the python instance of benchmark.py
 	If Agent 1's SGLang instance failed at any point before completion, restart from Step 17.
 Step 19:
