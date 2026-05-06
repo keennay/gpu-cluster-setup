@@ -1,3 +1,9 @@
-Send the following message in Discord: "Starting the KTransformers Script Now!"
+1. Send the following message in Discord: "Starting the KTransformers Script Now!"
 
-Read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously. In each section of test_plan_for_agent.md there is a completed benchmark resulting in `RESULTS`, with files written. For each file written, output its entirety to Discord. Follow the plan in test_plan_for_hermes.md until completion.
+2. Read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously.
+
+3. Read test_plan_for_agent.md.
+
+4. In each section of test_plan_for_agent.md there is a completed benchmark resulting in `RESULTS`, with files written. For each file completed benchmark file written, output the entirety of that file to Discord.
+
+5. Follow the plan in test_plan_for_hermes.md with the prior instructions for each benchmark result completion.

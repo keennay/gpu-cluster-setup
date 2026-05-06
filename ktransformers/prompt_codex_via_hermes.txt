@@ -1,7 +1,0 @@
-Have `codex --yolo` read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously.
-
-For Hermes: in each section of test_plan_for_agent.md there is a completed benchmark resulting in `RESULTS`, with files written. For each file written, output its entirety to Discord.
-
-Have `codex --yolo` follow the plan in test_plan_for_agent.md, with the above rules, until completion.
-
-If anywhere in the steps does SGLang or the Python benchmark fail / die, report it in Discord.

@@ -1,1 +1,1 @@
-Read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously. Follow the plan in test_plan_for_agent.md until completion.
+Read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously. Follow the plan in test_plan_for_agent.md.
