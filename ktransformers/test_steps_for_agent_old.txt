@@ -1,4 +1,4 @@
-KT_EXPERTS_PATH="qwen35_122b_a10b_fp8/rtxpro6k"
+KT_EXPERTS_PATH="qwen35_122b_a10b_fp8/h200"
 KT_PYTHON_ENV=$HOME/env_qwen3-ktransformers
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
 KT_BENCHMARK_MODEL="qwen3"
@@ -92,7 +92,59 @@ Step 11:
 Step 12:
 	Agent 1:
 	Stop `./03_launch.sh ${KT_TEST_ENV}`
-	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
 
 Step 13:
-	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 2 results files: 01_launch.txt & 03_launch.txt, in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/03_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
+	Agent 1:
+	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Launch `./03_record.sh ${KT_TEST_ENV}`
+	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
+
+Step 14:
+	Agent 2:
+	Start the SGLang recorder:
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/start_expert_distribution_record \
+  		-d '{}'
+	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 15 when tasked to repeat from Step 13.
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "${KT_EXPERTS_PATH} | 03_record_<iteration>"`
+	Wait until completion, the window should show `RESULTS`
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_record_<iteration>.txt.
+	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "${KT_EXPERTS_PATH} | 03_record_<iteration>"`
+	Stop & dump the SGLang recorder stats:
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/stop_expert_distribution_record \
+  		-d '{}'
+
+		curl -sS -X POST \
+  		-H 'Content-Type: application/json' \
+  		-H 'Authorization: Bearer YOUR_API_KEY' \
+  		http://127.0.0.1:8000/dump_expert_distribution_record \
+  		-d '{}'
+	Stop the python instance of benchmark.py.
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 13.
+	If successful, proceed to Step 15.
+
+Step 15:
+	If successfully reached this point and already successfully repeated Step 13 nine times, proceed to Step 16. Otherwise repeat Step 13 nine more times.
+Step 16:
+	Run `python ./tools/combine_expert_distrbution_recordings.py experts/${KT_EXPERTS_PATH}/02` (This script should launch Python and run that file which exists in the tools directory under this script.
+Step 17:
+	Agent 1:
+	Stop `./03_record.sh ${KT_TEST_ENV}`
+	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Launch `./04_launch.sh ${KT_TEST_ENV}`
+	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
+Step 18:
+	Agent 2:
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_TEST_MODEL --label "${KT_EXPERTS_PATH} | 04_launch"`
+	Wait until completion, the window should show `RESULTS`
+	If benchmark.py crashed at any moment during this step, restart Step 18.
+	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/04_launch.txt
+	Stop the python instance of benchmark.py
+	If Agent 1's SGLang instance failed at any point before completion, restart from Step 17.
+Step 19:
+	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 3 results files: 01_launch.txt, 03_launch.txt, 04_launch.txt, in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/04_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
