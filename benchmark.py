@@ -1015,9 +1015,8 @@ async def run_benchmark():
     actual_avg_input = statistics.mean([r.prompt_tokens for r in successful])
     actual_avg_output = statistics.mean([r.completion_tokens for r in successful])
 
-    print(f"{'=' * 60}")
     print(run_header("RESULTS"))
-    print(f"{'=' * 60}")
+    print()
     print(f"Successful requests:       {len(successful)}/{NUM_PROMPTS}")
     print(f"Failed requests:           {len(failed)}")
     print(f"Avg input tokens (cfg):    {avg_input:.0f}")
