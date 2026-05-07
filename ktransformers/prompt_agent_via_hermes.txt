@@ -1,3 +1,5 @@
+DO NOT KILL GPU PROCESS ON CUDA_VISIBLE_DEVICES=1.
+
 1. Enter a 10 second timer & instruct Hermes to send the following message to Discord with the `send_message` tool: "Starting the KTransformers Script Now!" If the Discord `send_message` tool returns `success=true` within the 10 second timer, exit the timer and proceed to Step 2. Otherwise repeat Step 1.
 
 2. Read test_steps_for_agent.txt and create an agentic coding work plan in test_plan_for_agent.md to work autonomously. If Hermes agent successfully completes this task, proceed to Step 4. Otherwise, proceed to step 3.
