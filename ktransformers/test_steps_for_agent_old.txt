@@ -1,9 +1,9 @@
-KT_EXPERTS_PATH="qwen35_122b_a10b_fp8/h200"
+KT_EXPERTS_PATH="kimi_k26/h200x2"
 KT_PYTHON_ENV=$HOME/env_qwen3-ktransformers
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
-KT_BENCHMARK_MODEL="qwen3"
+KT_BENCHMARK_MODEL="kimi_k2"
 KT_BENCHMARK_PATH="/workspace/scripts/benchmark.py"
-KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 10"
+KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 10 --timeout 3600"
 
 Step 1:
 	Ensure the terminal has already activated the following pip env: ${KT_PYTHON_ENV}. If not, activate it it.
