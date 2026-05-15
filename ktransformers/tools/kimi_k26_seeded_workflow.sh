@@ -15,6 +15,9 @@ KT_SWEEP_NUM_PROMPTS="${KT_SWEEP_NUM_PROMPTS:-100}"
 KT_CONCURRENCY="${KT_CONCURRENCY:-2}"
 KT_TIMEOUT="${KT_TIMEOUT:-3600}"
 RESULTS_DIR="${RESULTS_DIR:-./results/${KT_EXPERTS_PATH}/tests}"
+KT_PLAN_FILE="${KT_PLAN_FILE:-kimi_k26_sweep.md}"
+KT_FIRST_TEST="${KT_FIRST_TEST:-001}"
+KT_LAST_TEST="${KT_LAST_TEST:-999}"
 MAX_TEST_ATTEMPTS="${MAX_TEST_ATTEMPTS:-3}"
 GPU_CLEANUP_TIMEOUT_SECONDS="${GPU_CLEANUP_TIMEOUT_SECONDS:-180}"
 GPU_CLEANUP_POLL_SECONDS="${GPU_CLEANUP_POLL_SECONDS:-5}"
@@ -134,10 +137,11 @@ recorder_api_post() {
 
 successful_result() {
   local out="$1"
+  local expected_requests="${2:-100}"
   [[ -f "${out}" ]] || return 1
   grep -q '^END_UTC:' "${out}" || return 1
   grep -q '^BENCHMARK_EXIT_CODE: 0' "${out}" || return 1
-  grep -Eq 'Successful requests:[[:space:]]+100/100' "${out}" || return 1
+  grep -Eq "Successful requests:[[:space:]]+${expected_requests}/${expected_requests}" "${out}" || return 1
 }
 
 archive_failed_result() {
@@ -146,6 +150,16 @@ archive_failed_result() {
   local stamp
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   mv "${path}" "${path}.previous_${stamp}"
+}
+
+append_benchmark_results() {
+  local live_log="$1"
+  if grep -q '^RESULTS:' "${live_log}" 2>/dev/null; then
+    sed -n '/^RESULTS:/,$p' "${live_log}"
+  else
+    echo "BENCHMARK_LIVE_LOG_TAIL:"
+    tail -n 240 "${live_log}" 2>/dev/null || true
+  fi
 }
 
 latest_combined_expert() {
@@ -203,13 +217,12 @@ run_record_stage() {
   local out="${RESULTS_DIR}/${stage}_seed${KT_BENCHMARK_SEED}.txt"
   local server_log="${RESULTS_DIR}/${stage}_seed${KT_BENCHMARK_SEED}.server.log"
 
-  if successful_result "${out}" && [[ -n "$(latest_combined_expert "${combine_dir}")" ]]; then
+  if successful_result "${out}" "${KT_RECORD_NUM_PROMPTS}" && [[ -n "$(latest_combined_expert "${combine_dir}")" ]]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] SKIP ${stage} already completed successfully"
     return 0
   fi
   archive_failed_result "${out}"
   archive_failed_result "${server_log}"
-  : > "${out}"
 
   local -a server_cmd=(bash "${script}" "${KT_TEST_ENV}")
   local -a benchmark_cmd=(
@@ -221,23 +234,14 @@ run_record_stage() {
       --model "${KT_BENCHMARK_MODEL}"
       --label "${KT_EXPERTS_PATH} | ${stage}_seed${KT_BENCHMARK_SEED}"
   )
+  local live_log="/tmp/kimi_k26_${stage}_seed${KT_BENCHMARK_SEED}.benchmark.live.log"
+  local api_log="/tmp/kimi_k26_${stage}_seed${KT_BENCHMARK_SEED}.recorder_api.log"
+  : > "${live_log}"
+  : > "${api_log}"
 
   cleanup_server
-  {
-    echo "STAGE: ${stage}"
-    echo "START_UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "SEED: ${KT_BENCHMARK_SEED}"
-    echo
-    echo "SERVER_COMMAND:"
-    printf '%q ' "${server_cmd[@]}"
-    echo
-    echo
-    echo "BENCHMARK_COMMAND:"
-    printf '%q ' "${benchmark_cmd[@]}"
-    echo
-    echo
-    echo "BENCHMARK_OUTPUT:"
-  } >> "${out}"
+  local start_utc
+  start_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   "${server_cmd[@]}" > "${server_log}" 2>&1 &
   local server_pid=$!
@@ -247,28 +251,53 @@ run_record_stage() {
     return 1
   fi
 
-  if ! recorder_api_post start_expert_distribution_record "${out}"; then
+  if ! recorder_api_post start_expert_distribution_record "${api_log}"; then
     cleanup_server
-    echo "BENCHMARK_EXIT_CODE: 96" >> "${out}"
-    echo "END_UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${out}"
+    {
+      echo "STAGE: ${stage}"
+      echo "START_UTC: ${start_utc}"
+      echo "SEED: ${KT_BENCHMARK_SEED}"
+      echo "LIVE_BENCHMARK_LOG: ${live_log}"
+      echo "SERVER_LOG: ${server_log}"
+      cat "${api_log}"
+      echo
+      echo "BENCHMARK_EXIT_CODE: 96"
+      echo "END_UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    } > "${out}"
     return 1
   fi
 
   set +e
-  "${benchmark_cmd[@]}" >> "${out}" 2>&1
+  "${benchmark_cmd[@]}" > "${live_log}" 2>&1
   local benchmark_rc=$?
   set -e
 
   local recorder_rc=0
-  recorder_api_post stop_expert_distribution_record "${out}" || recorder_rc=$?
-  recorder_api_post dump_expert_distribution_record "${out}" || recorder_rc=$?
+  recorder_api_post stop_expert_distribution_record "${api_log}" || recorder_rc=$?
+  recorder_api_post dump_expert_distribution_record "${api_log}" || recorder_rc=$?
 
   cleanup_server
   {
+    echo "STAGE: ${stage}"
+    echo "START_UTC: ${start_utc}"
+    echo "SEED: ${KT_BENCHMARK_SEED}"
+    echo "LIVE_BENCHMARK_LOG: ${live_log}"
+    echo "SERVER_LOG: ${server_log}"
     echo
+    echo "SERVER_COMMAND:"
+    printf '%q ' "${server_cmd[@]}"
+    echo
+    echo
+    echo "BENCHMARK_COMMAND:"
+    printf '%q ' "${benchmark_cmd[@]}"
+    echo
+    cat "${api_log}"
+    echo
+    echo "BENCHMARK_RESULTS:"
+    append_benchmark_results "${live_log}"
     echo "BENCHMARK_EXIT_CODE: ${benchmark_rc}"
     echo "END_UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  } >> "${out}"
+  } > "${out}"
 
   if (( benchmark_rc != 0 )); then
     return "${benchmark_rc}"
@@ -305,7 +334,7 @@ run_test() {
   local -a extra_arg_list=()
   read -r -a extra_arg_list <<< "${extra_args}"
 
-  if successful_result "${out}"; then
+  if successful_result "${out}" "${KT_SWEEP_NUM_PROMPTS}"; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] SKIP test${id}_${label} already completed successfully"
     return 0
   fi
@@ -354,9 +383,11 @@ run_test() {
       --label "${KT_EXPERTS_PATH} | test${id}_${label} | seed${KT_BENCHMARK_SEED}"
   )
 
-  : > "${out}"
   local attempt
   for attempt in $(seq 1 "${MAX_TEST_ATTEMPTS}"); do
+    local safe_label="${label//[^A-Za-z0-9_.-]/_}"
+    local live_log="/tmp/kimi_k26_test${id}_${safe_label}_attempt${attempt}_seed${KT_BENCHMARK_SEED}.benchmark.live.log"
+    : > "${live_log}"
     cleanup_server
     if (( attempt > 1 )); then
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] RETRY test${id}_${label} attempt=${attempt}/${MAX_TEST_ATTEMPTS}"
@@ -364,23 +395,8 @@ run_test() {
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] START test${id}_${label} attempt=${attempt}/${MAX_TEST_ATTEMPTS}"
 
-    {
-      echo "TEST: test${id}_${label}"
-      echo "ATTEMPT: ${attempt}/${MAX_TEST_ATTEMPTS}"
-      echo "START_UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-      echo "SEED: ${KT_BENCHMARK_SEED}"
-      echo "EXPERT_FILE: ${latest_expert_location}"
-      echo
-      echo "SGLANG_COMMAND:"
-      printf '%q ' "${cmd[@]}"
-      echo
-      echo
-      echo "BENCHMARK_COMMAND:"
-      printf '%q ' "${benchmark_cmd[@]}"
-      echo
-      echo
-      echo "BENCHMARK_OUTPUT:"
-    } >> "${out}"
+    local start_utc
+    start_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
     "${cmd[@]}" > "${server_log}" 2>&1 &
     local server_pid=$!
@@ -395,23 +411,39 @@ run_test() {
       fi
       archive_failed_result "${out}"
       archive_failed_result "${server_log}"
-      : > "${out}"
       continue
     fi
 
     set +e
-    "${benchmark_cmd[@]}" >> "${out}" 2>&1
+    "${benchmark_cmd[@]}" > "${live_log}" 2>&1
     local benchmark_rc=$?
     set -e
 
     cleanup_server
     {
+      echo "TEST: test${id}_${label}"
+      echo "ATTEMPT: ${attempt}/${MAX_TEST_ATTEMPTS}"
+      echo "START_UTC: ${start_utc}"
+      echo "SEED: ${KT_BENCHMARK_SEED}"
+      echo "EXPERT_FILE: ${latest_expert_location}"
+      echo "LIVE_BENCHMARK_LOG: ${live_log}"
+      echo "SERVER_LOG: ${server_log}"
       echo
+      echo "SGLANG_COMMAND:"
+      printf '%q ' "${cmd[@]}"
+      echo
+      echo
+      echo "BENCHMARK_COMMAND:"
+      printf '%q ' "${benchmark_cmd[@]}"
+      echo
+      echo
+      echo "BENCHMARK_RESULTS:"
+      append_benchmark_results "${live_log}"
       echo "BENCHMARK_EXIT_CODE: ${benchmark_rc}"
       echo "END_UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    } >> "${out}"
+    } > "${out}"
 
-    if (( benchmark_rc == 0 )) && successful_result "${out}"; then
+    if (( benchmark_rc == 0 )) && successful_result "${out}" "${KT_SWEEP_NUM_PROMPTS}"; then
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] DONE test${id}_${label} benchmark_rc=${benchmark_rc} attempt=${attempt}/${MAX_TEST_ATTEMPTS}"
       return 0
     fi
@@ -440,12 +472,51 @@ NVLS="--enable-nccl-nvls"
 FLASHINFER_BACKEND="--prefill-attention-backend flashinfer --decode-attention-backend flashinfer --sampling-backend flashinfer"
 TRITON_PREFILL_BACKEND="--prefill-attention-backend triton --decode-attention-backend fa3 --sampling-backend flashinfer"
 
-mapfile -t PLAN_RUN_TESTS < <(awk '/^run_test [0-9][0-9][0-9] / {print}' kimi_k26_sweep.md)
-if (( ${#PLAN_RUN_TESTS[@]} < 100 )); then
-  echo "Expected at least 100 run_test lines in kimi_k26_sweep.md, found ${#PLAN_RUN_TESTS[@]}" >&2
+if [[ ! "${KT_FIRST_TEST}" =~ ^[0-9][0-9][0-9]$ ]] || [[ ! "${KT_LAST_TEST}" =~ ^[0-9][0-9][0-9]$ ]]; then
+  echo "KT_FIRST_TEST and KT_LAST_TEST must be three-digit test ids, got ${KT_FIRST_TEST}-${KT_LAST_TEST}" >&2
   exit 2
 fi
 
-for plan_line in "${PLAN_RUN_TESTS[@]}"; do
+if [[ ! -f "${KT_PLAN_FILE}" ]]; then
+  echo "Plan file not found: ${KT_PLAN_FILE}" >&2
+  exit 2
+fi
+
+first_test_num=$((10#${KT_FIRST_TEST}))
+last_test_num=$((10#${KT_LAST_TEST}))
+if (( first_test_num > last_test_num )); then
+  echo "KT_FIRST_TEST must be <= KT_LAST_TEST, got ${KT_FIRST_TEST}-${KT_LAST_TEST}" >&2
+  exit 2
+fi
+
+mapfile -t PLAN_RUN_TESTS < <(awk '/^run_test [0-9][0-9][0-9] / {print NR "\t" $0}' "${KT_PLAN_FILE}")
+if (( ${#PLAN_RUN_TESTS[@]} < 100 )); then
+  echo "Expected at least 100 run_test lines in ${KT_PLAN_FILE}, found ${#PLAN_RUN_TESTS[@]}" >&2
+  exit 2
+fi
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] PLAN_FILE ${KT_PLAN_FILE} tests=${#PLAN_RUN_TESTS[@]} range=${KT_FIRST_TEST}-${KT_LAST_TEST}"
+
+for plan_entry in "${PLAN_RUN_TESTS[@]}"; do
+  plan_line_no="${plan_entry%%$'\t'*}"
+  plan_line="${plan_entry#*$'\t'}"
+  if [[ ! "${plan_line}" =~ ^run_test[[:space:]]+([0-9][0-9][0-9])[[:space:]] ]]; then
+    echo "Invalid run_test line ${plan_line_no}: ${plan_line}" >&2
+    exit 2
+  fi
+  plan_test_id="${BASH_REMATCH[1]}"
+  plan_test_num=$((10#${plan_test_id}))
+  if (( plan_test_num < first_test_num || plan_test_num > last_test_num )); then
+    continue
+  fi
+
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] PLAN_RUN test${plan_test_id} line=${plan_line_no}"
+  set +e
   eval "${plan_line}"
+  plan_rc=$?
+  set -e
+  if (( plan_rc != 0 )); then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] PLAN_FAIL test${plan_test_id} line=${plan_line_no} rc=${plan_rc}" >&2
+    exit "${plan_rc}"
+  fi
 done

@@ -20,15 +20,17 @@ Do not edit installed packages. Do not edit `04_launch.sh` for this sweep.
 
 Portability notes:
 
-- Override `KT_EXPERTS_PATH`, `KT_PYTHON_ENV`, `KT_BENCHMARK_PATH`, `KT_BENCHMARK_MODEL`, `RESULTS_DIR`, `KT_HOST`, `KT_PORT`, or `KT_API_KEY` when moving this runner to another system.
+- Override `KT_EXPERTS_PATH`, `KT_PYTHON_ENV`, `KT_BENCHMARK_PATH`, `KT_BENCHMARK_MODEL`, `RESULTS_DIR`, `KT_HOST`, `KT_PORT`, `KT_API_KEY`, or `KT_PLAN_FILE` when moving this runner to another system.
 - `tools/kimi_k26_seeded_workflow.sh` recreates wiped `experts/.../01` and `experts/.../02` directories, records fixed-seed experts with `02_record.sh` and `03_record.sh`, combines them, then runs the 100+ seeded tests below.
+- Benchmark stdout/stderr is written live to `/tmp/*benchmark.live.log`; `record*.txt` and `testNNN.txt` are written after benchmark completion with commands plus the final `RESULTS` section.
 - The runner skips only fully successful results: `BENCHMARK_EXIT_CODE: 0` and `Successful requests: 100/100`.
 - Failed or partial result files are archived with `.previous_YYYYmmddTHHMMSSZ` and retried up to `MAX_TEST_ATTEMPTS` times, default `3`.
 - Startup cleanup waits for old SGLang child processes and GPU allocations to disappear before the next launch. If startup memory imbalance persists, increase `GPU_CLEANUP_TIMEOUT_SECONDS` or `GPU_CLEANUP_EXTRA_SLEEP_SECONDS`.
+- Use `KT_FIRST_TEST=NNN` and `KT_LAST_TEST=NNN` to resume or narrow the sweep without editing the test matrix.
 
 ## Runner
 
-Run from this directory after confirming no unrelated SGLang job is meant to stay alive.
+Run from this directory after confirming no unrelated SGLang job is meant to stay alive. The durable runner is `tools/kimi_k26_seeded_workflow.sh`; the code block below keeps the test matrix that the runner parses.
 
 ```bash
 #!/usr/bin/env bash
