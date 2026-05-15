@@ -308,6 +308,7 @@ Example usage:
     optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum output tokens (default: {DEFAULT_MAX_OUTPUT})")
     optional.add_argument("--timeout", type=int, default=600, help="Timeout per request in seconds (default: 600)")
     optional.add_argument("--warmup", type=int, default=3, help="Number of warmup requests (default: 3)")
+    optional.add_argument("--seed", type=int, default=None, help="Random seed for reproducible prompt sampling (default: random)")
     optional.add_argument("--no-ignore-eos", action="store_true", help="Don't force full output length (default: force full output)")
     optional.add_argument(
         "--preview-samples",
@@ -372,6 +373,7 @@ MIN_OUTPUT_TOKENS = args.min_output
 MAX_OUTPUT_TOKENS = args.max_output
 IGNORE_EOS = not args.no_ignore_eos
 PREVIEW_SAMPLES = args.preview_samples
+RANDOM_SEED = args.seed
 
 client = None
 if PREVIEW_SAMPLES == 0:
@@ -391,6 +393,13 @@ if PREVIEW_SAMPLES == 0:
 
 def run_header(prefix: str) -> str:
     return f"{prefix}: {RUN_LABEL} | Prompts: {NUM_PROMPTS} | Concurrency: {CONCURRENCY}"
+
+
+def seed_random():
+    if RANDOM_SEED is None:
+        random.seed()
+    else:
+        random.seed(RANDOM_SEED)
 
 
 @dataclass
@@ -703,9 +712,16 @@ def build_coding_agent_prompt(input_bucket: str, output_bucket: str) -> tuple[st
 
 
 def generate_unique_prompt(target_tokens: int, input_bucket: str, output_bucket: str) -> str:
+    if RANDOM_SEED is None:
+        request_uuid = uuid.uuid4()
+        timestamp = time.time_ns()
+    else:
+        request_uuid = uuid.UUID(int=random.getrandbits(128))
+        timestamp = random.getrandbits(63)
+
     unique_prefix = (
-        f"[Request ID: {uuid.uuid4()}] "
-        f"[Timestamp: {time.time_ns()}] "
+        f"[Request ID: {request_uuid}] "
+        f"[Timestamp: {timestamp}] "
         f"[Random: {random.random()}] "
         f"[Input Bucket: {input_bucket}] "
         f"[Output Bucket: {output_bucket}]\n\n"
@@ -941,7 +957,7 @@ async def run_benchmark():
         print("ERROR: Client not initialized. Use --preview-samples for preview mode or provide --model for benchmark mode.")
         return
 
-    random.seed()
+    seed_random()
 
     print("\n" + "=" * 60)
     print("NOTE: For accurate benchmarks, start server with:")
@@ -1082,7 +1098,7 @@ async def run_benchmark():
 
 
 if __name__ == "__main__":
-    random.seed()
+    seed_random()
     if PREVIEW_SAMPLES > 0:
         print_sample_preview()
     else:
