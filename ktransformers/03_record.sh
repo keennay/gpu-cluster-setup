@@ -13,10 +13,7 @@ if [[ ! -d "$recorder_dir" ]]; then
   exit 1
 fi
 
-if [[ ! -d "$output_recorder_dir" ]]; then
-  echo "Output recorder directory not found: $output_recorder_dir" >&2
-  exit 1
-fi
+mkdir -p "$output_recorder_dir"
 
 latest_expert_location="$(find "$recorder_dir" -maxdepth 1 -type f -name 'expert_distribution_recorder_*.pt' | sort -V | tail -n 1)"
 

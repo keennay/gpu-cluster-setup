@@ -1,9 +1,9 @@
 # Kimi K2.6 H200x2 SGLang Flag Test Plan
 
-Goal: reduce TTFT as much as possible for Kimi K2.6 on `h200x2`, even if some candidates trade away throughput or stability. Rerun `/workspace/scripts/benchmark.py` with the same benchmark flags as before:
+Goal: reduce TTFT as much as possible for Kimi K2.6 on `h200x2`, even if some candidates trade away throughput or stability. Rerun `/workspace/scripts/benchmark.py` with the same fixed-seed benchmark flags:
 
 ```bash
---num-prompts 100 --concurrency 2 --timeout 3600
+--num-prompts 100 --concurrency 2 --timeout 3600 --seed 52
 ```
 
 Every test is based on `04_launch.sh` behavior:
@@ -11,6 +11,7 @@ Every test is based on `04_launch.sh` behavior:
 - uses `envs/kimi_k26/h200x2.env`
 - uses `--kt-expert-placement-strategy frequency`
 - uses the latest `experts/kimi_k26/h200x2/02/expert_distribution_recorder_*.pt`
+- uses experts recorded from the same `--seed 52` benchmark workload
 - keeps `--disable-radix-cache`
 - keeps `--disable-chunked-prefix-cache`
 - writes the full resolved SGLang engine command and benchmark output to `./results/kimi_k26/h200x2/tests/testNNN.txt`
@@ -20,6 +21,7 @@ Do not edit installed packages. Do not edit `04_launch.sh` for this sweep.
 Portability notes:
 
 - Override `KT_EXPERTS_PATH`, `KT_PYTHON_ENV`, `KT_BENCHMARK_PATH`, `KT_BENCHMARK_MODEL`, `RESULTS_DIR`, `KT_HOST`, `KT_PORT`, or `KT_API_KEY` when moving this runner to another system.
+- `tools/kimi_k26_seeded_workflow.sh` recreates wiped `experts/.../01` and `experts/.../02` directories, records fixed-seed experts with `02_record.sh` and `03_record.sh`, combines them, then runs the 100+ seeded tests below.
 - The runner skips only fully successful results: `BENCHMARK_EXIT_CODE: 0` and `Successful requests: 100/100`.
 - Failed or partial result files are archived with `.previous_YYYYmmddTHHMMSSZ` and retried up to `MAX_TEST_ATTEMPTS` times, default `3`.
 - Startup cleanup waits for old SGLang child processes and GPU allocations to disappear before the next launch. If startup memory imbalance persists, increase `GPU_CLEANUP_TIMEOUT_SECONDS` or `GPU_CLEANUP_EXTRA_SLEEP_SECONDS`.
@@ -37,7 +39,7 @@ KT_PYTHON_ENV="${KT_PYTHON_ENV:-${HOME}/env_qwen3-ktransformers}"
 KT_TEST_ENV="${KT_TEST_ENV:-./envs/${KT_EXPERTS_PATH}.env}"
 KT_BENCHMARK_MODEL="${KT_BENCHMARK_MODEL:-kimi_k2}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-/workspace/scripts/benchmark.py}"
-KT_BENCHMARK_FLAGS=(--num-prompts 100 --concurrency 2 --timeout 3600)
+KT_BENCHMARK_FLAGS=(--num-prompts 100 --concurrency 2 --timeout 3600 --seed 52)
 RESULTS_DIR="${RESULTS_DIR:-./results/${KT_EXPERTS_PATH}/tests}"
 MAX_TEST_ATTEMPTS="${MAX_TEST_ATTEMPTS:-3}"
 GPU_CLEANUP_TIMEOUT_SECONDS="${GPU_CLEANUP_TIMEOUT_SECONDS:-180}"

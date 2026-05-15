@@ -7,10 +7,7 @@ source "$script_dir/tools/launch_config.sh"
 load_launch_config "$@"
 recorder_dir="$script_dir/experts/$EXPERTS_PATH/01"
 
-if [[ ! -d "$recorder_dir" ]]; then
-  echo "Recorder directory not found: $recorder_dir" >&2
-  exit 1
-fi
+mkdir -p "$recorder_dir"
 
 cmd=(
   env CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES"
