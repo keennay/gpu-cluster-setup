@@ -407,9 +407,9 @@ NVLS="--enable-nccl-nvls"
 FLASHINFER_BACKEND="--prefill-attention-backend flashinfer --decode-attention-backend flashinfer --sampling-backend flashinfer"
 TRITON_PREFILL_BACKEND="--prefill-attention-backend triton --decode-attention-backend fa3 --sampling-backend flashinfer"
 
-mapfile -t PLAN_RUN_TESTS < <(awk '/^run_test [0-9][0-9][0-9] / {print}' kimi_k2.6.md)
+mapfile -t PLAN_RUN_TESTS < <(awk '/^run_test [0-9][0-9][0-9] / {print}' kimi_k26_sweep.md)
 if (( ${#PLAN_RUN_TESTS[@]} < 100 )); then
-  echo "Expected at least 100 run_test lines in kimi_k2.6.md, found ${#PLAN_RUN_TESTS[@]}" >&2
+  echo "Expected at least 100 run_test lines in kimi_k26_sweep.md, found ${#PLAN_RUN_TESTS[@]}" >&2
   exit 2
 fi
 
