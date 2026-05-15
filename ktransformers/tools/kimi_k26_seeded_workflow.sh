@@ -104,6 +104,34 @@ wait_for_server() {
   return 1
 }
 
+recorder_api_post() {
+  local endpoint="$1"
+  local out="$2"
+  local response
+  local rc
+
+  set +e
+  response="$(curl -fsS -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${KT_API_KEY}" \
+    "http://127.0.0.1:${KT_PORT}/${endpoint}" \
+    -d '{}' 2>&1)"
+  rc=$?
+  set -e
+
+  {
+    echo
+    echo "RECORDER_API: ${endpoint}"
+    echo "RECORDER_API_EXIT_CODE: ${rc}"
+    if [[ -n "${response}" ]]; then
+      echo "RECORDER_API_RESPONSE:"
+      echo "${response}"
+    fi
+  } >> "${out}"
+
+  return "${rc}"
+}
+
 successful_result() {
   local out="$1"
   [[ -f "${out}" ]] || return 1
@@ -228,10 +256,21 @@ run_record_stage() {
     return 1
   fi
 
+  if ! recorder_api_post start_expert_distribution_record "${out}"; then
+    cleanup_server
+    echo "BENCHMARK_EXIT_CODE: 96" >> "${out}"
+    echo "END_UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${out}"
+    return 1
+  fi
+
   set +e
   "${benchmark_cmd[@]}" >> "${out}" 2>&1
   local benchmark_rc=$?
   set -e
+
+  local recorder_rc=0
+  recorder_api_post stop_expert_distribution_record "${out}" || recorder_rc=$?
+  recorder_api_post dump_expert_distribution_record "${out}" || recorder_rc=$?
 
   cleanup_server
   {
@@ -242,6 +281,9 @@ run_record_stage() {
 
   if (( benchmark_rc != 0 )); then
     return "${benchmark_rc}"
+  fi
+  if (( recorder_rc != 0 )); then
+    return "${recorder_rc}"
   fi
 
   python ./tools/combine_expert_distrbution_recordings.py "${combine_dir}" >> "${out}" 2>&1
