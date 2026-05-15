@@ -150,18 +150,9 @@ archive_failed_result() {
 
 latest_combined_expert() {
   local dir="$1"
-  local path
-  for path in "${dir}"/expert_distribution_recorder_*.pt; do
-    [[ -e "${path}" ]] || continue
-    local name timestamp gpu_path
-    name="$(basename "${path}")"
-    timestamp="${name#expert_distribution_recorder_}"
-    timestamp="${timestamp%.pt}"
-    gpu_path="${dir}/gpu_expert_distribution_${timestamp}.pt"
-    if [[ ! -e "${gpu_path}" ]]; then
-      printf '%s\n' "${path}"
-    fi
-  done | sort -V | tail -n 1
+  find "${dir}" -maxdepth 1 -type f -name 'expert_distribution_recorder_*.pt' -size -100M 2>/dev/null \
+    | sort -V \
+    | tail -n 1
 }
 
 write_seed_profile() {

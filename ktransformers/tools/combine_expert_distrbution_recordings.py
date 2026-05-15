@@ -23,23 +23,22 @@ def main():
     args = parse_args()
     rec_dir = Path(args.recording_dir)
 
-    files = []
+    raw_totals = []
+    skipped_combined = []
     for path in sorted(rec_dir.glob("expert_distribution_recorder_*.pt")):
-        if "combined" in path.name:
+        data = torch.load(path, map_location="cpu", weights_only=True)
+        logical_count = data["logical_count"]
+        if logical_count.shape[0] == 1:
+            skipped_combined.append(str(path))
             continue
-        timestamp = path.stem.removeprefix("expert_distribution_recorder_")
-        gpu_path = rec_dir / f"gpu_expert_distribution_{timestamp}.pt"
-        if gpu_path.exists():
-            files.append(path)
-    if not files:
-        raise SystemExit(f"No expert_distribution_recorder_*.pt files found in {rec_dir}")
+        raw_totals.append((path, logical_count.sum(dim=0, keepdim=True)))
+
+    if not raw_totals:
+        raise SystemExit(f"No raw expert_distribution_recorder_*.pt files found in {rec_dir}")
 
     total = None
     used = []
-    for path in files:
-        data = torch.load(path, map_location="cpu", weights_only=True)
-        logical_count = data["logical_count"]
-        chunk_total = logical_count.sum(dim=0, keepdim=True)
+    for path, chunk_total in raw_totals:
         total = chunk_total if total is None else total + chunk_total
         used.append(str(path))
 
@@ -48,6 +47,7 @@ def main():
 
     print(f"wrote {out}")
     print(f"combined {len(used)} chunks")
+    print(f"skipped {len(skipped_combined)} already-combined files")
     print(f"logical_count shape: {tuple(total.shape)}")
 
 
