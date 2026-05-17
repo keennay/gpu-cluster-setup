@@ -221,7 +221,7 @@ from pathlib import Path
 
 results_dir = Path(sys.argv[1])
 expected_requests = sys.argv[2]
-best = None
+rows = []
 
 for path in sorted(results_dir.glob("test*.txt")):
     txt = path.read_text(errors="replace")
@@ -237,26 +237,55 @@ for path in sorted(results_dir.glob("test*.txt")):
     if not ttft:
         continue
     mean_ms = int(ttft.group(1))
+    median_ms = int(ttft.group(2))
+    p95_ms = int(ttft.group(3))
     chunk = re.search(r"--chunked-prefill-size\s+(\S+)", txt)
     threshold = re.search(r"--kt-gpu-prefill-token-threshold\s+(\S+)", txt)
     output = re.search(r"^  Output tokens/sec:\s*([0-9.]+)", txt, re.M)
-    row = (
-        mean_ms,
-        path.stem,
-        chunk.group(1) if chunk else "n/a",
-        threshold.group(1) if threshold else "n/a",
-        output.group(1) if output else "n/a",
-        f"{mean_ms / 1000:.3f}s",
-        f"{int(ttft.group(2)) / 1000:.3f}s",
-        f"{int(ttft.group(3)) / 1000:.3f}s",
+    output_toks = float(output.group(1)) if output else 0.0
+    rows.append(
+        {
+            "mean_ms": mean_ms,
+            "median_ms": median_ms,
+            "p95_ms": p95_ms,
+            "output_toks": output_toks,
+            "output_text": output.group(1) if output else "n/a",
+            "test_name": path.stem,
+            "chunk": chunk.group(1) if chunk else "n/a",
+            "threshold": threshold.group(1) if threshold else "n/a",
+        }
     )
-    if best is None or row[0] < best[0]:
-        best = row
 
-if best is None:
+if not rows:
     sys.exit(1)
 
-print("\t".join(best[1:]))
+min_mean = min(row["mean_ms"] for row in rows)
+ttft_tolerance_ms = max(250, int(min_mean * 0.005))
+eligible = [row for row in rows if row["mean_ms"] <= min_mean + ttft_tolerance_ms]
+best = sorted(
+    eligible,
+    key=lambda row: (
+        -row["output_toks"],
+        row["p95_ms"],
+        row["median_ms"],
+        row["mean_ms"],
+        row["test_name"],
+    ),
+)[0]
+
+print(
+    "\t".join(
+        [
+            best["test_name"],
+            best["chunk"],
+            best["threshold"],
+            best["output_text"],
+            f'{best["mean_ms"] / 1000:.3f}s',
+            f'{best["median_ms"] / 1000:.3f}s',
+            f'{best["p95_ms"] / 1000:.3f}s',
+        ]
+    )
+)
 PY
 }
 
@@ -869,7 +898,19 @@ for path in sorted(results_dir.glob("test*.txt")):
         }
     )
 
-rows.sort(key=lambda row: (row["mean_ms"], row["p95_ms"], row["median_ms"], -float(row["output"] if row["output"] != "n/a" else 0)))
+if rows:
+    min_mean = min(row["mean_ms"] for row in rows)
+    ttft_tolerance_ms = max(250, int(min_mean * 0.005))
+    rows.sort(
+        key=lambda row: (
+            0 if row["mean_ms"] <= min_mean + ttft_tolerance_ms else 1,
+            -float(row["output"] if row["output"] != "n/a" else 0),
+            row["p95_ms"],
+            row["median_ms"],
+            row["mean_ms"],
+            row["test_num"],
+        )
+    )
 for rank, row in enumerate(rows[:top_n], start=1):
     required = ["cpuinfer", "threadpools", "gpu_experts", "deferred", "mem", "chunk", "threshold"]
     if any(not row[key] for key in required):
