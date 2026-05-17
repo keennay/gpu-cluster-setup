@@ -28,6 +28,8 @@ Portability notes:
 - Starting with `test025` by default, each new test sends a best-effort Discord notification as `Starting testNNN | ...` with a compact explanation of chunk size, threshold, memory fraction, expert count, CPU/deferred settings, and notable SGLang flags. Override `KT_HERMES_START_FROM` to change the first test that emits start notifications.
 - Successful tests send best-effort Discord notifications with `hermes send --to discord`: one message for the completed test and one for the current best by lowest mean TTFT. Set `KT_HERMES_NOTIFY=0` to disable this on systems without Hermes configured.
 - Failed test attempts also send best-effort Discord notifications as `Fail 1/3 testNNN`, `Fail 2/3 testNNN`, and `Fail 3/3 testNNN`. After the final failed attempt, the runner records the failed result and continues to the next test instead of stopping the sweep.
+- By default, `test026+` is dynamic: `tools/kimi_k26_seeded_workflow.sh` ranks successful `test001-test025` results and programmatically builds post-25 overlay runs from the top `KT_DYNAMIC_POST25_TOP_N=3` anchors. This avoids hardcoding today's winners. Set `KT_DYNAMIC_POST25=0` to use the static `run_test 026+` rows below instead.
+- Dynamic post-25 anchor selection writes `./results/kimi_k26/h200x2/tests/dynamic_post25_anchors_seed52.tsv` with the exact source tests, chunk sizes, thresholds, and TTFT metrics used.
 - Startup cleanup waits for old SGLang child processes and GPU allocations to disappear before the next launch. If startup memory imbalance persists, increase `GPU_CLEANUP_TIMEOUT_SECONDS` or `GPU_CLEANUP_EXTRA_SLEEP_SECONDS`.
 - Use `KT_FIRST_TEST=NNN` and `KT_LAST_TEST=NNN` to resume or narrow the sweep without editing the test matrix.
 
