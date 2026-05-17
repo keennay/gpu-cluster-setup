@@ -25,7 +25,9 @@ Portability notes:
 - Benchmark stdout/stderr is written live to `/tmp/*benchmark.live.log`; `record*.txt` and `testNNN.txt` are written after benchmark completion with commands plus the final `RESULTS` section.
 - The runner skips only fully successful results: `BENCHMARK_EXIT_CODE: 0` and `Successful requests: 100/100`.
 - Failed or partial result files are archived with `.previous_YYYYmmddTHHMMSSZ` and retried up to `MAX_TEST_ATTEMPTS` times, default `3`.
+- Starting with `test025` by default, each new test sends a best-effort Discord notification as `Starting testNNN | ...` with a compact explanation of chunk size, threshold, memory fraction, expert count, CPU/deferred settings, and notable SGLang flags. Override `KT_HERMES_START_FROM` to change the first test that emits start notifications.
 - Successful tests send best-effort Discord notifications with `hermes send --to discord`: one message for the completed test and one for the current best by lowest mean TTFT. Set `KT_HERMES_NOTIFY=0` to disable this on systems without Hermes configured.
+- Failed test attempts also send best-effort Discord notifications as `Fail 1/3 testNNN`, `Fail 2/3 testNNN`, and `Fail 3/3 testNNN`. After the final failed attempt, the runner records the failed result and continues to the next test instead of stopping the sweep.
 - Startup cleanup waits for old SGLang child processes and GPU allocations to disappear before the next launch. If startup memory imbalance persists, increase `GPU_CLEANUP_TIMEOUT_SECONDS` or `GPU_CLEANUP_EXTRA_SLEEP_SECONDS`.
 - Use `KT_FIRST_TEST=NNN` and `KT_LAST_TEST=NNN` to resume or narrow the sweep without editing the test matrix.
 
