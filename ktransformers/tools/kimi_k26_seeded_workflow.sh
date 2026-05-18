@@ -32,6 +32,7 @@ KT_HERMES_START_NOTIFY_STATE="${KT_HERMES_START_NOTIFY_STATE:-/tmp/kimi_k26_seed
 KT_HERMES_START_FROM="${KT_HERMES_START_FROM:-025}"
 KT_DYNAMIC_POST25="${KT_DYNAMIC_POST25:-1}"
 KT_DYNAMIC_POST25_TOP_N="${KT_DYNAMIC_POST25_TOP_N:-3}"
+KT_DYNAMIC_POST25_OVERLAY_TOP_N="${KT_DYNAMIC_POST25_OVERLAY_TOP_N:-1}"
 KT_DYNAMIC_POST25_START="${KT_DYNAMIC_POST25_START:-026}"
 KT_DYNAMIC_POST25_SOURCE_LAST="${KT_DYNAMIC_POST25_SOURCE_LAST:-025}"
 
@@ -1135,7 +1136,11 @@ run_dynamic_post25() {
       top_output_toks="${output_toks}"
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] DYNAMIC_POST25_ANCHOR rank=${rank} source=${source_test} chunk=${chunked_prefill_size} threshold=${threshold} mem=${mem_fraction_static} mean_ms=${mean_ms}"
-    run_dynamic_post25_overlay_set "${rank}" "${source_test}" "${source_label}" "${kt_cpuinfer}" "${kt_threadpool_count}" "${kt_num_gpu_experts}" "${kt_deferred}" "${mem_fraction_static}" "${chunked_prefill_size}" "${threshold}"
+    if (( 10#${rank} <= KT_DYNAMIC_POST25_OVERLAY_TOP_N )); then
+      run_dynamic_post25_overlay_set "${rank}" "${source_test}" "${source_label}" "${kt_cpuinfer}" "${kt_threadpool_count}" "${kt_num_gpu_experts}" "${kt_deferred}" "${mem_fraction_static}" "${chunked_prefill_size}" "${threshold}"
+    else
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] DYNAMIC_POST25_SKIP_OVERLAY rank=${rank} source=${source_test} reason=overlay_top_n_${KT_DYNAMIC_POST25_OVERLAY_TOP_N}"
+    fi
   done
 
   if [[ -n "${top_source_test:-}" ]]; then

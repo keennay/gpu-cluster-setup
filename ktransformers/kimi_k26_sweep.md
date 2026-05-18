@@ -28,7 +28,7 @@ Portability notes:
 - Starting with `test025` by default, each new test sends a best-effort Discord notification as `Starting testNNN | ...` with a compact explanation of chunk size, threshold, memory fraction, expert count, CPU/deferred settings, and notable SGLang flags. Override `KT_HERMES_START_FROM` to change the first test that emits start notifications.
 - Successful tests send best-effort Discord notifications with `hermes send --to discord`: one message for the completed test and one for the current balanced best. Balanced best first keeps mean TTFT within `max(250ms, 0.5%)` of the fastest successful run, then prefers higher output tokens/sec, lower P95, lower median, and lower mean TTFT. Set `KT_HERMES_NOTIFY=0` to disable this on systems without Hermes configured.
 - Failed test attempts also send best-effort Discord notifications as `Fail 1/3 testNNN`, `Fail 2/3 testNNN`, and `Fail 3/3 testNNN`. After the final failed attempt, the runner records the failed result and continues to the next test instead of stopping the sweep.
-- By default, `test026+` is dynamic: `tools/kimi_k26_seeded_workflow.sh` ranks successful `test001-test025` results and programmatically builds post-25 overlay runs from the top `KT_DYNAMIC_POST25_TOP_N=3` anchors. This avoids hardcoding today's winners. Set `KT_DYNAMIC_POST25=0` to use the static `run_test 026+` rows below instead.
+- By default, `test026+` is dynamic: `tools/kimi_k26_seeded_workflow.sh` ranks successful `test001-test025` results, records the top `KT_DYNAMIC_POST25_TOP_N=3` anchors, runs overlay probes only on the best `KT_DYNAMIC_POST25_OVERLAY_TOP_N=1` anchor, then starts the deeper top-anchor probes immediately after that block. With the default 16 overlay probes, the deep-dive tests start at `test042` instead of repeating the same overlay set for the 2nd and 3rd anchors. This keeps rented-compute runs cheaper while still preserving the top-3 anchor metadata. Set `KT_DYNAMIC_POST25_OVERLAY_TOP_N=3` to restore the old repeat-all-three behavior, or `KT_DYNAMIC_POST25=0` to use the static `run_test 026+` rows below instead.
 - Dynamic post-25 anchor selection writes `./results/kimi_k26/h200x2/tests/dynamic_post25_anchors_seed52.tsv` with the exact source tests, chunk sizes, thresholds, and TTFT metrics used.
 - Startup cleanup waits for old SGLang child processes and GPU allocations to disappear before the next launch. If startup memory imbalance persists, increase `GPU_CLEANUP_TIMEOUT_SECONDS` or `GPU_CLEANUP_EXTRA_SLEEP_SECONDS`.
 - Use `KT_FIRST_TEST=NNN` and `KT_LAST_TEST=NNN` to resume or narrow the sweep without editing the test matrix.
@@ -532,13 +532,9 @@ Run all cases when possible. If the sweep is interrupted or narrowed, use this T
 
 1. `001` for the current `04_launch` baseline.
 2. `014`, `016`, `019`, `021`, `022` to find the chunk/threshold direction.
-3. `026` through `035` to check backend and NVLS overlays.
-4. `038`, `040`, `045`, `048`, `049` to check expert count and memory headroom.
-5. `053` through `065` only if CPU fallback still looks like the bottleneck.
-6. `066` through `077` only if CUDA graph or request scheduling looks unstable.
-7. `097` through `152` for the expanded chunk, threshold, backend, graph, expert, and memory local search.
-8. `153` through `184` for CPU fallback, request admission, advanced SGLang, and tokenizer-side TTFT checks.
-9. `078` through `096` are stretch/control runs if they were skipped earlier.
+3. `026` through `041` to check backend, NVLS, CUDA graph, scheduler, and tokenizer overlays on the best first-25 anchor.
+4. `042+` for the deeper top-anchor probes that used to start after the repeated 2nd/3rd-anchor overlay blocks.
+5. Use `KT_DYNAMIC_POST25_OVERLAY_TOP_N=3` only if you explicitly want to spend the compute to repeat `026-041` style overlays on the 2nd and 3rd anchors.
 
 ## Ranking Metrics
 
