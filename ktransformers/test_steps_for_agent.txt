@@ -5,9 +5,10 @@ KT_BENCHMARK_MODEL="kimi_k2"
 KT_REPO_ROOT="${KT_REPO_ROOT:-$(pwd)}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmark.py}"
 KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 2 --timeout 3600 --seed 52"
+MESSAGE="hermes send --to discord"
 
 Step 1:
-	Ensure the terminal has already activated the following pip env: ${KT_PYTHON_ENV}. If not, activate it it.
+	Ensure the terminal has already activated the following pip env: ${KT_PYTHON_ENV}. If not, activate it.
 	Ensure all new files & directories specifically instructed for creation within this script are created within the same directory as this script's location, with new file & directory suggestions in this script shown as ./<file> or ./<directory>, unless specified otherwise.
 	Any files created by the agent for temporary work should only be in /tmp.
 	Do not modify pre-existing files.
@@ -15,6 +16,8 @@ Step 1:
 Step 2:
 	Agent 1:
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Terminal prompt `${MESSAGE} "Starting the KTransformers Script Now!"`
+	Terminal prompt `${MESSAGE} "Launching: SGLang for 02_record"` 
 	Launch `./02_record.sh ${KT_TEST_ENV}`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 Step 3:
@@ -25,10 +28,12 @@ Step 3:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/start_expert_distribution_record \
   		-d '{}'
+	Terminal prompt `${MESSAGE} "Launching: Benchmark for 02_record"` 
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 02_record"`
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/02_record.txt.
-	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 02_record"`
+	Terminal prompt `${MESSAGE} "<above_results>"`
+	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 02_record"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 02_record"`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
   		-H 'Content-Type: application/json' \
@@ -42,14 +47,16 @@ Step 3:
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
 	Stop the python instance of benchmark.py.
-	If Agent 1's SGLang instance failed at any point before completion, restart from Step 2.
+	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 02_record"` and restart from Step 2.
 	If successful, proceed to step 4.
 Step 4:
 	Agent 1:
 	Stop `./02_record.sh ${KT_TEST_ENV}`
+	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 7 when tasked to repeat from Step 5.
 Step 5:
 	Agent 1:
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Terminal prompt `${MESSAGE} "Launching: SGLang for 03_record_<iteration>"` 
 	Launch `./03_record.sh ${KT_TEST_ENV}`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 
@@ -61,11 +68,12 @@ Step 6:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/start_expert_distribution_record \
   		-d '{}'
-	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 7 when tasked to repeat from Step 5.
+	Terminal prompt `${MESSAGE} "Launching: Benchmark for 03_record_<iteration>"` 
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 03_record_<iteration>"`
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_record_<iteration>.txt.
-	If benchmark.py crashed at any moment during this step, restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 03_record_<iteration>"`
+	Terminal prompt `${MESSAGE} "<above_results>"`
+	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 03_record_<iteration>"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 03_record_<iteration>"`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
   		-H 'Content-Type: application/json' \
@@ -79,7 +87,7 @@ Step 6:
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
 	Stop the python instance of benchmark.py.
-	If Agent 1's SGLang instance failed at any point before completion, restart from Step 5.
+	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 03_record_<iteration>"` and restart from Step 5.
 	If successful, proceed to Step 7.
 
 Step 7:
@@ -90,15 +98,19 @@ Step 9:
 	Agent 1:
 	Stop `./03_record.sh ${KT_TEST_ENV}`
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
+	Terminal prompt `${MESSAGE} "Launching: SGLang for 04_launch"`
 	Launch `./04_launch.sh ${KT_TEST_ENV}`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 Step 10:
 	Agent 2:
+	Terminal prompt `${MESSAGE} "Launching: Benchmark for 04_launch"`
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 04_launch"`
 	Wait until completion, the window should show `RESULTS`
-	If benchmark.py crashed at any moment during this step, restart Step 10.
+	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 04_launch"` and restart Step 10.
 	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/04_launch.txt
+	Terminal prompt `${MESSAGE} "<above_results>"`
 	Stop the python instance of benchmark.py
-	If Agent 1's SGLang instance failed at any point before completion, restart from Step 9.
+	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 04_launch"` and restart from Step 9.
 Step 11:
 	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 2 results files: 02_record.txt, 04_launch.txt, in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/04_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
+	Terminal prompt `${MESSAGE} "<above_summary>"`
