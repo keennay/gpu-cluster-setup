@@ -33,6 +33,16 @@ Portability notes:
 - Startup cleanup waits for old SGLang child processes and GPU allocations to disappear before the next launch. If startup memory imbalance persists, increase `GPU_CLEANUP_TIMEOUT_SECONDS` or `GPU_CLEANUP_EXTRA_SLEEP_SECONDS`.
 - Use `KT_FIRST_TEST=NNN` and `KT_LAST_TEST=NNN` to resume or narrow the sweep without editing the test matrix.
 
+## Completed Follow-Up Results Through Test066
+
+These result files were produced manually after the dynamic sweep. They supersede the historical static `run_test 065/066` rows below for the current `./results/kimi_k26/h200x2/tests` directory. Do not infer the manual result-file numbers from the older static matrix rows.
+
+- `test065_r1_053_mem0912_ctx262k`: full-context version of `test053`; `--kt-cpuinfer 16`, `--kt-threadpool-count 2`, `--kt-num-gpu-experts 136`, `--mem-fraction-static 0.912`, `--max-total-tokens 262144`, `--chunked-prefill-size 16384`, `--kt-gpu-prefill-token-threshold 1024`; actual `max_total_num_tokens=262144`; 100/100 requests; output `20.05` tok/s; mean TTFT `20.928s`; median TTFT `13.602s`; P95 TTFT `48.498s`. This is the current TTFT-preferred full-context config.
+- `test066_r1_065_cpuinfer32`: same as `test065`, except `--kt-cpuinfer 32`; actual `max_total_num_tokens=262144`; 100/100 requests; output `21.60` tok/s; mean TTFT `22.218s`; median TTFT `14.509s`; P95 TTFT `51.703s`. This is the throughput-preferred full-context variant, but TTFT was worse than `test065`.
+- Startup probing found `--mem-fraction-static 0.910` started but only reported `max_total_num_tokens=260812`; `0.912` reached the requested `262144`.
+- `envs/kimi_k26/h200x2.env` currently encodes the `test065` normal-launch values for `01_launch.sh`: cpuinfer `16`, threadpool `2`, GPU experts `136`, mem fraction `0.912`, chunk `16384`, threshold `1024`, max-running requests `2`, max-total tokens `262144`, and CUDA graph batch sizes `1 2`. `01_launch.sh` still uses `--kt-expert-placement-strategy uniform` and no `--init-expert-location`; the sweep runner uses `frequency` plus the latest recorded experts.
+- Do not change KV-cache dtype or prefix/radix-cache behavior unless explicitly requested. The completed runs kept `kv_cache_dtype=auto` / BF16 and preserved `--disable-radix-cache --disable-chunked-prefix-cache`.
+
 ## Runner
 
 Run from this directory after confirming no unrelated SGLang job is meant to stay alive. The durable runner is `tools/kimi_k26_seeded_workflow.sh`; the code block below keeps the test matrix that the runner parses.

@@ -2,6 +2,8 @@
 __pycache__/
 ktransformers/test_plan_for_agent.md
 ktransformers/experts
+ktransformers/experts_backup
 ktransformers/results
+ktransformers/results_backup
 logs/
 tmp/
