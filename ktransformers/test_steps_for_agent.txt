@@ -4,7 +4,7 @@ KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
 KT_BENCHMARK_MODEL="kimi_k2"
 KT_REPO_ROOT="${KT_REPO_ROOT:-$(pwd)}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmark.py}"
-KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 2 --timeout 3600 --seed 52"
+KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 1 --timeout 3600 --seed 52"
 MESSAGE="hermes send --to discord"
 
 Step 1:
