@@ -17,10 +17,32 @@ Step 2:
 	Agent 1:
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
 	Terminal prompt `${MESSAGE} "Starting the KTransformers Script Now!"`
+	Terminal prompt `${MESSAGE} "Launching: SGLang for 01_launch"` 
+	Run `./01_launch.sh ${KT_TEST_ENV}`
+	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
+
+Step 3:
+	Agent 2:
+	Terminal prompt `${MESSAGE} "Launching: Benchmark for 01_launch"` 
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
+	Wait until completion, the window should show `RESULTS`
+	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/01_launch.txt
+	Terminal prompt `${MESSAGE} "<above_results>"`
+	Stop the python instance of benchmark.py
+	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 01_launch"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
+	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 01_launch"` and restart from Step 2.
+	If successful, proceed to Step 4.
+
+Step 4:
+	Agent 1:
+	Stop `./01_launch.sh ${KT_TEST_ENV}`
+Step 5:
+	Agent 1:
+	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 02_record"` 
 	Launch `./02_record.sh ${KT_TEST_ENV}`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
-Step 3:
+Step 6:
 	Agent 2:
 	Start the SGLang recorder:
 		curl -sS -X POST \
@@ -47,20 +69,20 @@ Step 3:
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
 	Stop the python instance of benchmark.py.
-	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 02_record"` and restart from Step 2.
-	If successful, proceed to step 4.
-Step 4:
+	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 02_record"` and restart from Step 5.
+	If successful, proceed to step 7.
+Step 7:
 	Agent 1:
 	Stop `./02_record.sh ${KT_TEST_ENV}`
-	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 7 when tasked to repeat from Step 5.
-Step 5:
+	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 10 when tasked to repeat from Step 8.
+Step 8:
 	Agent 1:
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 03_record_<iteration>"` 
 	Launch `./03_record.sh ${KT_TEST_ENV}`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 
-Step 6:
+Step 9:
 	Agent 2:
 	Start the SGLang recorder:
 		curl -sS -X POST \
@@ -87,30 +109,30 @@ Step 6:
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
 	Stop the python instance of benchmark.py.
-	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 03_record_<iteration>"` and restart from Step 5.
-	If successful, proceed to Step 7.
+	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 03_record_<iteration>"` and restart from Step 8.
+	If successful, proceed to Step 10.
 
-Step 7:
-	If successfully reached this point and already successfully repeated Step 5 nine times, proceed to Step 8. Otherwise repeat Step 5 nine more times.
-Step 8:
+Step 10:
+	If successfully reached this point and already successfully repeated Step 8 nine times, proceed to Step 11. Otherwise repeat Step 8 nine more times.
+Step 11:
 	Run `python ./tools/combine_expert_distrbution_recordings.py experts/${KT_EXPERTS_PATH}/02` (This script should launch Python and run that file which exists in the tools directory under this script.
-Step 9:
+Step 12:
 	Agent 1:
 	Stop `./03_record.sh ${KT_TEST_ENV}`
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Kill any active SGLang processes.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 04_launch"`
 	Launch `./04_launch.sh ${KT_TEST_ENV}`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
-Step 10:
+Step 13:
 	Agent 2:
 	Terminal prompt `${MESSAGE} "Launching: Benchmark for 04_launch"`
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 04_launch"`
 	Wait until completion, the window should show `RESULTS`
-	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 04_launch"` and restart Step 10.
+	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 04_launch"` and restart Step 13.
 	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/04_launch.txt
 	Terminal prompt `${MESSAGE} "<above_results>"`
 	Stop the python instance of benchmark.py
-	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 04_launch"` and restart from Step 9.
-Step 11:
+	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 04_launch"` and restart from Step 12.
+Step 14:
 	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 2 results files: 02_record.txt, 04_launch.txt, in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/04_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
 	Terminal prompt `${MESSAGE} "<above_summary>"`
