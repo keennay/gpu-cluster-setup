@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$script_dir"
+tool_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+plan_dir="$(cd -- "${tool_dir}/.." && pwd)"
+repo_root="${KT_REPO_ROOT:-$(cd -- "${plan_dir}/../.." && pwd)}"
+repo_parent="$(cd -- "${repo_root}/.." && pwd)"
+cd "${repo_root}"
 
 KT_EXPERTS_PATH="${KT_EXPERTS_PATH:-kimi_k26/h200x2}"
 KT_PYTHON_ENV="${KT_PYTHON_ENV:-${HOME}/env_qwen3-ktransformers}"
-KT_TEST_ENV="${KT_TEST_ENV:-./envs/${KT_EXPERTS_PATH}.env}"
+KT_TEST_ENV="${KT_TEST_ENV:-${repo_root}/envs/${KT_EXPERTS_PATH}.env}"
 KT_BENCHMARK_MODEL="${KT_BENCHMARK_MODEL:-kimi_k2}"
-KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-/workspace/scripts/benchmark.py}"
+KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-${repo_parent}/benchmark.py}"
 KT_BENCHMARK_SEED="${KT_BENCHMARK_SEED:-52}"
 KT_RECORD_NUM_PROMPTS="${KT_RECORD_NUM_PROMPTS:-100}"
 KT_SWEEP_NUM_PROMPTS="${KT_SWEEP_NUM_PROMPTS:-100}"
 KT_CONCURRENCY="${KT_CONCURRENCY:-2}"
 KT_TIMEOUT="${KT_TIMEOUT:-3600}"
-RESULTS_DIR="${RESULTS_DIR:-./results/${KT_EXPERTS_PATH}/tests}"
-KT_PLAN_FILE="${KT_PLAN_FILE:-kimi_k26_sweep.md}"
+RESULTS_DIR="${RESULTS_DIR:-${repo_root}/results/${KT_EXPERTS_PATH}/tests}"
+KT_PLAN_FILE="${KT_PLAN_FILE:-${plan_dir}/plan.md}"
 KT_FIRST_TEST="${KT_FIRST_TEST:-001}"
 KT_LAST_TEST="${KT_LAST_TEST:-999}"
 MAX_TEST_ATTEMPTS="${MAX_TEST_ATTEMPTS:-3}"
@@ -42,10 +45,10 @@ if [[ -d "${KT_PYTHON_ENV}" ]]; then
 fi
 
 # shellcheck source=tools/launch_config.sh
-source ./tools/launch_config.sh
+source "${repo_root}/tools/launch_config.sh"
 load_launch_config "${KT_TEST_ENV}"
 
-mkdir -p "${RESULTS_DIR}" "./experts/${EXPERTS_PATH}/01" "./experts/${EXPERTS_PATH}/02"
+mkdir -p "${RESULTS_DIR}" "${repo_root}/experts/${EXPERTS_PATH}/01" "${repo_root}/experts/${EXPERTS_PATH}/02"
 
 sglang_process_pids() {
   pgrep -f "python -m sglang.launch_server|sglang::scheduler|sglang::detokenizer|sglang::tokenizer" 2>/dev/null || true
@@ -656,11 +659,11 @@ run_record_stage() {
     return "${recorder_rc}"
   fi
 
-  python ./tools/combine_expert_distrbution_recordings.py "${combine_dir}" >> "${out}" 2>&1
+  python "${repo_root}/tools/combine_expert_distrbution_recordings.py" "${combine_dir}" >> "${out}" 2>&1
 }
 
 refresh_latest_expert_location() {
-  local recorder_dir="./experts/${EXPERTS_PATH}/02"
+  local recorder_dir="${repo_root}/experts/${EXPERTS_PATH}/02"
   latest_expert_location="$(latest_combined_expert "${recorder_dir}")"
   if [[ -z "${latest_expert_location}" ]]; then
     echo "No combined expert_distribution_recorder_*.pt files found in ${recorder_dir}" >&2
@@ -825,8 +828,8 @@ run_test() {
 }
 
 write_seed_profile
-run_record_stage record01 ./02_record.sh "./experts/${EXPERTS_PATH}/01"
-run_record_stage record02 ./03_record.sh "./experts/${EXPERTS_PATH}/02"
+run_record_stage record01 "${repo_root}/02_record.sh" "${repo_root}/experts/${EXPERTS_PATH}/01"
+run_record_stage record02 "${repo_root}/03_record.sh" "${repo_root}/experts/${EXPERTS_PATH}/02"
 refresh_latest_expert_location
 
 COMMON="--tool-call-parser kimi_k2 --reasoning-parser kimi_k2 --max-running-requests 2 --max-total-tokens 131072"

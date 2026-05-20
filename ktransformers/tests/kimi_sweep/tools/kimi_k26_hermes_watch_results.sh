@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "${script_dir}"
+tool_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+plan_dir="$(cd -- "${tool_dir}/.." && pwd)"
+repo_root="${KT_REPO_ROOT:-$(cd -- "${plan_dir}/../.." && pwd)}"
+cd "${repo_root}"
 
 KT_EXPERTS_PATH="${KT_EXPERTS_PATH:-kimi_k26/h200x2}"
 KT_BENCHMARK_SEED="${KT_BENCHMARK_SEED:-52}"
 KT_SWEEP_NUM_PROMPTS="${KT_SWEEP_NUM_PROMPTS:-100}"
-RESULTS_DIR="${RESULTS_DIR:-./results/${KT_EXPERTS_PATH}/tests}"
+RESULTS_DIR="${RESULTS_DIR:-${repo_root}/results/${KT_EXPERTS_PATH}/tests}"
 KT_HERMES_NOTIFY="${KT_HERMES_NOTIFY:-1}"
 KT_HERMES_NOTIFY_STATE="${KT_HERMES_NOTIFY_STATE:-/tmp/kimi_k26_seed${KT_BENCHMARK_SEED}_hermes_notified_tests.txt}"
 KT_HERMES_WATCH_INTERVAL="${KT_HERMES_WATCH_INTERVAL:-30}"

@@ -1,27 +1,28 @@
 # Kimi K2.6 H200x2 SGLang Flag Test Plan
 
-Goal: reduce TTFT as much as possible for Kimi K2.6 on `h200x2`, even if some candidates trade away throughput or stability. Rerun `/workspace/scripts/benchmark.py` with the same fixed-seed benchmark flags:
+Goal: reduce TTFT as much as possible for Kimi K2.6 on `h200x2`, even if some candidates trade away throughput or stability. Rerun the benchmark script from the parent scripts directory, defaulting to `${repo_root}/../benchmark.py`, with the same fixed-seed benchmark flags:
 
 ```bash
 --num-prompts 100 --concurrency 2 --timeout 3600 --seed 52
 ```
 
-Every test is based on `04_launch.sh` behavior:
+Every test is based on repo-root `04_launch.sh` behavior:
 
-- uses `envs/kimi_k26/h200x2.env`
+- uses repo-root `envs/kimi_k26/h200x2.env`
 - uses `--kt-expert-placement-strategy frequency`
-- uses the latest `experts/kimi_k26/h200x2/02/expert_distribution_recorder_*.pt`
+- uses the latest repo-root `experts/kimi_k26/h200x2/02/expert_distribution_recorder_*.pt`
 - uses experts recorded from the same `--seed 52` benchmark workload
 - keeps `--disable-radix-cache`
 - keeps `--disable-chunked-prefix-cache`
-- writes the full resolved SGLang engine command and benchmark output to `./results/kimi_k26/h200x2/tests/testNNN.txt`
+- writes the full resolved SGLang engine command and benchmark output to repo-root `results/kimi_k26/h200x2/tests/testNNN.txt`
 
 Do not edit installed packages. Do not edit `04_launch.sh` for this sweep.
 
 Portability notes:
 
+- Keep the scripts in `tools/` beside this markdown file. They derive `plan_dir` from their own location and default `repo_root` to two directories above this file; override `KT_REPO_ROOT` only if you move the plan bundle somewhere else.
 - Override `KT_EXPERTS_PATH`, `KT_PYTHON_ENV`, `KT_BENCHMARK_PATH`, `KT_BENCHMARK_MODEL`, `RESULTS_DIR`, `KT_HOST`, `KT_PORT`, `KT_API_KEY`, or `KT_PLAN_FILE` when moving this runner to another system.
-- `tools/kimi_k26_seeded_workflow.sh` recreates wiped `experts/.../01` and `experts/.../02` directories, records fixed-seed experts with `02_record.sh` and `03_record.sh`, combines them, then runs the 100+ seeded tests below.
+- `tools/kimi_k26_seeded_workflow.sh` recreates wiped repo-root `experts/.../01` and `experts/.../02` directories, records fixed-seed experts with repo-root `02_record.sh` and `03_record.sh`, combines them, then runs the 100+ seeded tests below.
 - Benchmark stdout/stderr is written live to `/tmp/*benchmark.live.log`; `record*.txt` and `testNNN.txt` are written after benchmark completion with commands plus the final `RESULTS` section.
 - The runner skips only fully successful results: `BENCHMARK_EXIT_CODE: 0` and `Successful requests: 100/100`.
 - Failed or partial result files are archived with `.previous_YYYYmmddTHHMMSSZ` and retried up to `MAX_TEST_ATTEMPTS` times, default `3`.
@@ -29,13 +30,13 @@ Portability notes:
 - Successful tests send best-effort Discord notifications with `hermes send --to discord`: one message for the completed test and one for the current balanced best. Balanced best first keeps mean TTFT within `max(250ms, 0.5%)` of the fastest successful run, then prefers higher output tokens/sec, lower P95, lower median, and lower mean TTFT. Set `KT_HERMES_NOTIFY=0` to disable this on systems without Hermes configured.
 - Failed test attempts also send best-effort Discord notifications as `Fail 1/3 testNNN`, `Fail 2/3 testNNN`, and `Fail 3/3 testNNN`. After the final failed attempt, the runner records the failed result and continues to the next test instead of stopping the sweep.
 - By default, `test026+` is dynamic: `tools/kimi_k26_seeded_workflow.sh` ranks successful `test001-test025` results, records the top `KT_DYNAMIC_POST25_TOP_N=3` anchors, runs overlay probes only on the best `KT_DYNAMIC_POST25_OVERLAY_TOP_N=1` anchor, then starts the deeper top-anchor probes immediately after that block. With the default 16 overlay probes, the deep-dive tests start at `test042` instead of repeating the same overlay set for the 2nd and 3rd anchors. This keeps rented-compute runs cheaper while still preserving the top-3 anchor metadata. Set `KT_DYNAMIC_POST25_OVERLAY_TOP_N=3` to restore the old repeat-all-three behavior, or `KT_DYNAMIC_POST25=0` to use the static `run_test 026+` rows below instead.
-- Dynamic post-25 anchor selection writes `./results/kimi_k26/h200x2/tests/dynamic_post25_anchors_seed52.tsv` with the exact source tests, chunk sizes, thresholds, and TTFT metrics used.
+- Dynamic post-25 anchor selection writes repo-root `results/kimi_k26/h200x2/tests/dynamic_post25_anchors_seed52.tsv` with the exact source tests, chunk sizes, thresholds, and TTFT metrics used.
 - Startup cleanup waits for old SGLang child processes and GPU allocations to disappear before the next launch. If startup memory imbalance persists, increase `GPU_CLEANUP_TIMEOUT_SECONDS` or `GPU_CLEANUP_EXTRA_SLEEP_SECONDS`.
 - Use `KT_FIRST_TEST=NNN` and `KT_LAST_TEST=NNN` to resume or narrow the sweep without editing the test matrix.
 
 ## Completed Follow-Up Results Through Test066
 
-These result files were produced manually after the dynamic sweep. They supersede the historical static `run_test 065/066` rows below for the current `./results/kimi_k26/h200x2/tests` directory. Do not infer the manual result-file numbers from the older static matrix rows.
+These result files were produced manually after the dynamic sweep. They supersede the historical static `run_test 065/066` rows below for the current repo-root `results/kimi_k26/h200x2/tests` directory. Do not infer the manual result-file numbers from the older static matrix rows.
 
 - `test065_r1_053_mem0912_ctx262k`: full-context version of `test053`; `--kt-cpuinfer 16`, `--kt-threadpool-count 2`, `--kt-num-gpu-experts 136`, `--mem-fraction-static 0.912`, `--max-total-tokens 262144`, `--chunked-prefill-size 16384`, `--kt-gpu-prefill-token-threshold 1024`; actual `max_total_num_tokens=262144`; 100/100 requests; output `20.05` tok/s; mean TTFT `20.928s`; median TTFT `13.602s`; P95 TTFT `48.498s`. This is the current TTFT-preferred full-context config.
 - `test066_r1_065_cpuinfer32`: same as `test065`, except `--kt-cpuinfer 32`; actual `max_total_num_tokens=262144`; 100/100 requests; output `21.60` tok/s; mean TTFT `22.218s`; median TTFT `14.509s`; P95 TTFT `51.703s`. This is the throughput-preferred full-context variant, but TTFT was worse than `test065`.
@@ -51,13 +52,20 @@ Run from this directory after confirming no unrelated SGLang job is meant to sta
 #!/usr/bin/env bash
 set -euo pipefail
 
+tool_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+plan_dir="$(cd -- "${tool_dir}/.." && pwd)"
+repo_root="${KT_REPO_ROOT:-$(cd -- "${plan_dir}/../.." && pwd)}"
+repo_parent="$(cd -- "${repo_root}/.." && pwd)"
+cd "${repo_root}"
+
 KT_EXPERTS_PATH="${KT_EXPERTS_PATH:-kimi_k26/h200x2}"
 KT_PYTHON_ENV="${KT_PYTHON_ENV:-${HOME}/env_qwen3-ktransformers}"
-KT_TEST_ENV="${KT_TEST_ENV:-./envs/${KT_EXPERTS_PATH}.env}"
+KT_TEST_ENV="${KT_TEST_ENV:-${repo_root}/envs/${KT_EXPERTS_PATH}.env}"
 KT_BENCHMARK_MODEL="${KT_BENCHMARK_MODEL:-kimi_k2}"
-KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-/workspace/scripts/benchmark.py}"
+KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-${repo_parent}/benchmark.py}"
 KT_BENCHMARK_FLAGS=(--num-prompts 100 --concurrency 2 --timeout 3600 --seed 52)
-RESULTS_DIR="${RESULTS_DIR:-./results/${KT_EXPERTS_PATH}/tests}"
+RESULTS_DIR="${RESULTS_DIR:-${repo_root}/results/${KT_EXPERTS_PATH}/tests}"
+KT_PLAN_FILE="${KT_PLAN_FILE:-${plan_dir}/plan.md}"
 MAX_TEST_ATTEMPTS="${MAX_TEST_ATTEMPTS:-3}"
 GPU_CLEANUP_TIMEOUT_SECONDS="${GPU_CLEANUP_TIMEOUT_SECONDS:-180}"
 GPU_CLEANUP_POLL_SECONDS="${GPU_CLEANUP_POLL_SECONDS:-5}"
@@ -73,12 +81,12 @@ if [[ -d "${KT_PYTHON_ENV}" ]]; then
 fi
 
 # shellcheck source=tools/launch_config.sh
-source ./tools/launch_config.sh
+source "${repo_root}/tools/launch_config.sh"
 load_launch_config "${KT_TEST_ENV}"
 
 mkdir -p "${RESULTS_DIR}"
 
-recorder_dir="./experts/${EXPERTS_PATH}/02"
+recorder_dir="${repo_root}/experts/${EXPERTS_PATH}/02"
 latest_expert_location="$(find "${recorder_dir}" -maxdepth 1 -type f -name 'expert_distribution_recorder_*.pt' | sort -V | tail -n 1)"
 if [[ -z "${latest_expert_location}" ]]; then
   echo "No expert_distribution_recorder_*.pt files found in ${recorder_dir}" >&2
@@ -557,4 +565,4 @@ Rank by balanced performance, not raw lowest mean TTFT. Treat mean TTFT differen
 5. lowest median TTFT
 6. lowest mean TTFT
 
-Keep `02_record.txt` and `04_launch.txt` unchanged. New results belong only in `./results/kimi_k26/h200x2/tests/`.
+Keep `02_record.txt` and `04_launch.txt` unchanged. New results belong only in repo-root `results/kimi_k26/h200x2/tests/`.
