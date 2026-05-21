@@ -3,8 +3,8 @@ KT_PYTHON_ENV=$HOME/env_qwen3-ktransformers
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
 KT_BENCHMARK_MODEL="kimi_k2"
 KT_REPO_ROOT="${KT_REPO_ROOT:-$(pwd)}"
-KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmark.py}"
-KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 1 --timeout 3600 --seed 52"
+KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmark_swezero.py}"
+KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 1 --timeout 3600 --seed 52 --trajectory-mode prefix"
 MESSAGE="hermes send --to discord"
 
 Step 1:
@@ -28,8 +28,8 @@ Step 3:
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/01_launch.txt
 	Terminal prompt `${MESSAGE} "<above_results>"`
-	Stop the python instance of benchmark.py
-	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 01_launch"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
+	Stop the python instance of benchmark_swezero.py
+	If benchmark_swezero.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 01_launch"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 01_launch"` and restart from Step 2.
 	If successful, proceed to Step 4.
 
@@ -57,7 +57,7 @@ Step 6:
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/02_record_<iteration>.txt.
 	Terminal prompt `${MESSAGE} "<above_results>"`
-	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 02_record_<iteration>/10"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 02_record_<iteration>/10"`
+	If benchmark_swezero.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 02_record_<iteration>/10"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 02_record_<iteration>/10"`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
   		-H 'Content-Type: application/json' \
@@ -70,7 +70,7 @@ Step 6:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
-	Stop the python instance of benchmark.py.
+	Stop the python instance of benchmark_swezero.py.
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 02_record_<iteration>/10"` and restart from Step 5.
 	If successful, proceed to step 7.
 Step 7:
@@ -101,7 +101,7 @@ Step 11:
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_record_<iteration>.txt.
 	Terminal prompt `${MESSAGE} "<above_results>"`
-	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 03_record_<iteration>/10"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 03_record_<iteration>/10"`
+	If benchmark_swezero.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 03_record_<iteration>/10"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 03_record_<iteration>/10"`
 	Stop & dump the SGLang recorder stats:
 		curl -sS -X POST \
   		-H 'Content-Type: application/json' \
@@ -114,7 +114,7 @@ Step 11:
   		-H 'Authorization: Bearer YOUR_API_KEY' \
   		http://127.0.0.1:8000/dump_expert_distribution_record \
   		-d '{}'
-	Stop the python instance of benchmark.py.
+	Stop the python instance of benchmark_swezero.py.
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 03_record_<iteration>/10"` and restart from Step 10.
 	If successful, proceed to Step 12.
 
@@ -134,10 +134,10 @@ Step 15:
 	Terminal prompt `${MESSAGE} "Launching: Benchmark for 04_launch"`
 	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 04_launch"`
 	Wait until completion, the window should show `RESULTS`
-	If benchmark.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 04_launch"` and restart Step 15.
+	If benchmark_swezero.py crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 04_launch"` and restart Step 15.
 	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/04_launch.txt
 	Terminal prompt `${MESSAGE} "<above_results>"`
-	Stop the python instance of benchmark.py
+	Stop the python instance of benchmark_swezero.py
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 04_launch"` and restart from Step 14.
 Step 16:
 	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 2 results files: 02_record.txt, 04_launch.txt, in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/04_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
