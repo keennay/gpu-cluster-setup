@@ -157,5 +157,5 @@ Step 17:
 	Stop the python instance of ${KT_BENCHMARK_PATH}.
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 04_launch | Reason: <reason>"` with <reason> being a concise message especially for capturing any SGLang OOM errors, and restart from Step 16.
 Step 18:
-	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 2 results files: 02_record.txt, 04_launch.txt, in great detail, and if any improvements were made. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/04_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
+	Output "COMPLETE" and show the differences in Output tokens/sec & TTFT between the 3 results files: 01_launch.txt, 03_launch.txt, 04_launch.txt, in great detail, and if any improvements were made. Show what % of overall MoE layer experts were utilized on the 03_launch & 04_launch expert frequency runs, and if the GPU expert placements helped at all. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/04_launch.txt`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt
 	Terminal prompt `${MESSAGE} "<above_summary>"`
