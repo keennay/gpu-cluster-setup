@@ -80,7 +80,7 @@ Step 8:
 	Run `python ./tools/combine_expert_distrbution_recordings.py experts/${KT_EXPERTS_PATH}/01` (This script should launch Python and run that file which exists in the tools directory under this script).
 Step 9:
 	Agent 1:
-	Stop `./02_record.sh ${KT_TEST_ENV}` if currently running.
+	Stop `./02_record.sh ${KT_TEST_ENV}`.
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Stop the SGLang process group with SIGTERM and wait 30 seconds. If any are still running after 30 seconds, send SIGKILL. Confirm the following holds true before continuing: no process matches sglang.launch_server, sglang::scheduler, sglang::tokenizer, or sglang::detokenizer.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 03_launch"`
 	Launch `./03_launch.sh ${KT_TEST_ENV}`
