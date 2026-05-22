@@ -6,6 +6,18 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
+
+TOOLS_DIR = Path(__file__).resolve().parent / "tools"
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+
+from benchmark_sglang_metrics import (
+    fetch_sglang_metrics_snapshot,
+    fetch_sglang_model_metadata,
+    print_sglang_metrics_report,
+    sglang_display_model_name,
+)
 
 @dataclass(frozen=True)
 class TokenBucket:
@@ -391,8 +403,8 @@ if PREVIEW_SAMPLES == 0:
     )
 
 
-def run_header(prefix: str) -> str:
-    return f"{prefix}: {RUN_LABEL} | Prompts: {NUM_PROMPTS} | Concurrency: {CONCURRENCY}"
+def run_header(prefix: str, label: str | None = None) -> str:
+    return f"{prefix}: {label or RUN_LABEL} | Prompts: {NUM_PROMPTS} | Concurrency: {CONCURRENCY}"
 
 
 def seed_random():
@@ -960,21 +972,31 @@ async def run_benchmark():
     seed_random()
 
     print("\n" + "=" * 60)
+    print()
     print("NOTE: For accurate benchmarks, start server with:")
     print("  SGLang: --disable-radix-cache")
     print("  vLLM:   --no-enable-prefix-caching")
+    print()
     print("=" * 60 + "\n")
 
     await warmup()
+    sglang_model_metadata = fetch_sglang_model_metadata(BASE_URL, API_KEY)
+    display_model = sglang_display_model_name(sglang_model_metadata, MODEL)
+    display_run_label = RUN_LABEL if args.run_label else display_model
+    sglang_metrics_start = fetch_sglang_metrics_snapshot(BASE_URL, API_KEY)
 
     progress = {"completed": 0, "failed": 0, "start_time": time.perf_counter()}
 
     print(f"\n{'=' * 60}")
-    print(run_header("BENCHMARK"))
+    print(run_header("BENCHMARK", display_run_label))
     print(f"{'=' * 60}")
-    print(f"Model:               {MODEL}")
+    print()
+    print(f"SGLang Version:      {sglang_model_metadata.sglang_version}")
+    print(f"Model:               {display_model}")
     print(f"Port:                {PORT}")
     print(f"Base URL:            {BASE_URL}")
+    print("Streaming:           True")
+    print("Radix cache:         disabled (expected)")
     print(f"Total requests:      {NUM_PROMPTS}")
     print(f"Concurrency:         {CONCURRENCY} (simulating {CONCURRENCY} agents)")
     print(f"Input tokens clamp:  {MIN_INPUT_TOKENS} - {MAX_INPUT_TOKENS}")
@@ -985,6 +1007,7 @@ async def run_benchmark():
     print_bucket_profile(OUTPUT_TOKEN_BUCKETS, OUTPUT_BUCKET_DESCRIPTIONS)
     print(f"Timeout per request: {TIMEOUT_PER_REQUEST}s")
     print(f"ignore_eos:          {IGNORE_EOS} {'(forces full output)' if IGNORE_EOS else '(natural stopping)'}")
+    print()
     print(f"{'=' * 60}\n")
 
     semaphore = asyncio.Semaphore(CONCURRENCY)
@@ -996,8 +1019,10 @@ async def run_benchmark():
     overall_start = time.perf_counter()
     results = await asyncio.gather(*[bounded_request(i) for i in range(NUM_PROMPTS)])
     overall_end = time.perf_counter()
+    await asyncio.sleep(0.5)
+    sglang_metrics_end = fetch_sglang_metrics_snapshot(BASE_URL, API_KEY)
 
-    print("\n")
+    print(f"\n\n{'=' * 60}")
 
     successful = [r for r in results if r.success]
     failed = [r for r in results if not r.success]
@@ -1031,7 +1056,8 @@ async def run_benchmark():
     actual_avg_input = statistics.mean([r.prompt_tokens for r in successful])
     actual_avg_output = statistics.mean([r.completion_tokens for r in successful])
 
-    print(run_header("RESULTS"))
+    print(run_header("RESULTS", display_run_label))
+    print(f"{'=' * 60}")
     print()
     print(f"Successful requests:       {len(successful)}/{NUM_PROMPTS}")
     print(f"Failed requests:           {len(failed)}")
@@ -1043,7 +1069,9 @@ async def run_benchmark():
     print(f"Total completion tokens:   {total_completion_tokens:,}")
     print(f"Total wall time:           {total_wall_time:.2f}s")
 
-    print("\nREQUEST MIX (successful):")
+    print(f"\n{'=' * 60}")
+    print()
+    print("REQUEST MIX (successful):")
     print("Input buckets:")
     for line in summarize_bucket_counts(successful, "input_bucket", INPUT_TOKEN_BUCKETS):
         print(line)
@@ -1054,7 +1082,9 @@ async def run_benchmark():
     for line in summarize_finish_reasons(results):
         print(line)
 
-    print("\nTHROUGHPUT:")
+    print(f"\n{'=' * 60}")
+    print()
+    print("THROUGHPUT:")
     print(f"  Requests/sec:          {len(successful) / total_wall_time:.2f}")
     print(f"  Output tokens/sec:     {total_completion_tokens / total_wall_time:.2f}")
     print(f"  Total tokens/sec:      {total_tokens / total_wall_time:.2f}")
@@ -1073,21 +1103,32 @@ async def run_benchmark():
         print(f"  P95:                   {percentile(ttft_values, 0.95) * 1000:.0f}ms")
         print(f"  P99:                   {percentile(ttft_values, 0.99) * 1000:.0f}ms")
 
-    print("\nTIME TO FIRST TOKEN (TTFT):")
+    print(f"\n{'=' * 60}")
+    print()
+    print("TIME TO FIRST TOKEN (client-observed):")
     print_ttft_stats("Content", content_ttfts)
     print_ttft_stats("Reasoning", reasoning_ttfts)
 
-    print("\nEND-TO-END LATENCY:")
+    print("\nEND-TO-END LATENCY (client-observed):")
     print(f"  Mean:                  {statistics.mean(latencies):.2f}s")
     print(f"  Median:                {statistics.median(latencies):.2f}s")
     print(f"  P95:                   {percentile(latencies, 0.95):.2f}s")
     print(f"  P99:                   {percentile(latencies, 0.99):.2f}s")
 
-    print("\nPER-REQUEST OUTPUT TPS:")
+    print("\nPER-REQUEST OUTPUT TPS (client-observed):")
     print(f"  Mean:                  {statistics.mean(tps_per_request):.2f}")
     print(f"  Std dev:               {statistics.stdev(tps_per_request) if len(tps_per_request) > 1 else 0:.2f}")
     print(f"  Min:                   {min(tps_per_request):.2f}")
     print(f"  Max:                   {max(tps_per_request):.2f}")
+
+    print_sglang_metrics_report(
+        BASE_URL,
+        API_KEY,
+        MODEL,
+        sglang_metrics_start,
+        sglang_metrics_end,
+        metadata=sglang_model_metadata,
+    )
 
     if failed:
         print("\nFAILED REQUESTS (first 10):")

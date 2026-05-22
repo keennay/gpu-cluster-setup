@@ -33,6 +33,8 @@ cmd=(
     --disable-shared-experts-fusion \
     --disable-radix-cache \
     --disable-chunked-prefix-cache \
+    --enable-metrics \
+    --collect-tokens-histogram \
     "${ADDITIONAL_SGLANG_ARG_LIST[@]}"
 )
 print_launch_command "${cmd[@]}"
