@@ -41,6 +41,8 @@ load_launch_config() {
   : "${KT_METHOD:?KT_METHOD must be set in $config_file}"
   : "${KT_MAX_DEFERRED_EXPERTS_PER_TOKEN:?KT_MAX_DEFERRED_EXPERTS_PER_TOKEN must be set in $config_file}"
   : "${MEM_FRACTION_STATIC:?MEM_FRACTION_STATIC must be set in $config_file}"
+  : "${CONTEXT_LENGTH:?CONTEXT_LENGTH must be set in $config_file}"
+  : "${MAX_TOTAL_TOKENS:?MAX_TOTAL_TOKENS must be set in $config_file}"
   : "${CHUNKED_PREFILL_SIZE:?CHUNKED_PREFILL_SIZE must be set in $config_file}"
   : "${SERVED_MODEL_NAME:?SERVED_MODEL_NAME must be set in $config_file}"
   : "${TENSOR_PARALLEL_SIZE:?TENSOR_PARALLEL_SIZE must be set in $config_file}"

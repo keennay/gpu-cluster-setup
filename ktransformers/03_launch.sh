@@ -37,6 +37,8 @@ cmd=(
     --kt-expert-placement-strategy frequency \
     --init-expert-location "$latest_expert_location" \
     --trust-remote-code \
+    --context-length "$CONTEXT_LENGTH" \
+    --max-total-tokens "$MAX_TOTAL_TOKENS" \
     --mem-fraction-static "$MEM_FRACTION_STATIC" \
     --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
     --served-model-name "$SERVED_MODEL_NAME" \

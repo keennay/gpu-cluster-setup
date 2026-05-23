@@ -6,6 +6,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/tools/launch_config.sh"
 load_launch_config "$@"
 recorder_dir="$script_dir/experts/$EXPERTS_PATH/01"
+EXPERT_DISTRIBUTION_RECORDER_BUFFER_SIZE="${EXPERT_DISTRIBUTION_RECORDER_BUFFER_SIZE:-100000}"
 
 mkdir -p "$recorder_dir"
 
@@ -28,8 +29,10 @@ cmd=(
     --kt-expert-placement-strategy uniform \
     --record-kt-gpu-expert-distribution \
     --expert-distribution-recorder-mode stat \
-    --expert-distribution-recorder-buffer-size -1 \
+    --expert-distribution-recorder-buffer-size "$EXPERT_DISTRIBUTION_RECORDER_BUFFER_SIZE" \
     --trust-remote-code \
+    --context-length "$CONTEXT_LENGTH" \
+    --max-total-tokens "$MAX_TOTAL_TOKENS" \
     --mem-fraction-static "$MEM_FRACTION_STATIC" \
     --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
     --served-model-name "$SERVED_MODEL_NAME" \

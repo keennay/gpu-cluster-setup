@@ -7,6 +7,7 @@ source "$script_dir/tools/launch_config.sh"
 load_launch_config "$@"
 recorder_dir="$script_dir/experts/$EXPERTS_PATH/01"
 output_recorder_dir="$script_dir/experts/$EXPERTS_PATH/02"
+EXPERT_DISTRIBUTION_RECORDER_BUFFER_SIZE="${EXPERT_DISTRIBUTION_RECORDER_BUFFER_SIZE:-100000}"
 
 if [[ ! -d "$recorder_dir" ]]; then
   echo "Recorder directory not found: $recorder_dir" >&2
@@ -42,8 +43,10 @@ cmd=(
     --init-expert-location "$latest_expert_location" \
     --record-kt-gpu-expert-distribution \
     --expert-distribution-recorder-mode stat \
-    --expert-distribution-recorder-buffer-size -1 \
+    --expert-distribution-recorder-buffer-size "$EXPERT_DISTRIBUTION_RECORDER_BUFFER_SIZE" \
     --trust-remote-code \
+    --context-length "$CONTEXT_LENGTH" \
+    --max-total-tokens "$MAX_TOTAL_TOKENS" \
     --mem-fraction-static "$MEM_FRACTION_STATIC" \
     --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
     --served-model-name "$SERVED_MODEL_NAME" \

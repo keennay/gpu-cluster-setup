@@ -23,6 +23,8 @@ cmd=(
     --kt-max-deferred-experts-per-token "$KT_MAX_DEFERRED_EXPERTS_PER_TOKEN" \
     --kt-expert-placement-strategy uniform \
     --trust-remote-code \
+    --context-length "$CONTEXT_LENGTH" \
+    --max-total-tokens "$MAX_TOTAL_TOKENS" \
     --mem-fraction-static "$MEM_FRACTION_STATIC" \
     --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
     --served-model-name "$SERVED_MODEL_NAME" \
