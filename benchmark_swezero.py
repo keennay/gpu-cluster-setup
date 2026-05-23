@@ -33,34 +33,28 @@ class TokenBucket:
 
 INPUT_TOKEN_BUCKETS = [
     TokenBucket("short_trace", 2000, 6000, 0.25),
-    TokenBucket("standard_trace", 6000, 14000, 0.60),
-    TokenBucket("long_trace", 14000, 24000, 0.13),
-    TokenBucket("deep_trace", 24000, 32768, 0.02),
+    TokenBucket("standard_trace", 6000, 14000, 0.50),
+    TokenBucket("long_trace", 14000, 24000, 0.20),
+    TokenBucket("deep_trace", 24000, 32768, 0.05),
 ]
 
 OUTPUT_TOKEN_BUCKETS = [
-    TokenBucket("small_patch", 80, 400, 0.45),
-    TokenBucket("standard_patch", 400, 1200, 0.38),
-    TokenBucket("large_patch", 1200, 3000, 0.17),
+    TokenBucket("small_patch", 80, 400, 0.60),
+    TokenBucket("standard_patch", 400, 1200, 0.32),
+    TokenBucket("large_patch", 1200, 3000, 0.08),
 ]
 
 INPUT_BUCKET_DESCRIPTIONS = {
     "short_trace": "Short SWE-ZERO agent trajectory context",
     "standard_trace": "Typical SWE-ZERO multi-turn agent trajectory",
-    "long_trace": "Longer SWE-ZERO trajectory near the dataset tail",
-    "deep_trace": "Rare near-cap SWE-ZERO trajectory",
+    "long_trace": "Long SWE-ZERO investigation with broader repo context",
+    "deep_trace": "Long-tail near-cap SWE-ZERO trajectory",
 }
 
 OUTPUT_BUCKET_DESCRIPTIONS = {
-    "small_patch": "Concise next action or compact patch response",
-    "standard_patch": "Normal next action with moderate explanation",
-    "large_patch": "Longer continuation, rationale, or patch-style output",
-}
-
-OUTPUT_BUCKET_EXPECTATIONS = {
-    "small_patch": "Prefer a concise next assistant action.",
-    "standard_patch": "Provide a complete next assistant response with brief rationale.",
-    "large_patch": "Provide a detailed continuation with expanded reasoning or patch-oriented detail.",
+    "small_patch": "Concise next agent action",
+    "standard_patch": "Normal next action with moderate reasoning",
+    "large_patch": "Longer next action with expanded investigation context",
 }
 
 DEFAULT_MIN_INPUT = min(bucket.min_tokens for bucket in INPUT_TOKEN_BUCKETS)
@@ -73,6 +67,7 @@ DEFAULT_MAX_OUTPUT = max(bucket.max_tokens for bucket in OUTPUT_TOKEN_BUCKETS)
 class RequestSample:
     request_id: int
     prompt: str
+    messages: list[dict]
     input_len: int
     input_bucket: str
     output_len: int
@@ -314,12 +309,6 @@ def sample_output_tokens() -> tuple[int, str]:
     return pick_weighted_token_count(MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS, OUTPUT_TOKEN_BUCKETS)
 
 
-def deterministic_request_markers() -> tuple[uuid.UUID, int]:
-    if RANDOM_SEED is None:
-        return uuid.uuid4(), time.time_ns()
-    return uuid.UUID(int=random.getrandbits(128)), random.getrandbits(63)
-
-
 class SweZeroSampler:
     def __init__(self, dataset_path: Path, exit_status_filter: str, trajectory_mode: str):
         self.dataset_path = dataset_path
@@ -375,13 +364,41 @@ class SweZeroSampler:
         user_indices = [
             idx
             for idx, message in enumerate(messages)
-            if message.get("role") == "user" and idx >= 1
+            if message.get("role") == "user"
+            and idx >= 3
+            and any(prev.get("role") == "assistant" for prev in messages[:idx])
         ]
+        if not user_indices:
+            user_indices = [
+                idx
+                for idx, message in enumerate(messages)
+                if message.get("role") == "user" and idx >= 1
+            ]
         if not user_indices:
             return messages
 
-        end_idx = random.choice(user_indices)
+        message_count = max(1, len(messages))
+        weights = [((idx + 1) / message_count) ** 2 for idx in user_indices]
+        end_idx = random.choices(user_indices, weights=weights, k=1)[0]
         return messages[: end_idx + 1]
+
+    def normalize_chat_messages(self, messages: list[dict]) -> list[dict]:
+        chat_messages = []
+        valid_roles = {"system", "user", "assistant"}
+        for message in messages:
+            role = message.get("role") or "user"
+            if role not in valid_roles:
+                role = "user"
+            content = message.get("content") or ""
+            if content:
+                chat_messages.append({"role": role, "content": content})
+
+        if not chat_messages:
+            return [{"role": "user", "content": "Continue the software-engineering task."}]
+        return chat_messages
+
+    def is_continuable(self, messages: list[dict]) -> bool:
+        return bool(messages) and messages[-1].get("role") == "user"
 
     def render_transcript(self, messages: list[dict]) -> str:
         blocks = []
@@ -391,78 +408,30 @@ class SweZeroSampler:
             blocks.append(f"<{role}>\n{content}\n</{role}>")
         return "\n\n".join(blocks)
 
-    def build_prompt(self, row: dict, shard_name: str, output_bucket: str) -> str:
-        request_uuid, timestamp = deterministic_request_markers()
+    def build_prompt(self, row: dict, shard_name: str, output_bucket: str) -> tuple[str, list[dict]]:
+        del shard_name, output_bucket
         messages = self.select_messages(row.get("messages") or [])
-        transcript = self.render_transcript(messages)
-        output_expectation = OUTPUT_BUCKET_EXPECTATIONS.get(output_bucket, OUTPUT_BUCKET_EXPECTATIONS["standard_patch"])
+        chat_messages = self.normalize_chat_messages(messages)
+        return self.render_transcript(chat_messages), chat_messages
 
-        return (
-            f"[Request ID: {request_uuid}] "
-            f"[Timestamp: {timestamp}] "
-            f"[Dataset: SWE-ZERO-12M] "
-            f"[Shard: {shard_name}] "
-            f"[Instance: {row.get('instance_id', '')}] "
-            f"[Repo: {row.get('repo', '')}]\n\n"
-            "You are continuing a software-engineering agent trajectory from SWE-ZERO.\n"
-            "The transcript is provided as plain text inside this prompt. Continue with the next assistant response.\n"
-            f"{output_expectation}\n\n"
-            "## Trajectory Metadata\n"
-            f"- instance_id: {row.get('instance_id', '')}\n"
-            f"- repo: {row.get('repo', '')}\n"
-            f"- exit_status: {row.get('exit_status', '')}\n"
-            f"- duration_sec: {row.get('duration_sec', '')}\n"
-            f"- trajectory_mode: {self.trajectory_mode}\n\n"
-            "## Transcript\n"
-            f"{transcript}\n\n"
-            "## Continue\n"
-            "Produce the next assistant message for this trajectory."
-        )
-
-    def sample_request(self, request_id: int, output_len: int, output_bucket: str) -> RequestSample:
-        target_bucket = pick_weighted_bucket(MIN_INPUT_TOKENS, MAX_INPUT_TOKENS, INPUT_TOKEN_BUCKETS)
-        fallback = None
-
-        for _ in range(MAX_SAMPLE_ATTEMPTS):
-            row, shard_name = self.next_row()
-            prompt = self.build_prompt(row, shard_name, output_bucket)
-            approx_tokens = estimate_tokens(prompt)
-            in_requested_range = MIN_INPUT_TOKENS <= approx_tokens <= MAX_INPUT_TOKENS
-
-            if in_requested_range and fallback is None:
-                fallback = (row, shard_name, prompt, approx_tokens)
-
-            if (
-                max(MIN_INPUT_TOKENS, target_bucket.min_tokens)
-                <= approx_tokens
-                <= min(MAX_INPUT_TOKENS, target_bucket.max_tokens)
-            ):
-                return RequestSample(
-                    request_id=request_id,
-                    prompt=prompt,
-                    input_len=approx_tokens,
-                    input_bucket=target_bucket.name,
-                    output_len=output_len,
-                    output_bucket=output_bucket,
-                    temperature=random.uniform(0.15, 0.45),
-                    instance_id=row.get("instance_id") or "",
-                    repo=row.get("repo") or "",
-                    exit_status=row.get("exit_status") or "",
-                    shard_name=shard_name,
-                )
-
-        if fallback is None:
-            raise RuntimeError(
-                f"Could not find a SWE-ZERO prompt in input range {MIN_INPUT_TOKENS}-{MAX_INPUT_TOKENS} "
-                f"after {MAX_SAMPLE_ATTEMPTS} candidate rows. Try widening --min-input/--max-input."
-            )
-
-        row, shard_name, prompt, approx_tokens = fallback
+    def make_sample(
+        self,
+        request_id: int,
+        row: dict,
+        shard_name: str,
+        prompt: str,
+        messages: list[dict],
+        approx_tokens: int,
+        input_bucket: str,
+        output_len: int,
+        output_bucket: str,
+    ) -> RequestSample:
         return RequestSample(
             request_id=request_id,
             prompt=prompt,
+            messages=messages,
             input_len=approx_tokens,
-            input_bucket=bucket_for_tokens(approx_tokens),
+            input_bucket=input_bucket,
             output_len=output_len,
             output_bucket=output_bucket,
             temperature=random.uniform(0.15, 0.45),
@@ -470,6 +439,92 @@ class SweZeroSampler:
             repo=row.get("repo") or "",
             exit_status=row.get("exit_status") or "",
             shard_name=shard_name,
+        )
+
+    def sample_request(self, request_id: int, output_len: int, output_bucket: str) -> RequestSample:
+        target_bucket = pick_weighted_bucket(MIN_INPUT_TOKENS, MAX_INPUT_TOKENS, INPUT_TOKEN_BUCKETS)
+        fallback_in_range = None
+        fallback_bucket_match = None
+        fallback_continuable = None
+
+        for _ in range(MAX_SAMPLE_ATTEMPTS):
+            row, shard_name = self.next_row()
+            prompt, messages = self.build_prompt(row, shard_name, output_bucket)
+            approx_tokens = estimate_tokens(prompt)
+            in_requested_range = MIN_INPUT_TOKENS <= approx_tokens <= MAX_INPUT_TOKENS
+            bucket_matches = (
+                max(MIN_INPUT_TOKENS, target_bucket.min_tokens)
+                <= approx_tokens
+                <= min(MAX_INPUT_TOKENS, target_bucket.max_tokens)
+            )
+            continuable = self.is_continuable(messages)
+            candidate = (row, shard_name, prompt, messages, approx_tokens)
+
+            if in_requested_range and fallback_in_range is None:
+                fallback_in_range = candidate
+            if in_requested_range and continuable and fallback_continuable is None:
+                fallback_continuable = candidate
+            if bucket_matches and fallback_bucket_match is None:
+                fallback_bucket_match = candidate
+
+            if bucket_matches and continuable:
+                return self.make_sample(
+                    request_id,
+                    row,
+                    shard_name,
+                    prompt,
+                    messages,
+                    approx_tokens,
+                    target_bucket.name,
+                    output_len,
+                    output_bucket,
+                )
+
+        if fallback_continuable is not None:
+            row, shard_name, prompt, messages, approx_tokens = fallback_continuable
+            return self.make_sample(
+                request_id,
+                row,
+                shard_name,
+                prompt,
+                messages,
+                approx_tokens,
+                bucket_for_tokens(approx_tokens),
+                output_len,
+                output_bucket,
+            )
+
+        if fallback_bucket_match is not None:
+            row, shard_name, prompt, messages, approx_tokens = fallback_bucket_match
+            return self.make_sample(
+                request_id,
+                row,
+                shard_name,
+                prompt,
+                messages,
+                approx_tokens,
+                target_bucket.name,
+                output_len,
+                output_bucket,
+            )
+
+        if fallback_in_range is None:
+            raise RuntimeError(
+                f"Could not find a SWE-ZERO prompt in input range {MIN_INPUT_TOKENS}-{MAX_INPUT_TOKENS} "
+                f"after {MAX_SAMPLE_ATTEMPTS} candidate rows. Try widening --min-input/--max-input."
+            )
+
+        row, shard_name, prompt, messages, approx_tokens = fallback_in_range
+        return self.make_sample(
+            request_id,
+            row,
+            shard_name,
+            prompt,
+            messages,
+            approx_tokens,
+            bucket_for_tokens(approx_tokens),
+            output_len,
+            output_bucket,
         )
 
 
@@ -531,6 +586,7 @@ def print_sample_preview():
         print(f"Instance:                 {sample.instance_id}")
         print(f"Exit status:              {sample.exit_status}")
         print(f"Shard:                    {sample.shard_name}")
+        print(f"Chat messages:            {len(sample.messages)}")
         print("-" * 80)
         print(sample.prompt[:preview_chars])
         if len(sample.prompt) > preview_chars:
@@ -577,7 +633,7 @@ async def run_single_request_streaming(sample: RequestSample, progress: dict) ->
     try:
         request_params = {
             "model": MODEL,
-            "messages": [{"role": "user", "content": sample.prompt}],
+            "messages": sample.messages,
             "max_tokens": sample.output_len,
             "temperature": sample.temperature,
             "stream": True,
@@ -743,6 +799,8 @@ async def run_benchmark():
     print(f"Port:                {PORT}")
     print(f"Base URL:            {BASE_URL}")
     print("Streaming:           True")
+    print("Prompt format:       SWE-ZERO chat roles")
+    print("Sampling policy:     prefers active trajectories ending on user observations")
     print("Radix cache:         disabled (expected)")
     print(f"Total requests:      {NUM_PROMPTS}")
     print(f"Concurrency:         {CONCURRENCY} (simulating {CONCURRENCY} agents)")
