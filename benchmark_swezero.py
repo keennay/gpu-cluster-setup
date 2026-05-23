@@ -803,11 +803,12 @@ async def run_benchmark():
     actual_avg_input = statistics.mean([r.prompt_tokens for r in successful])
     actual_avg_output = statistics.mean([r.completion_tokens for r in successful])
 
-    print(run_header("SWE-ZERO RESULTS", display_run_label))
+    print(run_header("RESULTS", display_run_label))
     print(f"{'=' * 60}")
     print()
     print(f"Successful requests:       {len(successful)}/{NUM_PROMPTS}")
     print(f"Failed requests:           {len(failed)}")
+    print(f"Requests Seed:             {RANDOM_SEED if RANDOM_SEED is not None else '(random)'}")
     print(f"Avg input tokens (approx): {avg_input:.0f}")
     print(f"Avg input tokens (actual): {actual_avg_input:.0f}")
     print(f"Avg output tokens (cfg):   {avg_output:.0f}")

@@ -1061,6 +1061,7 @@ async def run_benchmark():
     print()
     print(f"Successful requests:       {len(successful)}/{NUM_PROMPTS}")
     print(f"Failed requests:           {len(failed)}")
+    print(f"Requests Seed:             {RANDOM_SEED if RANDOM_SEED is not None else '(random)'}")
     print(f"Avg input tokens (cfg):    {avg_input:.0f}")
     print(f"Avg input tokens (actual): {actual_avg_input:.0f}")
     print(f"Avg output tokens (cfg):   {avg_output:.0f}")
