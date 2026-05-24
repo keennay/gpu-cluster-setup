@@ -3,6 +3,7 @@
 INFERENCE_PROVIDER="vLLM"
 MODEL_REPO="nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
 MODEL_NAME="nemotron_v3"
+MAX_MODEL_LEN=1048576
 DEFAULT_TENSOR_PARALLEL_SIZE=2
 DEFAULT_PORT=8000
 GPU_MEM_UTIL=0.95
@@ -201,7 +202,7 @@ main() {
     base_command+=" --dtype auto"
     base_command+=" --kv-cache-dtype fp8"
     base_command+=" --tensor-parallel-size $TENSOR_PARALLEL_SIZE"
-    base_command+=" --max-model-len 1048576"
+    base_command+=" --max-model-len $MAX_MODEL_LEN"
     base_command+=" --trust-remote-code"
     base_command+=" --gpu-memory-utilization ${GPU_MEM_UTIL}"
     base_command+=" --max-cudagraph-capture-size 128"
