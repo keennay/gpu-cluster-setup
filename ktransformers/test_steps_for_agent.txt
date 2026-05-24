@@ -1,7 +1,7 @@
-KT_EXPERTS_PATH="kimi_k26/h200x2"
-KT_PYTHON_ENV=$HOME/env_qwen3-ktransformers
+KT_EXPERTS_PATH="deepseek_v4_flash/h200x2"
+KT_PYTHON_ENV=$HOME/env_deepseek-ktransformers
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
-KT_BENCHMARK_MODEL="kimi_k2"
+KT_BENCHMARK_MODEL="deepseek_v4"
 KT_REPO_ROOT="${KT_REPO_ROOT:-$(pwd)}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmark_swezero.py}"
 KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 1 --timeout 3600 --trajectory-mode prefix --exit-status any --no-ignore-eos"

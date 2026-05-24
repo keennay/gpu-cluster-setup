@@ -506,6 +506,7 @@ install_deepseek_ktransformers() {
 
     print_info "Installing SGLang for DeepSeek-V3/V4/R1/OCR..."
 
+    local sglang_branch="merge-deepseek-v4"
     local sglang_dir=""
     if [ -n "${SGLANG_DIR:-}" ]; then
         sglang_dir="$SGLANG_DIR"
@@ -521,7 +522,11 @@ install_deepseek_ktransformers() {
         if [ ! -d "$parent_dir" ]; then
             run_command mkdir -p "$parent_dir" || return 1
         fi
-        run_command git clone https://github.com/kvcache-ai/sglang.git "$sglang_dir" || return 1
+        run_command git clone -b "$sglang_branch" https://github.com/kvcache-ai/sglang.git "$sglang_dir" || return 1
+    else
+        run_command git -C "$sglang_dir" fetch origin || return 1
+        run_command git -C "$sglang_dir" checkout "$sglang_branch" || return 1
+        run_command git -C "$sglang_dir" pull --ff-only origin "$sglang_branch" || return 1
     fi
 
     run_pip_install -e "$sglang_dir/python[all]" || return 1
