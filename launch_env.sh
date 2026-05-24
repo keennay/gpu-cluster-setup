@@ -421,6 +421,7 @@ if [ "$ENV_TYPE" = "deepseek-sglang" ]; then
         export CUDA_PATH="$CUDA_13_HOME"
         export PATH="$CUDA_13_HOME/bin:$PATH"
         export LD_LIBRARY_PATH="$CUDA_13_HOME/lib:$CUDA_13_HOME/lib64:${LD_LIBRARY_PATH:-}"
+        export LIBRARY_PATH="$CUDA_13_HOME/lib:$CUDA_13_HOME/lib64:${LIBRARY_PATH:-}"
         if [ -d "$CUDA_13_HOME/include/cccl" ]; then
             export CPATH="$CUDA_13_HOME/include/cccl:${CPATH:-}"
         fi

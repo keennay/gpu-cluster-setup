@@ -20,6 +20,51 @@ echo "$MODEL_REPO $INFERENCE_PROVIDER Launcher"
 
 trap 'echo -e "\n\nServer stopped by user."; exit 0' INT
 
+get_cuda_sm_version() {
+    local visible_devices="${CUDA_VISIBLE_DEVICES:-}"
+
+    if [ "${GPU_SELECTION_MODE:-}" = "custom" ]; then
+        visible_devices="$CUDA_VISIBLE_DEVICES_VALUE"
+    fi
+
+    if [ -n "$visible_devices" ]; then
+        CUDA_VISIBLE_DEVICES="$visible_devices" python3 - <<'PY' 2>/dev/null
+import torch
+
+if torch.cuda.is_available():
+    major, minor = torch.cuda.get_device_capability(0)
+    print(f"sm_{major}{minor}")
+PY
+    else
+        python3 - <<'PY' 2>/dev/null
+import torch
+
+if torch.cuda.is_available():
+    major, minor = torch.cuda.get_device_capability(0)
+    print(f"sm_{major}{minor}")
+PY
+    fi
+}
+
+configure_moe_runner_backend() {
+    local sm_version
+    sm_version="$(get_cuda_sm_version || true)"
+
+    case "$sm_version" in
+        sm_90)
+            BACKEND_MOE_RUNNER="marlin"
+            ;;
+        sm_100|sm_103)
+            BACKEND_MOE_RUNNER="flashinfer_mxfp4"
+            ;;
+        *)
+            BACKEND_MOE_RUNNER="${BACKEND_MOE_RUNNER:-}"
+            ;;
+    esac
+
+    export BACKEND_MOE_RUNNER
+}
+
 is_valid_tensor_parallel_size() {
     [[ "$1" =~ ^(1|2|4|8)$ ]]
 }
@@ -66,12 +111,16 @@ set_custom_gpus() {
 
 build_extra_args() {
     EXTRA_ARGS=""
+    configure_moe_runner_backend
 
     if [ "$ENABLE_SPECULATIVE" -eq 1 ]; then
         EXTRA_ARGS+="$SPECULATIVE "
     fi
     EXTRA_ARGS+="$QUANTIZATION "
     EXTRA_ARGS+="$NO_PREFIX_CACHE "
+    if [ -n "$BACKEND_MOE_RUNNER" ]; then
+        EXTRA_ARGS+="--moe-runner-backend ${BACKEND_MOE_RUNNER} "
+    fi
 }
 
 get_tensor_parallel_size() {
@@ -193,6 +242,9 @@ main() {
         echo "GPU selection: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE"
     fi
     echo "Port: $INFERENCE_PORT"
+    if [ -n "$BACKEND_MOE_RUNNER" ]; then
+        echo "MoE runner backend: $BACKEND_MOE_RUNNER"
+    fi
     echo ""
 
     local base_command+=" sglang serve"

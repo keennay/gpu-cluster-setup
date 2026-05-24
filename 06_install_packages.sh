@@ -507,8 +507,8 @@ install_deepseek_sglang() {
     print_info "Installing SGLang for DeepSeek..."
 
     run_uv_install --upgrade --prerelease=explicit \
-        'flash-attn-4>=4.0.0b9' \
-        'sglang>=0.5.12' || return 1
+        'flash-attn-4==4.0.0b9' \
+        'sglang==0.5.12' || return 1
 
     local cuda_home=""
     if cuda_home=$(find_system_cuda_13_home); then
@@ -533,6 +533,12 @@ install_deepseek_sglang() {
         fi
     fi
 
+    export CUDA_HOME="$cuda_home"
+    export CUDA_PATH="$cuda_home"
+    export PATH="$cuda_home/bin:$PATH"
+    export LD_LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
+    export LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
+
     print_info "Installing FlashMLA with CUDA_HOME=$cuda_home..."
     local cpath_value="${CPATH:-}"
     if [ -d "$cuda_home/include/cccl" ]; then
@@ -541,10 +547,11 @@ install_deepseek_sglang() {
 
     local flash_mla_env=(
         env
-        "CUDA_HOME=$cuda_home"
-        "CUDA_PATH=$cuda_home"
-        "PATH=$cuda_home/bin:$PATH"
-        "LD_LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
+        "CUDA_HOME=$CUDA_HOME"
+        "CUDA_PATH=$CUDA_PATH"
+        "PATH=$PATH"
+        "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+        "LIBRARY_PATH=$LIBRARY_PATH"
         "CPATH=$cpath_value"
         "NVCC_THREADS=${NVCC_THREADS:-8}"
     )
