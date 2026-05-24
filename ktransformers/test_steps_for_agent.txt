@@ -1,4 +1,4 @@
-KT_EXPERTS_PATH="deepseek_v4_flash/h200x2"
+KT_EXPERTS_PATH="deepseek_v4_flash/h200x1"
 KT_PYTHON_ENV=$HOME/env_deepseek-ktransformers
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
 KT_BENCHMARK_MODEL="deepseek_v4"
