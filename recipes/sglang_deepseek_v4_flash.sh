@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-INFERENCE_PROVIDER="vLLM"
-MODEL_REPO="Qwen/Qwen3.6-27B"
-MODEL_NAME="qwen3"
+INFERENCE_PROVIDER="SGLang"
+MODEL_REPO="deepseek-ai/DeepSeek-V4-Flash"
+MODEL_NAME="deepseek_v4"
 MAX_MODEL_LEN=1000000
-DEFAULT_TENSOR_PARALLEL_SIZE=1
+DEFAULT_TENSOR_PARALLEL_SIZE=2
 DEFAULT_PORT=8000
 GPU_MEM_UTIL=0.95
 
-SPECULATIVE='--speculative-config {"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+SPECULATIVE='--speculative-algo EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4'
 QUANTIZATION=""
-NO_PREFIX_CACHE="--no-enable-prefix-caching"
+NO_PREFIX_CACHE="--disable-radix-cache --disable-chunked-prefix-cache"
 EXTRA_ARGS=""
 ENABLE_SPECULATIVE=0
 POSITIONAL_ARGS=()
@@ -195,15 +195,15 @@ main() {
     echo "Port: $INFERENCE_PORT"
     echo ""
 
-    local base_command="vllm serve $MODEL_REPO"
+    local base_command+=" sglang serve"
+    base_command+=" --model-path $MODEL_REPO"
     base_command+=" --served-model-name $MODEL_NAME"
     base_command+=" --trust-remote-code"
-    base_command+=" --tensor-parallel-size $TENSOR_PARALLEL_SIZE"
-    base_command+=" --reasoning-parser $MODEL_NAME"
-    base_command+=" --enable-auto-tool-choice"
-    base_command+=" --tool-call-parser qwen3_coder"
-    base_command+=" --max-model-len $MAX_MODEL_LEN"
-    base_command+=" --gpu-memory-utilization ${GPU_MEM_UTIL}"
+    base_command+=" --tp $TENSOR_PARALLEL_SIZE"
+    base_command+=" --reasoning-parser deepseek-v4"
+    base_command+=" --tool-call-parser deepseekv4"
+    base_command+=" --context-length $MAX_MODEL_LEN"
+    base_command+=" --mem-fraction-static ${GPU_MEM_UTIL}"
     base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
     base_command+=" --port $INFERENCE_PORT"
     base_command+=" --api-key YOUR_API_KEY"

@@ -315,6 +315,65 @@ run_pip_install() {
     return 1
 }
 
+find_system_cuda_13_home() {
+    local candidates=()
+
+    if [ -n "${CUDA_HOME:-}" ]; then
+        candidates+=("$CUDA_HOME")
+    fi
+    if [ -n "${CUDA_PATH:-}" ]; then
+        candidates+=("$CUDA_PATH")
+    fi
+
+    candidates+=(
+        /usr/local/cuda-13.0
+        /usr/local/cuda-13
+        /usr/local/cuda
+    )
+
+    local candidate release
+    local seen=":"
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="${candidate%/}"
+        if [ -n "${VIRTUAL_ENV:-}" ] && [[ "$candidate" == "$VIRTUAL_ENV"* ]]; then
+            continue
+        fi
+        case "$seen" in
+            *":$candidate:"*) continue ;;
+        esac
+        seen+="$candidate:"
+
+        [ -x "$candidate/bin/nvcc" ] || continue
+        release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
+        [ "$release" = "13.0" ] || continue
+        [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
+        [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
+        [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
+        [ -e "$candidate/include/cuda/std/utility" ] || [ -e "$candidate/include/cccl/cuda/std/utility" ] || continue
+
+        echo "$candidate"
+        return 0
+    done
+
+    return 1
+}
+
+find_venv_cuda_13_home() {
+    python - <<'PY'
+import pathlib
+import site
+import sys
+
+for site_dir in site.getsitepackages():
+    candidate = pathlib.Path(site_dir) / "nvidia" / "cu13"
+    if (candidate / "bin" / "nvcc").is_file():
+        print(candidate)
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
 install_gemma_sglang() {
     print_info "Installing packages for Gemma-4 (SGLang)..."
 
@@ -446,7 +505,62 @@ install_deepseek_ktransformers() {
 
 install_deepseek_sglang() {
     print_info "Installing SGLang for DeepSeek..."
-    run_uv_install "sglang[all]>=0.5.3rc0"
+
+    run_uv_install --upgrade --prerelease=explicit \
+        'flash-attn-4>=4.0.0b9' \
+        'sglang>=0.5.12' || return 1
+
+    local cuda_home=""
+    if cuda_home=$(find_system_cuda_13_home); then
+        print_info "Using system CUDA 13.0 toolkit at $cuda_home"
+    else
+        print_info "No complete system CUDA 13.0 toolkit found; installing CUDA 13.0 compiler packages into the virtual environment."
+        run_uv_install \
+            nvidia-cuda-nvcc==13.0.88 \
+            nvidia-cuda-crt==13.0.88 \
+            nvidia-nvvm==13.0.88 \
+            nvidia-cuda-cccl==13.0.85 || return 1
+
+        cuda_home=$(find_venv_cuda_13_home) || {
+            print_error "CUDA 13 nvcc was not found inside the active virtual environment."
+            print_info "Expected it under: $VIRTUAL_ENV/lib/python*/site-packages/nvidia/cu13/bin/nvcc"
+            return 1
+        }
+        print_info "Using virtualenv CUDA 13.0 toolkit at $cuda_home"
+
+        if [ ! -e "$cuda_home/lib/libcudart.so" ] && [ -e "$cuda_home/lib/libcudart.so.13" ]; then
+            run_command ln -s libcudart.so.13 "$cuda_home/lib/libcudart.so" || return 1
+        fi
+    fi
+
+    print_info "Installing FlashMLA with CUDA_HOME=$cuda_home..."
+    local cpath_value="${CPATH:-}"
+    if [ -d "$cuda_home/include/cccl" ]; then
+        cpath_value="$cuda_home/include/cccl:$cpath_value"
+    fi
+
+    local flash_mla_env=(
+        env
+        "CUDA_HOME=$cuda_home"
+        "CUDA_PATH=$cuda_home"
+        "PATH=$cuda_home/bin:$PATH"
+        "LD_LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
+        "CPATH=$cpath_value"
+        "NVCC_THREADS=${NVCC_THREADS:-8}"
+    )
+
+    local gpu_name=""
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]')
+    fi
+    if [[ "$gpu_name" != *"B200"* && "$gpu_name" != *"BLACKWELL"* ]]; then
+        flash_mla_env+=("FLASH_MLA_DISABLE_SM100=1")
+    fi
+
+    run_command "${flash_mla_env[@]}" uv pip install --no-build-isolation \
+        'flash-mla @ git+https://github.com/deepseek-ai/FlashMLA.git@9241ae3ef9bac614dd25e45e507e089f888280e0' || return 1
+
+    run_command python -c "import flash_mla; from flash_mla.flash_mla_interface import FlashMLASchedMeta; print('flash_mla import OK')" || return 1
 }
 
 install_deepseek_vllm() {

@@ -3,6 +3,7 @@
 INFERENCE_PROVIDER="vLLM"
 MODEL_REPO="MiniMaxAI/MiniMax-M2"
 MODEL_NAME="minimax_m2"
+MAX_MODEL_LEN=1000000
 DEFAULT_TENSOR_PARALLEL_SIZE=2
 DEFAULT_PORT=8000
 GPU_MEM_UTIL=0.98
@@ -202,6 +203,7 @@ main() {
     base_command+=" --reasoning-parser minimax_m2_append_think"
     base_command+=" --enable-auto-tool-choice"
     base_command+=" --tool-call-parser $MODEL_NAME"
+    base_command+=" --max-model-len $MAX_MODEL_LEN"
     base_command+=" --gpu-memory-utilization ${GPU_MEM_UTIL}"
     base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
     base_command+=" --port $INFERENCE_PORT"

@@ -348,6 +348,89 @@ else
     fi
 fi
 
+find_system_cuda_13_home() {
+    local candidates=()
+
+    if [ -n "${CUDA_HOME:-}" ]; then
+        candidates+=("$CUDA_HOME")
+    fi
+    if [ -n "${CUDA_PATH:-}" ]; then
+        candidates+=("$CUDA_PATH")
+    fi
+
+    candidates+=(
+        /usr/local/cuda-13.0
+        /usr/local/cuda-13
+        /usr/local/cuda
+    )
+
+    local candidate release
+    local seen=":"
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="${candidate%/}"
+        if [ -n "${VIRTUAL_ENV:-}" ] && [[ "$candidate" == "$VIRTUAL_ENV"* ]]; then
+            continue
+        fi
+        case "$seen" in
+            *":$candidate:"*) continue ;;
+        esac
+        seen+="$candidate:"
+
+        [ -x "$candidate/bin/nvcc" ] || continue
+        release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
+        [ "$release" = "13.0" ] || continue
+        [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
+        [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
+        [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
+        [ -e "$candidate/include/cuda/std/utility" ] || [ -e "$candidate/include/cccl/cuda/std/utility" ] || continue
+
+        echo "$candidate"
+        return 0
+    done
+
+    return 1
+}
+
+find_venv_cuda_13_home() {
+    python - <<'PY'
+import pathlib
+import site
+import sys
+
+for site_dir in site.getsitepackages():
+    candidate = pathlib.Path(site_dir) / "nvidia" / "cu13"
+    if (candidate / "bin" / "nvcc").is_file():
+        print(candidate)
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+if [ "$ENV_TYPE" = "deepseek-sglang" ]; then
+    CUDA_13_HOME=""
+    CUDA_13_SOURCE=""
+    if CUDA_13_HOME=$(find_system_cuda_13_home); then
+        CUDA_13_SOURCE="system"
+    elif CUDA_13_HOME=$(find_venv_cuda_13_home); then
+        CUDA_13_SOURCE="virtualenv"
+    fi
+
+    if [ -n "$CUDA_13_HOME" ]; then
+        export CUDA_HOME="$CUDA_13_HOME"
+        export CUDA_PATH="$CUDA_13_HOME"
+        export PATH="$CUDA_13_HOME/bin:$PATH"
+        export LD_LIBRARY_PATH="$CUDA_13_HOME/lib:$CUDA_13_HOME/lib64:${LD_LIBRARY_PATH:-}"
+        if [ -d "$CUDA_13_HOME/include/cccl" ]; then
+            export CPATH="$CUDA_13_HOME/include/cccl:${CPATH:-}"
+        fi
+        print_info "DeepSeek SGLang CUDA toolkit: $CUDA_HOME ($CUDA_13_SOURCE)"
+    else
+        print_warning "DeepSeek SGLang CUDA 13.0 toolkit not found on the system or in the virtual environment."
+        print_info "Run ./06_install_packages.sh --env deepseek-sglang to install nvidia-cuda-nvcc and FlashMLA."
+    fi
+fi
+
 export DG_JIT_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
 export FLASHINFER_WORKSPACE_BASE="${VIRTUAL_ENV:-$ENV_PATH}"
 export SGLANG_DG_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
