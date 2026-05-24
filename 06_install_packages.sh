@@ -315,6 +315,41 @@ run_pip_install() {
     return 1
 }
 
+check_kt_kernel_build_dependencies() {
+    local missing=()
+
+    if ! command -v cmake >/dev/null 2>&1; then
+        missing+=("cmake")
+    fi
+    if ! command -v pkg-config >/dev/null 2>&1; then
+        missing+=("pkg-config")
+    elif ! pkg-config --exists hwloc >/dev/null 2>&1; then
+        missing+=("libhwloc-dev")
+    fi
+
+    if [ "${#missing[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    print_error "Missing kt-kernel build dependencies: ${missing[*]}"
+    print_info "Install them with your OS package manager, then rerun this script."
+    print_info "On Debian/Ubuntu: sudo apt install -y cmake libhwloc-dev pkg-config"
+    return 1
+}
+
+install_kt_kernel() {
+    local ktransformers_dir="$1"
+    local kt_kernel_dir="$ktransformers_dir/kt-kernel"
+
+    if [ ! -d "$kt_kernel_dir" ]; then
+        print_warning "kt-kernel directory not found at $kt_kernel_dir"
+        return 1
+    fi
+
+    check_kt_kernel_build_dependencies || return 1
+    run_command bash -c "cd \"$kt_kernel_dir\" && ./install.sh build"
+}
+
 find_system_cuda_13_home() {
     local candidates=()
 
@@ -467,12 +502,7 @@ install_deepseek_ktransformers() {
 
     run_command git -C "$ktransformers_dir" submodule update --init --recursive || return 1
 
-    if [ -d "$ktransformers_dir/kt-kernel" ]; then
-        run_command bash -c "cd \"$ktransformers_dir/kt-kernel\" && ./install.sh" || return 1
-    else
-        print_warning "kt-kernel directory not found at $ktransformers_dir/kt-kernel"
-        return 1
-    fi
+    install_kt_kernel "$ktransformers_dir" || return 1
 
     print_info "Installing SGLang for DeepSeek-V3/V4/R1/OCR..."
 
@@ -495,7 +525,7 @@ install_deepseek_ktransformers() {
     fi
 
     run_pip_install -e "$sglang_dir/python[all]" || return 1
-    run_pip_install "tilelang==0.1.7.post3" || return 1
+    run_pip_install "tilelang==0.1.8" || return 1
     run_pip_install "apache-tvm-ffi==0.1.9" || return 1
     run_pip_install --upgrade flashinfer-python flashinfer-cubin || return 1
     run_pip_install "transformers==4.57.1" || return 1
@@ -627,12 +657,7 @@ install_kimi_ktransformers() {
 
     run_command git -C "$ktransformers_dir" submodule update --init --recursive || return 1
 
-    if [ -d "$ktransformers_dir/kt-kernel" ]; then
-        run_command bash -c "cd \"$ktransformers_dir/kt-kernel\" && ./install.sh" || return 1
-    else
-        print_warning "kt-kernel directory not found at $ktransformers_dir/kt-kernel"
-        return 1
-    fi
+    install_kt_kernel "$ktransformers_dir" || return 1
 
     print_info "Installing SGLang for Kimi K2.X..."
 

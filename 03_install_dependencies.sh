@@ -761,6 +761,7 @@ if [ "$OS_TYPE" = "ubuntu" ]; then
         # NUMA optimization
         "numactl"
         "libnuma-dev"
+        "libhwloc-dev"
         
         # Essential Python dependencies
         "libssl-dev"
@@ -785,6 +786,7 @@ elif [ "$OS_TYPE" = "rhel" ]; then
         # NUMA optimization
         "numactl"
         "numactl-devel"
+        "hwloc-devel"
         
         # Essential Python dependencies
         "openssl-devel"
