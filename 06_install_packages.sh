@@ -535,6 +535,44 @@ install_deepseek_ktransformers() {
     run_pip_install --upgrade flashinfer-python flashinfer-cubin || return 1
     run_pip_install "transformers==4.57.1" || return 1
 
+    print_info "Installing FlashMLA for DeepSeek V4 compressed attention..."
+    local flash_mla_env=(
+        env
+        "NVCC_THREADS=${NVCC_THREADS:-8}"
+    )
+
+    local cuda_home="${CUDA_HOME:-${CUDA_PATH:-}}"
+    if [ -z "$cuda_home" ] && command -v nvcc >/dev/null 2>&1; then
+        cuda_home=$(cd -- "$(dirname -- "$(command -v nvcc)")/.." && pwd)
+    fi
+
+    if [ -n "$cuda_home" ]; then
+        flash_mla_env+=(
+            "CUDA_HOME=$cuda_home"
+            "CUDA_PATH=$cuda_home"
+            "PATH=$cuda_home/bin:$PATH"
+            "LD_LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
+            "LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
+        )
+
+        if [ -d "$cuda_home/include/cccl" ]; then
+            flash_mla_env+=("CPATH=$cuda_home/include/cccl:${CPATH:-}")
+        fi
+    fi
+
+    local gpu_name=""
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]')
+    fi
+    if [[ "$gpu_name" != *"B200"* && "$gpu_name" != *"BLACKWELL"* ]]; then
+        flash_mla_env+=("FLASH_MLA_DISABLE_SM100=1")
+    fi
+
+    run_command "${flash_mla_env[@]}" python -m pip install --no-build-isolation \
+        'flash-mla @ git+https://github.com/deepseek-ai/FlashMLA.git@9241ae3ef9bac614dd25e45e507e089f888280e0' || return 1
+
+    run_command python -c "import flash_mla; from flash_mla.flash_mla_interface import FlashMLASchedMeta; print('flash_mla import OK')" || return 1
+
     run_pip_install nvidia-cudnn-cu12==9.16.0.29 || return 1
 }
 
