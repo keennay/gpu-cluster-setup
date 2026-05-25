@@ -13,6 +13,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from benchmark_sglang_metrics import (
+    calculate_sglang_stage_throughput,
     fetch_sglang_metrics_snapshot,
     fetch_sglang_model_metadata,
     print_sglang_metrics_report,
@@ -243,6 +244,12 @@ def seed_random():
 
 def run_header(prefix: str, label: str | None = None) -> str:
     return f"{prefix}: {label or RUN_LABEL} | Prompts: {NUM_PROMPTS} | Concurrency: {CONCURRENCY}"
+
+
+def format_optional_tps(value: float | None) -> str:
+    if value is None or value <= 0:
+        return "N/A"
+    return f"{value:.2f}"
 
 
 def import_pyarrow_parquet():
@@ -860,6 +867,12 @@ async def run_benchmark():
     avg_output = statistics.mean([r.output_len for r in successful])
     actual_avg_input = statistics.mean([r.prompt_tokens for r in successful])
     actual_avg_output = statistics.mean([r.completion_tokens for r in successful])
+    sglang_stage_throughput = calculate_sglang_stage_throughput(
+        MODEL,
+        sglang_model_metadata,
+        sglang_metrics_start,
+        sglang_metrics_end,
+    )
 
     print(run_header("RESULTS", display_run_label))
     print(f"{'=' * 60}")
@@ -892,8 +905,10 @@ async def run_benchmark():
     print()
     print("THROUGHPUT:")
     print(f"  Requests/sec:          {len(successful) / total_wall_time:.2f}")
-    print(f"  Output tokens/sec:     {total_completion_tokens / total_wall_time:.2f}")
-    print(f"  Total tokens/sec:      {total_tokens / total_wall_time:.2f}")
+    print(f"  SGLang Prefill tokens/sec: {format_optional_tps(sglang_stage_throughput.prefill_tokens_per_sec)}")
+    print(f"  SGLang Decode tokens/sec:  {format_optional_tps(sglang_stage_throughput.decode_tokens_per_sec)}")
+    print(f"  End-to-end Output tokens/sec: {total_completion_tokens / total_wall_time:.2f}")
+    print(f"  Total tokens/sec:             {total_tokens / total_wall_time:.2f}")
 
     def print_ttft_stats(label: str, ttft_values: list[float]):
         print(f"{label}:")

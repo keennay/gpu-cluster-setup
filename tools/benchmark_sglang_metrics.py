@@ -45,6 +45,12 @@ class SGLangModelMetadata:
     error: str = ""
 
 
+@dataclass(frozen=True)
+class SGLangStageThroughput:
+    prefill_tokens_per_sec: float | None = None
+    decode_tokens_per_sec: float | None = None
+
+
 _METRIC_RE = re.compile(
     r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+"
     r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?|[-+]?Inf|NaN)(?:\s|$)"
@@ -431,6 +437,32 @@ def _select_metrics_model(
     if len(metric_names) == 1:
         return next(iter(metric_names))
     return benchmark_model or None
+
+
+def calculate_sglang_stage_throughput(
+    benchmark_model: str,
+    metadata: SGLangModelMetadata,
+    start: SGLangMetricsSnapshot,
+    end: SGLangMetricsSnapshot,
+) -> SGLangStageThroughput:
+    metrics_model = _select_metrics_model(benchmark_model, metadata, start, end)
+    prefill = _average_histogram_summary_by_label(
+        start,
+        end,
+        "sglang:per_stage_req_latency_seconds",
+        "tp_rank",
+        metrics_model,
+        {"stage": "prefill_forward"},
+    )
+    decode_itl = _merged_histogram_summary(start, end, "sglang:inter_token_latency_seconds", metrics_model)
+
+    prompt_tokens = _counter_delta(start, end, "sglang:prompt_tokens_total", metrics_model)
+    prefill_tps = prompt_tokens / prefill.total if prefill.total > 0 else None
+    decode_tps = decode_itl.count / decode_itl.total if decode_itl.total > 0 else None
+    return SGLangStageThroughput(
+        prefill_tokens_per_sec=prefill_tps,
+        decode_tokens_per_sec=decode_tps,
+    )
 
 
 def _fmt_int(value: float | int | None) -> str:
