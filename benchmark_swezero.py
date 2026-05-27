@@ -13,9 +13,12 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from benchmark_sglang_metrics import (
+    SGLangBatchMetricsCollector,
     calculate_sglang_stage_throughput,
     fetch_sglang_metrics_snapshot,
     fetch_sglang_model_metadata,
+    prompt_continue_without_sglang_logs,
+    print_sglang_batch_throughput_report,
     print_sglang_metrics_report,
     sglang_display_model_name,
 )
@@ -789,9 +792,16 @@ async def run_benchmark():
     sglang_model_metadata = fetch_sglang_model_metadata(BASE_URL, API_KEY)
     display_model = sglang_display_model_name(sglang_model_metadata, MODEL)
     display_run_label = RUN_LABEL if args.run_label else display_model
+    sglang_batch_collector = SGLangBatchMetricsCollector(BASE_URL)
+    sglang_batch_collector.start()
+    if not sglang_batch_collector.has_log_source:
+        if not prompt_continue_without_sglang_logs(sglang_batch_collector.process):
+            sglang_batch_collector.stop()
+            return
     sglang_metrics_start = fetch_sglang_metrics_snapshot(BASE_URL, API_KEY)
 
     progress = {"completed": 0, "failed": 0, "start_time": time.perf_counter()}
+    sglang_log_sources = ", ".join(sglang_batch_collector.process.source_paths) or "N/A"
 
     print(f"\n{'=' * 60}")
     print(run_header("SWE-ZERO BENCHMARK", display_run_label))
@@ -805,6 +815,7 @@ async def run_benchmark():
     print(f"Seed:                {RANDOM_SEED if RANDOM_SEED is not None else '(random)'}")
     print(f"Port:                {PORT}")
     print(f"Base URL:            {BASE_URL}")
+    print(f"SGLang log source:   {sglang_log_sources}")
     print("Streaming:           True")
     print("Prompt format:       SWE-ZERO chat roles")
     print("Sampling policy:     prefers active trajectories ending on user observations")
@@ -828,11 +839,14 @@ async def run_benchmark():
         async with semaphore:
             return await run_single_request_streaming(sample, progress)
 
-    overall_start = time.perf_counter()
-    results = await asyncio.gather(*[bounded_request(sample) for sample in samples])
-    overall_end = time.perf_counter()
-    await asyncio.sleep(0.5)
-    sglang_metrics_end = fetch_sglang_metrics_snapshot(BASE_URL, API_KEY)
+    try:
+        overall_start = time.perf_counter()
+        results = await asyncio.gather(*[bounded_request(sample) for sample in samples])
+        overall_end = time.perf_counter()
+        await asyncio.sleep(0.5)
+        sglang_metrics_end = fetch_sglang_metrics_snapshot(BASE_URL, API_KEY)
+    finally:
+        sglang_batch_report = sglang_batch_collector.stop()
 
     print(f"\n\n{'=' * 60}")
 
@@ -843,6 +857,7 @@ async def run_benchmark():
         print("\nAll requests failed!")
         for result in failed[:10]:
             print(f"  Request {result.request_id}: {result.error}")
+        print_sglang_batch_throughput_report(sglang_batch_report)
         return
 
     total_prompt_tokens = sum(r.prompt_tokens for r in successful)
@@ -950,6 +965,7 @@ async def run_benchmark():
         sglang_metrics_end,
         metadata=sglang_model_metadata,
     )
+    print_sglang_batch_throughput_report(sglang_batch_report)
 
     if failed:
         print("\nFAILED REQUESTS (first 10):")

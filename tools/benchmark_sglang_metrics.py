@@ -1,11 +1,16 @@
 import importlib.metadata
 import json
+import os
 import re
+import socket
 import statistics
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 
 HTTP_TIMEOUT_SECONDS = 5
@@ -51,11 +56,38 @@ class SGLangStageThroughput:
     decode_tokens_per_sec: float | None = None
 
 
+@dataclass(frozen=True)
+class SGLangProcessInfo:
+    pid: int | None = None
+    command: str = ""
+    source_paths: tuple[str, ...] = ()
+    status: str = ""
+
+
+@dataclass(frozen=True)
+class BatchThroughputStats:
+    count: int = 0
+    mean: float | None = None
+    median: float | None = None
+    p95: float | None = None
+    max: float | None = None
+
+
+@dataclass(frozen=True)
+class SGLangBatchThroughputReport:
+    process: SGLangProcessInfo = field(default_factory=SGLangProcessInfo)
+    prefill_input_tokens_per_sec: BatchThroughputStats = field(default_factory=BatchThroughputStats)
+    decode_generation_tokens_per_sec: BatchThroughputStats = field(default_factory=BatchThroughputStats)
+    status: str = ""
+
+
 _METRIC_RE = re.compile(
     r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+"
     r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?|[-+]?Inf|NaN)(?:\s|$)"
 )
 _LABEL_RE = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"')
+_PREFILL_BATCH_RE = re.compile(r"Prefill batch,.*?input throughput \(token/s\):\s*([0-9]+(?:\.[0-9]+)?)")
+_DECODE_BATCH_RE = re.compile(r"Decode batch,.*?gen throughput \(token/s\):\s*([0-9]+(?:\.[0-9]+)?)")
 
 
 def sglang_root_url(base_url: str) -> str:
@@ -68,6 +100,191 @@ def sglang_root_url(base_url: str) -> str:
 
 def sglang_metrics_endpoint(base_url: str) -> str:
     return f"{sglang_root_url(base_url)}/metrics"
+
+
+def _base_url_host_port(base_url: str) -> tuple[str, int | None]:
+    parsed = urllib.parse.urlsplit(base_url)
+    host = parsed.hostname or ""
+    port = parsed.port
+    if port is None:
+        if parsed.scheme == "https":
+            port = 443
+        elif parsed.scheme == "http":
+            port = 80
+    return host, port
+
+
+def _is_local_host(host: str) -> bool:
+    normalized = host.strip("[]").lower()
+    if normalized in {"", "localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return True
+    try:
+        local_names = {socket.gethostname().lower(), socket.getfqdn().lower()}
+        return normalized in local_names
+    except OSError:
+        return False
+
+
+def _listening_socket_inodes(port: int) -> set[str]:
+    inodes: set[str] = set()
+    port_hex = f"{port:04X}"
+    for proc_file in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            lines = Path(proc_file).read_text().splitlines()[1:]
+        except OSError:
+            continue
+        for line in lines:
+            fields = line.split()
+            if len(fields) < 10:
+                continue
+            local_address = fields[1]
+            state = fields[3]
+            inode = fields[9]
+            if state != "0A":
+                continue
+            _, local_port = local_address.rsplit(":", 1)
+            if local_port.upper() == port_hex:
+                inodes.add(inode)
+    return inodes
+
+
+def _pids_for_socket_inodes(inodes: set[str]) -> set[int]:
+    pids: set[int] = set()
+    if not inodes:
+        return pids
+
+    for proc_dir in Path("/proc").iterdir():
+        if not proc_dir.name.isdigit():
+            continue
+        fd_dir = proc_dir / "fd"
+        try:
+            fd_paths = list(fd_dir.iterdir())
+        except OSError:
+            continue
+        for fd_path in fd_paths:
+            try:
+                target = os.readlink(fd_path)
+            except OSError:
+                continue
+            if target.startswith("socket:[") and target.endswith("]"):
+                inode = target.removeprefix("socket:[").removesuffix("]")
+                if inode in inodes:
+                    pids.add(int(proc_dir.name))
+                    break
+    return pids
+
+
+def _read_proc_cmdline(pid: int) -> str:
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return ""
+    parts = [part.decode("utf-8", errors="replace") for part in raw.split(b"\0") if part]
+    return " ".join(parts)
+
+
+def _read_proc_environ(pid: int) -> dict[str, str]:
+    try:
+        raw = Path(f"/proc/{pid}/environ").read_bytes()
+    except OSError:
+        return {}
+    env = {}
+    for item in raw.split(b"\0"):
+        if not item or b"=" not in item:
+            continue
+        key, value = item.split(b"=", 1)
+        env[key.decode("utf-8", errors="replace")] = value.decode("utf-8", errors="replace")
+    return env
+
+
+def _is_sglang_server_command(command: str) -> bool:
+    lowered = command.lower()
+    sglang_markers = (
+        "sglang.launch_server",
+        "sglang.srt",
+        "sglang-kt",
+        "kt-sglang",
+        "sglang_kt",
+        "kt_sglang",
+    )
+    return any(marker in lowered for marker in sglang_markers) or (
+        "sglang" in lowered and "launch_server" in lowered
+    )
+
+
+def _regular_file_fd_path(pid: int, fd: int) -> str | None:
+    try:
+        target = os.readlink(f"/proc/{pid}/fd/{fd}")
+    except OSError:
+        return None
+    if target.endswith(" (deleted)"):
+        return None
+    if not target.startswith("/"):
+        return None
+    try:
+        if Path(target).is_file():
+            return target
+    except OSError:
+        return None
+    return None
+
+
+def _sglang_log_source_paths(pid: int) -> tuple[str, ...]:
+    candidates = []
+    env = _read_proc_environ(pid)
+    launch_log = env.get("SGLANG_LAUNCH_LOG")
+    if launch_log and Path(launch_log).is_file():
+        candidates.append(launch_log)
+
+    for fd in (1, 2):
+        fd_path = _regular_file_fd_path(pid, fd)
+        if fd_path:
+            candidates.append(fd_path)
+
+    unique = []
+    for path in candidates:
+        if path not in unique:
+            unique.append(path)
+    return tuple(unique)
+
+
+def identify_sglang_process(base_url: str) -> SGLangProcessInfo:
+    host, port = _base_url_host_port(base_url)
+    if port is None:
+        return SGLangProcessInfo(status=f"could not determine port from base URL: {base_url}")
+    if not _is_local_host(host):
+        return SGLangProcessInfo(status=f"base URL host is not local: {host}")
+
+    inodes = _listening_socket_inodes(port)
+    if not inodes:
+        return SGLangProcessInfo(status=f"no local listening socket found for port {port}")
+
+    pids = sorted(_pids_for_socket_inodes(inodes))
+    if not pids:
+        return SGLangProcessInfo(status=f"no process fd matched listening socket on port {port}")
+
+    process_infos = []
+    for pid in pids:
+        command = _read_proc_cmdline(pid)
+        process_infos.append((pid, command, _is_sglang_server_command(command)))
+
+    sglang_infos = [item for item in process_infos if item[2]]
+    if sglang_infos:
+        pid, command, _ = sglang_infos[0]
+        return SGLangProcessInfo(
+            pid=pid,
+            command=command,
+            source_paths=_sglang_log_source_paths(pid),
+            status="matched local SGLang listener",
+        )
+
+    pid, command, _ = process_infos[0]
+    return SGLangProcessInfo(
+        pid=pid,
+        command=command,
+        source_paths=_sglang_log_source_paths(pid),
+        status=f"matched local listener on port {port}, but command was not recognized as SGLang",
+    )
 
 
 def _headers(api_key: str | None) -> dict[str, str]:
@@ -208,6 +425,132 @@ def fetch_sglang_model_metadata(base_url: str, api_key: str | None = None) -> SG
         architectures=architectures,
         error="; ".join(errors),
     )
+
+
+def _percentile_from_sorted(values: list[float], percentile: float) -> float | None:
+    if not values:
+        return None
+    idx = int(percentile * len(values))
+    idx = min(idx, len(values) - 1)
+    return values[idx]
+
+
+def _batch_stats(values: list[float]) -> BatchThroughputStats:
+    if not values:
+        return BatchThroughputStats()
+    sorted_values = sorted(values)
+    return BatchThroughputStats(
+        count=len(values),
+        mean=statistics.mean(values),
+        median=statistics.median(values),
+        p95=_percentile_from_sorted(sorted_values, 0.95),
+        max=max(values),
+    )
+
+
+def parse_sglang_batch_throughput_text(text: str) -> tuple[BatchThroughputStats, BatchThroughputStats]:
+    prefill_values = [float(match.group(1)) for match in _PREFILL_BATCH_RE.finditer(text)]
+    decode_values = [float(match.group(1)) for match in _DECODE_BATCH_RE.finditer(text)]
+    return _batch_stats(prefill_values), _batch_stats(decode_values)
+
+
+def parse_sglang_batch_throughput_log(log_path: str | Path) -> tuple[BatchThroughputStats, BatchThroughputStats]:
+    try:
+        text = Path(log_path).read_text(errors="replace")
+    except OSError:
+        return BatchThroughputStats(), BatchThroughputStats()
+    return parse_sglang_batch_throughput_text(text)
+
+
+class SGLangBatchMetricsCollector:
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+        self.process = SGLangProcessInfo()
+        self._stop = threading.Event()
+        self._threads: list[threading.Thread] = []
+        self._lock = threading.Lock()
+        self._chunks: list[str] = []
+        self._errors: list[str] = []
+        self._status = "not started"
+
+    def start(self) -> None:
+        self.process = identify_sglang_process(self.base_url)
+        source_paths = [Path(path) for path in self.process.source_paths]
+        if not source_paths:
+            self._status = "no readable SGLang log source found; batch stats unavailable"
+            return
+
+        self._status = "reading existing SGLang log source(s)"
+        for source_path in source_paths:
+            thread = threading.Thread(target=self._tail_source, args=(source_path,), daemon=True)
+            thread.start()
+            self._threads.append(thread)
+
+    @property
+    def has_log_source(self) -> bool:
+        return bool(self.process.source_paths)
+
+    def stop(self) -> SGLangBatchThroughputReport:
+        self._stop.set()
+        for thread in self._threads:
+            thread.join(timeout=2)
+
+        with self._lock:
+            text = "".join(self._chunks)
+            errors = tuple(self._errors)
+        prefill_stats, decode_stats = parse_sglang_batch_throughput_text(text)
+        status = self._status
+        if errors:
+            status = f"{status}; {'; '.join(errors)}"
+        return SGLangBatchThroughputReport(
+            process=self.process,
+            prefill_input_tokens_per_sec=prefill_stats,
+            decode_generation_tokens_per_sec=decode_stats,
+            status=status,
+        )
+
+    def _tail_source(self, source_path: Path) -> None:
+        try:
+            with source_path.open("r", encoding="utf-8", errors="replace") as source:
+                source.seek(0, os.SEEK_END)
+                while not self._stop.is_set():
+                    chunk = source.read()
+                    if chunk:
+                        self._append_chunk(chunk)
+                    else:
+                        time.sleep(0.2)
+                chunk = source.read()
+                if chunk:
+                    self._append_chunk(chunk)
+        except OSError as exc:
+            with self._lock:
+                self._errors.append(f"unable to read SGLang source log {source_path}: {exc}")
+
+    def _append_chunk(self, text: str) -> None:
+        with self._lock:
+            self._chunks.append(text)
+
+
+def prompt_continue_without_sglang_logs(process: SGLangProcessInfo) -> bool:
+    print()
+    print("WARNING: SGLang is not outputting to any readable log source.")
+    print("Batch prefill/decode throughput will be reported as N/A.")
+    if process.status:
+        print(f"Process status: {process.status}")
+    if process.pid is not None:
+        print(f"Process pid: {process.pid}")
+
+    while True:
+        try:
+            answer = input("Continue benchmark anyway? [y/N]: ").strip().lower()
+        except EOFError:
+            print("No response available; aborting benchmark.")
+            return False
+        if answer in {"y", "yes"}:
+            return True
+        if answer in {"n", "no"}:
+            return False
+        print("Unknown input. Please answer 'y' for yes or 'n' for no.")
 
 
 def sglang_display_model_name(metadata: SGLangModelMetadata, fallback: str) -> str:
@@ -515,6 +858,42 @@ def _histogram_enabled(summary: HistogramSummary) -> str:
     if summary.count <= 0:
         return "not observed"
     return f"enabled ({_fmt_int(summary.count)} samples)"
+
+
+def _fmt_batch_stat(value: float | None) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:.2f}"
+
+
+def print_sglang_batch_throughput_report(report: SGLangBatchThroughputReport | None) -> None:
+    print("\n" + "=" * 60)
+    print()
+    print("SGLang scheduler batch log:")
+    if report is None:
+        print("  Status:                        unavailable")
+        return
+
+    print(f"  Status:                        {report.status}")
+    print(f"  Process status:                {report.process.status}")
+    print(f"  Process pid:                   {_fmt_int(report.process.pid)}")
+    if report.process.command:
+        print(f"  Process command:               {report.process.command}")
+    if report.process.source_paths:
+        print(f"  Source log(s):                 {', '.join(report.process.source_paths)}")
+    else:
+        print("  Source log(s):                 N/A")
+
+    def print_stats(label: str, stats: BatchThroughputStats) -> None:
+        print(f"\n  {label}:")
+        print(f"    Samples:                     {_fmt_int(stats.count)}")
+        print(f"    Mean tok/s:                  {_fmt_batch_stat(stats.mean)}")
+        print(f"    Median tok/s:                {_fmt_batch_stat(stats.median)}")
+        print(f"    P95 tok/s:                   {_fmt_batch_stat(stats.p95)}")
+        print(f"    Max tok/s:                   {_fmt_batch_stat(stats.max)}")
+
+    print_stats("Prefill batch input throughput", report.prefill_input_tokens_per_sec)
+    print_stats("Decode batch generation throughput", report.decode_generation_tokens_per_sec)
 
 
 def print_sglang_metrics_report(

@@ -1,27 +1,58 @@
 #!/usr/bin/env bash
 
+launch_tools_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tools/sglang_launch_logging.sh
+source "$launch_tools_dir/sglang_launch_logging.sh"
+
 usage() {
   cat >&2 <<EOF
 Usage: $(basename "$0") <config.env>
+       $(basename "$0") [--log|--logs] <config.env>
 
 Example:
   $(basename "$0") envs/qwen35_122b_a10b_fp8/h200.env
+  $(basename "$0") --log envs/qwen35_122b_a10b_fp8/h200.env
 EOF
 }
 
 load_launch_config() {
-  if [[ $# -ne 1 ]]; then
+  local config_file=""
+  LAUNCH_ENABLE_LOG=0
+
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --log|--logs)
+        LAUNCH_ENABLE_LOG=1
+        ;;
+      -*)
+        echo "Error: unknown launch option: $arg" >&2
+        usage
+        exit 2
+        ;;
+      *)
+        if [[ -n "$config_file" ]]; then
+          echo "Error: expected exactly one config file; got '$config_file' and '$arg'." >&2
+          usage
+          exit 2
+        fi
+        config_file="$arg"
+        ;;
+    esac
+  done
+
+  if [[ -z "$config_file" ]]; then
     echo "Error: needs a config file." >&2
     usage
     exit 2
   fi
 
-  local config_file="$1"
   if [[ ! -f "$config_file" ]]; then
     echo "Error: config file not found: $config_file" >&2
     usage
     exit 2
   fi
+  LAUNCH_CONFIG_FILE="$config_file"
 
   : "${HF_HOME:?HF_HOME must be set to the Hugging Face model cache path}"
   HF_HUB_CACHE="${HF_HUB_CACHE:-$HF_HOME/hub}"

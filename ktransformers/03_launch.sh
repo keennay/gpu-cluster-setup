@@ -5,6 +5,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tools/launch_config.sh
 source "$script_dir/tools/launch_config.sh"
 load_launch_config "$@"
+setup_sglang_launch_log "$script_dir" "$(basename "$0" .sh)"
 recorder_dir="$script_dir/experts/$EXPERTS_PATH/01"
 
 if [[ ! -d "$recorder_dir" ]]; then
