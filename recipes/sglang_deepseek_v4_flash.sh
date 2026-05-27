@@ -289,6 +289,8 @@ main() {
     base_command+=" --tool-call-parser deepseekv4"
     base_command+=" --context-length $MAX_MODEL_LEN"
     base_command+=" --mem-fraction-static ${GPU_MEM_UTIL}"
+    base_command+=" --enable-metrics"
+    base_command+=" --collect-tokens-histogram"
     base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
     base_command+=" --port $INFERENCE_PORT"
     base_command+=" --api-key YOUR_API_KEY"

@@ -202,6 +202,8 @@ def _is_sglang_server_command(command: str) -> bool:
     sglang_markers = (
         "sglang.launch_server",
         "sglang.srt",
+        "sglang serve",
+        "/sglang serve",
         "sglang-kt",
         "kt-sglang",
         "sglang_kt",
