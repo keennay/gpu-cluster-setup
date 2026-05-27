@@ -17,6 +17,39 @@ EXTRA_ARGS=""
 ENABLE_SPECULATIVE=0
 POSITIONAL_ARGS=()
 
+RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+LOG_SUFFIX="${INFERENCE_PROVIDER,,}"
+case "$LOG_SUFFIX" in
+    vllm|sglang)
+        ;;
+    *)
+        echo "Error: unsupported inference provider for logging: $INFERENCE_PROVIDER" >&2
+        exit 1
+        ;;
+esac
+LOG_DIR="$RECIPE_DIR/logs"
+LOG_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+LAUNCH_LOG="$LOG_DIR/${LOG_TIMESTAMP}_${LOG_SUFFIX}.log"
+LAUNCH_LOG_REL="./logs/${LOG_TIMESTAMP}_${LOG_SUFFIX}.log"
+if ! mkdir -p "$LOG_DIR"; then
+    echo "Error: unable to create log directory: $LOG_DIR" >&2
+    exit 1
+fi
+if ! : > "$LAUNCH_LOG"; then
+    echo "Error: unable to write log file: $LAUNCH_LOG" >&2
+    exit 1
+fi
+if [ "$LOG_SUFFIX" = "sglang" ]; then
+    SGLANG_LAUNCH_LOG="$LAUNCH_LOG"
+    export SGLANG_LAUNCH_LOG
+else
+    VLLM_LAUNCH_LOG="$LAUNCH_LOG"
+    export VLLM_LAUNCH_LOG
+fi
+exec > >(tee -a "$LAUNCH_LOG") 2>&1
+echo "$INFERENCE_PROVIDER log: $LAUNCH_LOG_REL"
+echo "Full log path: $LAUNCH_LOG"
+
 echo ""
 echo "$MODEL_REPO $INFERENCE_PROVIDER Launcher"
 
