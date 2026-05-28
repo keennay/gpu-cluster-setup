@@ -1,10 +1,13 @@
 import argparse
 import asyncio
+import json
+import os
 import random
 import statistics
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +27,21 @@ from benchmark_sglang_metrics import (
 )
 
 
-DEFAULT_DATASET_PATH = "/workspace/datasets/swe-zero-12m"
+DEFAULT_DATASET_REPO_ID = "AlienKevin/SWE-ZERO-12M-trajectories"
+DEFAULT_DATASET_CACHE_DIR = "datasets--AlienKevin--SWE-ZERO-12M-trajectories"
+DEFAULT_PREFIX_INDEX_CACHE_DIR = f"{DEFAULT_DATASET_CACHE_DIR}-prefix-index"
+INPUT_BAND_CHOICES = ("1k", "2k", "4k", "8k", "12k", "16k", "20k")
+INPUT_BAND_RANGES = {
+    "1k": (1000, 2000),
+    "2k": (2000, 3000),
+    "4k": (4000, 5000),
+    "8k": (8000, 9000),
+    "12k": (12000, 13000),
+    "16k": (16000, 17000),
+    "20k": (20000, 21000),
+}
+INPUT_BAND_HELP = "Select between " + ", ".join(INPUT_BAND_CHOICES)
+FULL_PREFIX_SENTINEL = 65535
 
 
 @dataclass(frozen=True)
@@ -67,6 +84,68 @@ DEFAULT_MIN_OUTPUT = min(bucket.min_tokens for bucket in OUTPUT_TOKEN_BUCKETS)
 DEFAULT_MAX_OUTPUT = max(bucket.max_tokens for bucket in OUTPUT_TOKEN_BUCKETS)
 
 
+def resolve_required_hf_hub_cache() -> tuple[Path | None, str]:
+    value = os.environ.get("HF_HUB_CACHE")
+    if not value:
+        return None, "HF_HUB_CACHE is not set"
+    return Path(value).expanduser(), ""
+
+
+def is_swezero_dataset_root(path: Path) -> bool:
+    data_dir = path / "data"
+    return data_dir.is_dir() and any(data_dir.glob("*.parquet"))
+
+
+def resolve_cached_swezero_dataset() -> tuple[Path | None, list[str]]:
+    hub_cache, error = resolve_required_hf_hub_cache()
+    if error:
+        return None, [error]
+
+    repo_cache = hub_cache / DEFAULT_DATASET_CACHE_DIR
+    snapshots_dir = repo_cache / "snapshots"
+    looked = [
+        f"HF_HUB_CACHE resolved to: {hub_cache}",
+        f"dataset cache repo: {repo_cache}",
+    ]
+
+    if not snapshots_dir.is_dir():
+        looked.append(f"snapshots directory not found: {snapshots_dir}")
+        return None, looked
+
+    refs_main = repo_cache / "refs" / "main"
+    if refs_main.is_file():
+        revision = refs_main.read_text().strip()
+        if revision:
+            snapshot = snapshots_dir / revision
+            looked.append(f"refs/main snapshot: {snapshot}")
+            if is_swezero_dataset_root(snapshot):
+                return snapshot, looked
+
+    snapshots = sorted(
+        [path for path in snapshots_dir.iterdir() if path.is_dir()],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for snapshot in snapshots:
+        looked.append(f"snapshot candidate: {snapshot}")
+        if is_swezero_dataset_root(snapshot):
+            return snapshot, looked
+
+    looked.append(f"no snapshot containing data/*.parquet found under: {snapshots_dir}")
+    return None, looked
+
+
+def default_prefix_index_path() -> tuple[Path | None, str]:
+    hub_cache, error = resolve_required_hf_hub_cache()
+    if error:
+        return None, error
+    return hub_cache / DEFAULT_PREFIX_INDEX_CACHE_DIR, ""
+
+
+def prefix_index_build_command() -> str:
+    return "python tools/benchmark_build_swezero_prefix_index.py"
+
+
 @dataclass
 class RequestSample:
     request_id: int
@@ -81,6 +160,14 @@ class RequestSample:
     repo: str
     exit_status: str
     shard_name: str
+
+
+@dataclass(frozen=True)
+class IndexedCandidate:
+    approx_tokens: int
+    shard_id: int
+    row_in_shard: int
+    prefix_end_index: int
 
 
 @dataclass
@@ -109,7 +196,7 @@ Example usage:
   python benchmark_swezero.py --preview-samples 2
   python benchmark_swezero.py --model kimi_k2 --num-prompts 100 --concurrency 2 --timeout 3600
   python benchmark_swezero.py --model kimi_k2 --num-prompts 1000 --seed 42
-  python benchmark_swezero.py --dataset-path {DEFAULT_DATASET_PATH} --preview-samples 3
+  python benchmark_swezero.py --dataset-path /path/to/SWE-ZERO-12M-trajectories --preview-samples 3
         """,
     )
 
@@ -117,7 +204,15 @@ Example usage:
     required.add_argument("--model", type=str, required=False, help="Model name (required for live benchmark)")
 
     optional = parser.add_argument_group("optional arguments (with defaults)")
-    optional.add_argument("--dataset-path", type=str, default=DEFAULT_DATASET_PATH, help=f"SWE-ZERO dataset root (default: {DEFAULT_DATASET_PATH})")
+    optional.add_argument(
+        "--dataset-path",
+        type=str,
+        default=None,
+        help=(
+            "Override SWE-ZERO dataset root. Default resolves "
+            f"{DEFAULT_DATASET_REPO_ID} from HF_HUB_CACHE."
+        ),
+    )
     optional.add_argument("--api-key", type=str, default="YOUR_API_KEY", help="API key (default: YOUR_API_KEY)")
     optional.add_argument("--concurrency", type=int, default=100, help="Number of concurrent requests (default: 100)")
     optional.add_argument("--num-prompts", type=int, default=100, help="Total number of prompts to run (default: 100)")
@@ -126,6 +221,23 @@ Example usage:
     optional.add_argument("--label", dest="run_label", type=str, help="Display label for benchmark/result headers (default: model name)")
     optional.add_argument("--min-input", type=int, default=DEFAULT_MIN_INPUT, help=f"Minimum approximate input tokens (default: {DEFAULT_MIN_INPUT})")
     optional.add_argument("--max-input", type=int, default=DEFAULT_MAX_INPUT, help=f"Maximum approximate input tokens (default: {DEFAULT_MAX_INPUT})")
+    optional.add_argument(
+        "--input",
+        dest="input_band",
+        type=str,
+        help=f"Use a precomputed prefix input band index. {INPUT_BAND_HELP}.",
+    )
+    optional.add_argument(
+        "--prefix-index-path",
+        type=str,
+        default=None,
+        help=f"Prefix input-band index path (default: HF_HUB_CACHE/{DEFAULT_PREFIX_INDEX_CACHE_DIR})",
+    )
+    optional.add_argument(
+        "--sample-with-replacement",
+        action="store_true",
+        help="Allow indexed --input sampling to reuse candidates when --num-prompts exceeds the indexed pool",
+    )
     optional.add_argument("--min-output", type=int, default=DEFAULT_MIN_OUTPUT, help=f"Minimum output tokens (default: {DEFAULT_MIN_OUTPUT})")
     optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum output tokens (default: {DEFAULT_MAX_OUTPUT})")
     optional.add_argument("--timeout", type=int, default=600, help="Timeout per request in seconds (default: 600)")
@@ -155,6 +267,13 @@ Example usage:
     args = parser.parse_args()
 
     errors = []
+    input_range_was_explicit = any(
+        arg == "--min-input"
+        or arg.startswith("--min-input=")
+        or arg == "--max-input"
+        or arg.startswith("--max-input=")
+        for arg in sys.argv[1:]
+    )
     if args.run_label is not None:
         args.run_label = args.run_label.strip()
         if not args.run_label:
@@ -180,11 +299,88 @@ Example usage:
     if args.preview_samples == 0 and not args.model:
         errors.append("--model is required unless --preview-samples is used")
 
-    dataset_root = Path(args.dataset_path)
-    if not dataset_root.exists():
-        errors.append(f"--dataset-path does not exist: {dataset_root}")
-    elif not (dataset_root / "data").is_dir():
-        errors.append(f"--dataset-path must contain a data/ directory: {dataset_root}")
+    if args.dataset_path:
+        dataset_root = Path(args.dataset_path).expanduser()
+        if not dataset_root.exists():
+            errors.append(f"--dataset-path does not exist: {dataset_root}")
+        elif not is_swezero_dataset_root(dataset_root):
+            errors.append(f"--dataset-path must contain a data/ directory with Parquet shards: {dataset_root}")
+        else:
+            args.dataset_path = str(dataset_root)
+    else:
+        dataset_root, lookup_notes = resolve_cached_swezero_dataset()
+        if dataset_root is None:
+            errors.append(
+                "Unable to find default SWE-ZERO dataset in the Hugging Face Hub cache. "
+                f"Expected repo cache for {DEFAULT_DATASET_REPO_ID} under HF_HUB_CACHE. "
+                "Download it with: hf download AlienKevin/SWE-ZERO-12M-trajectories --repo-type dataset. "
+                "Or pass --dataset-path /path/to/SWE-ZERO-12M-trajectories. "
+                + " ".join(lookup_notes)
+            )
+        else:
+            args.dataset_path = str(dataset_root)
+
+    if args.input_band:
+        args.input_band = args.input_band.strip().lower()
+        if args.input_band not in INPUT_BAND_RANGES:
+            errors.append(f"Invalid --input value: {args.input_band}. {INPUT_BAND_HELP}.")
+        if args.trajectory_mode != "prefix":
+            errors.append(
+                "--input requires --trajectory-mode prefix. "
+                "Reason: indexed input bands are built from prefix-mode user-ending conversation prefixes."
+            )
+        if input_range_was_explicit:
+            errors.append("--input cannot be combined with --min-input/--max-input; it uses indexed half-open input bands.")
+        if args.exit_status != "any":
+            errors.append("--input currently requires --exit-status any because the prefix index is built across all exit statuses.")
+
+        if args.input_band in INPUT_BAND_RANGES:
+            lower, upper = INPUT_BAND_RANGES[args.input_band]
+            args.min_input = lower
+            args.max_input = upper - 1
+
+        if not args.prefix_index_path:
+            default_index_path, index_error = default_prefix_index_path()
+            if index_error:
+                errors.append(
+                    f"--input requires HF_HUB_CACHE to locate the default prefix index. "
+                    f"{index_error}. Pass --prefix-index-path or set HF_HUB_CACHE."
+                )
+            else:
+                args.prefix_index_path = str(default_index_path)
+        if args.prefix_index_path:
+            index_root = Path(args.prefix_index_path)
+            if not index_root.exists():
+                errors.append(
+                    f"Prefix index not found at {index_root}. "
+                    f"Build it first with `{prefix_index_build_command()}` or pass --prefix-index-path. {INPUT_BAND_HELP}."
+                )
+            elif args.input_band in INPUT_BAND_RANGES:
+                band_dir = index_root / f"band={args.input_band}"
+                metadata_path = index_root / "metadata.json"
+                if not metadata_path.is_file():
+                    errors.append(f"Prefix index metadata not found at {metadata_path}.")
+                else:
+                    try:
+                        metadata = json.loads(metadata_path.read_text())
+                        band_info = (metadata.get("bands") or {}).get(args.input_band) or {}
+                        candidate_count = int(band_info.get("count", 0))
+                        requested_samples = args.preview_samples if args.preview_samples > 0 else args.num_prompts
+                        if candidate_count < 1:
+                            errors.append(f"Prefix index band {args.input_band} is empty. {INPUT_BAND_HELP}.")
+                        elif requested_samples > candidate_count and not args.sample_with_replacement:
+                            errors.append(
+                                f"Requested {requested_samples} samples from --input {args.input_band}, "
+                                f"but only {candidate_count} indexed candidates are available. "
+                                f"Use --num-prompts <= {candidate_count} or pass --sample-with-replacement to allow repeats. "
+                                f"{INPUT_BAND_HELP}."
+                            )
+                    except Exception as exc:
+                        errors.append(f"Could not read prefix index metadata at {metadata_path}: {exc}")
+                if not band_dir.is_dir() or not list(band_dir.glob("*.parquet")):
+                    errors.append(f"Prefix index band not found at {band_dir}. {INPUT_BAND_HELP}.")
+    elif args.sample_with_replacement:
+        errors.append("--sample-with-replacement requires --input.")
 
     if errors:
         print("ERROR: Invalid arguments:")
@@ -213,6 +409,9 @@ TIMEOUT_PER_REQUEST = args.timeout
 WARMUP_REQUESTS = args.warmup
 MIN_INPUT_TOKENS = args.min_input
 MAX_INPUT_TOKENS = args.max_input
+INPUT_BAND = args.input_band
+PREFIX_INDEX_PATH = Path(args.prefix_index_path) if args.prefix_index_path else None
+SAMPLE_WITH_REPLACEMENT = args.sample_with_replacement
 MIN_OUTPUT_TOKENS = args.min_output
 MAX_OUTPUT_TOKENS = args.max_output
 IGNORE_EOS = not args.no_ignore_eos
@@ -264,6 +463,18 @@ def import_pyarrow_parquet():
         print("  uv pip install --python /home/user/env_custom_uv/bin/python pyarrow")
         sys.exit(1)
     return pq
+
+
+def load_indexed_source_rows(shard_path: str, row_ids: list[int]) -> tuple[str, dict[int, dict]]:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(
+        shard_path,
+        columns=["instance_id", "repo", "messages", "exit_status", "duration_sec"],
+    )
+    selected = table.take(pa.array(row_ids, type=pa.int64()))
+    return shard_path, dict(zip(row_ids, selected.to_pylist()))
 
 
 def estimate_tokens(text: str) -> int:
@@ -538,6 +749,252 @@ class SweZeroSampler:
         )
 
 
+class SweZeroIndexedSampler:
+    def __init__(
+        self,
+        dataset_path: Path,
+        index_path: Path,
+        input_band: str,
+        sample_count: int,
+        sample_with_replacement: bool,
+    ):
+        self.dataset_path = dataset_path
+        self.data_dir = dataset_path / "data"
+        self.index_path = index_path
+        self.input_band = input_band
+        self.sample_with_replacement = sample_with_replacement
+        self.pq = import_pyarrow_parquet()
+        self.shards = sorted(self.data_dir.glob("*.parquet"))
+        if not self.shards:
+            print(f"ERROR: No Parquet shards found under {self.data_dir}")
+            print("Expected files like data/train-00000.parquet")
+            sys.exit(1)
+
+        self.metadata = self.load_metadata()
+        self.pool_size = self.band_pool_size()
+        if sample_count > self.pool_size and not sample_with_replacement:
+            raise RuntimeError(
+                f"Requested --num-prompts {sample_count} from --input {input_band}, "
+                f"but only {self.pool_size} indexed candidates are available. "
+                f"Use --num-prompts <= {self.pool_size} or pass --sample-with-replacement to allow repeats. "
+                f"{INPUT_BAND_HELP}."
+            )
+        if sample_count > self.pool_size and sample_with_replacement:
+            print(
+                f"WARNING: Sampling with replacement: requested {sample_count} prompts from "
+                f"{self.pool_size} indexed {input_band} candidates. Some prompts will repeat."
+            )
+
+        self.candidates = self.load_selected_candidates(sample_count)
+        self._next_candidate = 0
+        self._rows_needed_by_shard: dict[int, set[int]] = {}
+        for candidate in self.candidates:
+            self._rows_needed_by_shard.setdefault(candidate.shard_id, set()).add(candidate.row_in_shard)
+        self._shard_cache: dict[int, dict[int, dict]] = {}
+
+    def load_metadata(self) -> dict:
+        metadata_path = self.index_path / "metadata.json"
+        try:
+            return json.loads(metadata_path.read_text())
+        except Exception as exc:
+            raise RuntimeError(f"Could not read prefix index metadata at {metadata_path}: {exc}") from exc
+
+    def band_pool_size(self) -> int:
+        bands = self.metadata.get("bands") or {}
+        band_info = bands.get(self.input_band)
+        if not band_info:
+            raise RuntimeError(f"Prefix index does not contain --input {self.input_band}. {INPUT_BAND_HELP}.")
+        count = int(band_info.get("count", 0))
+        if count < 1:
+            raise RuntimeError(f"Prefix index band {self.input_band} is empty. {INPUT_BAND_HELP}.")
+        return count
+
+    def validate_shard_map(self):
+        indexed_shards = self.metadata.get("shards") or []
+        if len(indexed_shards) != len(self.shards):
+            raise RuntimeError(
+                f"Prefix index shard count ({len(indexed_shards)}) does not match dataset shard count ({len(self.shards)}). "
+                "Rebuild the prefix index for this dataset."
+            )
+        for idx, shard in enumerate(self.shards):
+            expected = indexed_shards[idx]
+            if expected != shard.name:
+                raise RuntimeError(
+                    f"Prefix index shard mismatch at id {idx}: index has {expected}, dataset has {shard.name}. "
+                    "Rebuild the prefix index for this dataset."
+                )
+
+    def load_band_table(self):
+        import pyarrow as pa
+
+        band_dir = self.index_path / f"band={self.input_band}"
+        files = sorted(band_dir.glob("*.parquet"))
+        if not files:
+            raise RuntimeError(f"Prefix index band not found at {band_dir}. {INPUT_BAND_HELP}.")
+
+        columns = ["approx_tokens", "shard_id", "row_in_shard", "prefix_end_index"]
+        tables = [self.pq.read_table(path, columns=columns) for path in files]
+        if len(tables) == 1:
+            return tables[0]
+        return pa.concat_tables(tables)
+
+    def select_positions(self, sample_count: int) -> list[int]:
+        positions = []
+        if self.sample_with_replacement:
+            for _ in range(sample_count):
+                positions.append(random.randrange(self.pool_size))
+            return positions
+
+        seen = set()
+        while len(positions) < sample_count:
+            position = random.randrange(self.pool_size)
+            if position in seen:
+                continue
+            seen.add(position)
+            positions.append(position)
+        return positions
+
+    def load_selected_candidates(self, sample_count: int) -> list[IndexedCandidate]:
+        import pyarrow as pa
+
+        self.validate_shard_map()
+        positions = self.select_positions(sample_count)
+        table = self.load_band_table()
+        if table.num_rows != self.pool_size:
+            raise RuntimeError(
+                f"Prefix index metadata says {self.pool_size} rows for {self.input_band}, "
+                f"but the Parquet index contains {table.num_rows}. Rebuild the prefix index."
+            )
+
+        selected = table.take(pa.array(positions, type=pa.int64()))
+        approx_tokens = selected.column("approx_tokens").to_pylist()
+        shard_ids = selected.column("shard_id").to_pylist()
+        row_ids = selected.column("row_in_shard").to_pylist()
+        prefix_end_indices = selected.column("prefix_end_index").to_pylist()
+        return [
+            IndexedCandidate(
+                approx_tokens=int(approx_tokens[idx]),
+                shard_id=int(shard_ids[idx]),
+                row_in_shard=int(row_ids[idx]),
+                prefix_end_index=int(prefix_end_indices[idx]),
+            )
+            for idx in range(sample_count)
+        ]
+
+    def preload_source_rows(self, *, show_progress: bool):
+        tasks = [
+            (shard_id, str(self.shards[shard_id]), sorted(row_ids))
+            for shard_id, row_ids in self._rows_needed_by_shard.items()
+        ]
+        if not tasks:
+            return
+
+        worker_count = min(16, len(tasks))
+        if show_progress:
+            print(f"Loading indexed source rows from {len(tasks)} shards with {worker_count} workers...")
+
+        path_to_shard_id = {str(self.shards[shard_id]): shard_id for shard_id, _, _ in tasks}
+        with ThreadPoolExecutor(max_workers=worker_count) as pool:
+            futures = [
+                pool.submit(load_indexed_source_rows, shard_path, row_ids)
+                for _, shard_path, row_ids in tasks
+            ]
+            for completed, future in enumerate(as_completed(futures), start=1):
+                shard_path, rows = future.result()
+                self._shard_cache[path_to_shard_id[shard_path]] = rows
+                if show_progress and len(futures) >= 20 and (completed % max(1, len(futures) // 20) == 0):
+                    print(f"\rLoaded source shards: {completed}/{len(futures)}", end="", flush=True)
+
+        if show_progress and len(tasks) >= 20:
+            print()
+
+    def load_source_row(self, candidate: IndexedCandidate) -> tuple[dict, str]:
+        import pyarrow as pa
+
+        if candidate.shard_id < 0 or candidate.shard_id >= len(self.shards):
+            raise RuntimeError(f"Indexed candidate has invalid shard_id {candidate.shard_id}. Rebuild the prefix index.")
+        if candidate.shard_id not in self._shard_cache:
+            row_ids = sorted(self._rows_needed_by_shard.get(candidate.shard_id, {candidate.row_in_shard}))
+            table = self.pq.read_table(
+                self.shards[candidate.shard_id],
+                columns=["instance_id", "repo", "messages", "exit_status", "duration_sec"],
+            )
+            selected = table.take(pa.array(row_ids, type=pa.int64()))
+            self._shard_cache[candidate.shard_id] = dict(zip(row_ids, selected.to_pylist()))
+
+        rows = self._shard_cache[candidate.shard_id]
+        if candidate.row_in_shard not in rows:
+            raise RuntimeError(
+                f"Indexed candidate row {candidate.row_in_shard} is outside shard {self.shards[candidate.shard_id].name}. "
+                "Rebuild the prefix index."
+            )
+        return rows[candidate.row_in_shard], self.shards[candidate.shard_id].name
+
+    def normalize_chat_messages(self, messages: list[dict]) -> list[dict]:
+        chat_messages = []
+        valid_roles = {"system", "user", "assistant"}
+        for message in messages:
+            role = message.get("role") or "user"
+            if role not in valid_roles:
+                role = "user"
+            content = message.get("content") or ""
+            if content:
+                chat_messages.append({"role": role, "content": content})
+
+        if not chat_messages:
+            return [{"role": "user", "content": "Continue the software-engineering task."}]
+        return chat_messages
+
+    def render_transcript(self, messages: list[dict]) -> str:
+        blocks = []
+        for message in messages:
+            role = message.get("role") or "unknown"
+            content = message.get("content") or ""
+            blocks.append(f"<{role}>\n{content}\n</{role}>")
+        return "\n\n".join(blocks)
+
+    def build_prompt(self, row: dict, candidate: IndexedCandidate) -> tuple[str, list[dict]]:
+        messages = row.get("messages") or []
+        if candidate.prefix_end_index == FULL_PREFIX_SENTINEL:
+            selected_messages = messages
+        else:
+            selected_messages = messages[: candidate.prefix_end_index + 1]
+        chat_messages = self.normalize_chat_messages(selected_messages)
+        return self.render_transcript(chat_messages), chat_messages
+
+    def sample_request(self, request_id: int, output_len: int, output_bucket: str) -> RequestSample:
+        if self._next_candidate >= len(self.candidates):
+            raise RuntimeError("Indexed sampler exhausted its selected candidates.")
+
+        candidate = self.candidates[self._next_candidate]
+        self._next_candidate += 1
+        row, shard_name = self.load_source_row(candidate)
+        prompt, messages = self.build_prompt(row, candidate)
+        approx_tokens = estimate_tokens(prompt)
+
+        lower, upper = INPUT_BAND_RANGES[self.input_band]
+        if not (lower <= approx_tokens < upper):
+            raise RuntimeError(
+                f"Indexed candidate for {self.input_band} rendered to {approx_tokens} approximate tokens, "
+                f"outside expected range {lower}-{upper - 1}. Rebuild the prefix index."
+            )
+
+        return RequestSample(
+            request_id=request_id,
+            prompt=prompt,
+            messages=messages,
+            input_len=approx_tokens,
+            input_bucket=self.input_band,
+            output_len=output_len,
+            output_bucket=output_bucket,
+            temperature=random.uniform(0.15, 0.45),
+            instance_id=row.get("instance_id") or "",
+            repo=row.get("repo") or "",
+            exit_status=row.get("exit_status") or "",
+            shard_name=shard_name,
+        )
+
+
 def print_bucket_profile(buckets: list[TokenBucket], descriptions: dict[str, str]):
     for bucket in buckets:
         print(
@@ -548,11 +1005,29 @@ def print_bucket_profile(buckets: list[TokenBucket], descriptions: dict[str, str
 
 
 def build_request_samples(sample_count: int, *, show_progress: bool) -> list[RequestSample]:
-    sampler = SweZeroSampler(DATASET_PATH, EXIT_STATUS_FILTER, TRAJECTORY_MODE)
+    if INPUT_BAND:
+        sampler = SweZeroIndexedSampler(
+            DATASET_PATH,
+            PREFIX_INDEX_PATH,
+            INPUT_BAND,
+            sample_count,
+            SAMPLE_WITH_REPLACEMENT,
+        )
+    else:
+        sampler = SweZeroSampler(DATASET_PATH, EXIT_STATUS_FILTER, TRAJECTORY_MODE)
     samples = []
 
     if show_progress:
-        print(f"Sampling {sample_count} prompts from {DATASET_PATH} ({len(sampler.shards)} parquet shards)...")
+        if INPUT_BAND:
+            print(
+                f"Sampling {sample_count} prompts from prefix index {PREFIX_INDEX_PATH} "
+                f"({INPUT_BAND}, {sampler.pool_size} candidates)..."
+            )
+        else:
+            print(f"Sampling {sample_count} prompts from {DATASET_PATH} ({len(sampler.shards)} parquet shards)...")
+
+    if INPUT_BAND:
+        sampler.preload_source_rows(show_progress=show_progress)
 
     for idx in range(sample_count):
         output_len, output_bucket = sample_output_tokens()
@@ -576,6 +1051,10 @@ def print_sample_preview():
     print(f"Trajectory mode:  {TRAJECTORY_MODE}")
     print(f"Exit status:      {EXIT_STATUS_FILTER}")
     print(f"Seed:             {RANDOM_SEED if RANDOM_SEED is not None else '(random)'}")
+    if INPUT_BAND:
+        lower, upper = INPUT_BAND_RANGES[INPUT_BAND]
+        print(f"Indexed input:    {INPUT_BAND} (>={lower} <{upper})")
+        print(f"Prefix index:     {PREFIX_INDEX_PATH}")
     print(f"Input clamp:      {MIN_INPUT_TOKENS} - {MAX_INPUT_TOKENS}")
     print(f"Output clamp:     {MIN_OUTPUT_TOKENS} - {MAX_OUTPUT_TOKENS}")
     print("\nInput bucket profile:")
@@ -813,6 +1292,11 @@ async def run_benchmark():
     print(f"Trajectory mode:     {TRAJECTORY_MODE}")
     print(f"Exit status:         {EXIT_STATUS_FILTER}")
     print(f"Seed:                {RANDOM_SEED if RANDOM_SEED is not None else '(random)'}")
+    if INPUT_BAND:
+        lower, upper = INPUT_BAND_RANGES[INPUT_BAND]
+        print(f"Indexed input:       {INPUT_BAND} (>={lower} <{upper})")
+        print(f"Prefix index:        {PREFIX_INDEX_PATH}")
+        print(f"Sample replacement:  {SAMPLE_WITH_REPLACEMENT}")
     print(f"Port:                {PORT}")
     print(f"Base URL:            {BASE_URL}")
     print(f"SGLang log source:   {sglang_log_sources}")
