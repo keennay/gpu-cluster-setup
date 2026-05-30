@@ -428,7 +428,9 @@ install_gemma_vllm() {
 install_glm_sglang() {
     print_info "Installing packages for GLM-4/5 (SGLang)..."
     
-    run_uv_install sglang
+    run_uv_install -U --prerelease=allow \
+        "sglang[all] @ git+https://github.com/sgl-project/sglang.git@1c2857b0646f12a58a04072f0f3d6bd649f064f2#subdirectory=python" \
+        "kernels==0.14.1"
 }
 
 install_glm_transformers() {

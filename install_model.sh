@@ -10,6 +10,8 @@ NC='\033[0m' # No Color
 # Default values
 DEFAULT_HF_PATH="/workspace/models/huggingface"
 DEFAULT_MODEL="PrimeIntellect/INTELLECT-2"
+DEFAULT_HF_DOWNLOAD_MAX_WORKERS=32
+DEFAULT_HF_XET_NUM_CONCURRENT_RANGE_GETS=32
 
 # Function to print colored output
 print_info() {
@@ -37,6 +39,45 @@ setup_directory() {
     else
         print_info "Directory already exists: $dir"
     fi
+}
+
+check_hf_fast_download_tooling() {
+    python3 - <<'PY'
+from importlib.metadata import PackageNotFoundError, version
+import shutil
+import sys
+
+missing = []
+
+try:
+    import huggingface_hub  # noqa: F401
+except ImportError:
+    missing.append("huggingface_hub")
+
+try:
+    import hf_xet  # noqa: F401
+except ImportError:
+    missing.append("hf-xet")
+
+if shutil.which("hf") is None:
+    missing.append("hf CLI")
+
+if missing:
+    print("Missing: " + ", ".join(missing), file=sys.stderr)
+    sys.exit(1)
+
+try:
+    hub_version = version("huggingface_hub")
+except PackageNotFoundError:
+    hub_version = "unknown"
+
+try:
+    xet_version = version("hf-xet")
+except PackageNotFoundError:
+    xet_version = "unknown"
+
+print(f"huggingface_hub {hub_version}, hf-xet {xet_version}, hf CLI ready")
+PY
 }
 
 # Parse command line arguments
@@ -71,6 +112,11 @@ while [[ $# -gt 0 ]]; do
             echo "  -q, --quantization TYPE   Download quantized version (e.g., 'GGUF', 'GPTQ')"
             echo "  --auto                    Use default settings without prompting"
             echo "  -h, --help               Show this help message"
+            echo ""
+            echo "Environment overrides:"
+            echo "  HF_DOWNLOAD_MAX_WORKERS             Parallel hf download workers (default: $DEFAULT_HF_DOWNLOAD_MAX_WORKERS)"
+            echo "  HF_XET_NUM_CONCURRENT_RANGE_GETS    Per-file Xet range concurrency (default: $DEFAULT_HF_XET_NUM_CONCURRENT_RANGE_GETS)"
+            echo "  HF_XET_HIGH_PERFORMANCE             Enable Xet high-performance mode (default: 1)"
             echo ""
             echo "Examples:"
             echo "  $0"
@@ -153,12 +199,25 @@ if [ -z "$VIRTUAL_ENV" ]; then
     exit 1
 fi
 
+case ":$PATH:" in
+    *":$VIRTUAL_ENV/bin:"*) ;;
+    *) export PATH="$VIRTUAL_ENV/bin:$PATH" ;;
+esac
+
 # Check if required packages are installed
-python3 -c "import huggingface_hub" 2>/dev/null
-if [ $? -ne 0 ]; then
-    print_error "Required Python package not installed"
-    print_info "Run source ./05_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment."
-    exit 1
+if ! check_hf_fast_download_tooling; then
+    print_warning "Installing/upgrading Hugging Face fast-download tooling in the active environment..."
+    if ! uv pip install -U "huggingface_hub[hf-xet]"; then
+        print_error "Failed to install Hugging Face Hub fast-download tooling"
+        print_info "Run source ./05_setup_env.sh first, then retry this script."
+        exit 1
+    fi
+
+    if ! check_hf_fast_download_tooling; then
+        print_error "Required Hugging Face tooling is still unavailable after install"
+        print_info "Make sure the active virtual environment exposes the modern 'hf' CLI and hf-xet package."
+        exit 1
+    fi
 fi
 
 # Interactive mode if no model specified
@@ -286,25 +345,49 @@ setup_directory "$HF_CACHE_PATH"
 # Export environment variables using the standard Hugging Face cache layout.
 export HF_HOME="$HF_PATH"
 export HF_HUB_CACHE="$HF_CACHE_PATH"
+export MODEL_NAME
+
+# Enable Hugging Face's current high-performance download path. These are read
+# by huggingface_hub at import time, so they must be exported before Python runs.
+export HF_DOWNLOAD_MAX_WORKERS="${HF_DOWNLOAD_MAX_WORKERS:-$DEFAULT_HF_DOWNLOAD_MAX_WORKERS}"
+export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
+export HF_XET_NUM_CONCURRENT_RANGE_GETS="${HF_XET_NUM_CONCURRENT_RANGE_GETS:-$DEFAULT_HF_XET_NUM_CONCURRENT_RANGE_GETS}"
+
+if ! [[ "$HF_DOWNLOAD_MAX_WORKERS" =~ ^[1-9][0-9]*$ ]]; then
+    print_error "HF_DOWNLOAD_MAX_WORKERS must be a positive integer"
+    exit 1
+fi
+
+if ! [[ "$HF_XET_NUM_CONCURRENT_RANGE_GETS" =~ ^[1-9][0-9]*$ ]]; then
+    print_error "HF_XET_NUM_CONCURRENT_RANGE_GETS must be a positive integer"
+    exit 1
+fi
+
+case "${HF_HUB_DISABLE_XET:-}" in
+    1|ON|On|on|YES|Yes|yes|TRUE|True|true)
+        print_warning "HF_HUB_DISABLE_XET is set; Hugging Face fast Xet downloads are disabled."
+        ;;
+esac
 
 print_info "Environment variables set:"
 print_info "  HF_HOME=$HF_HOME"
 print_info "  HF_HUB_CACHE=$HF_HUB_CACHE"
+print_info "  HF_XET_HIGH_PERFORMANCE=$HF_XET_HIGH_PERFORMANCE"
+print_info "  HF_XET_NUM_CONCURRENT_RANGE_GETS=$HF_XET_NUM_CONCURRENT_RANGE_GETS"
+print_info "  HF_DOWNLOAD_MAX_WORKERS=$HF_DOWNLOAD_MAX_WORKERS"
 
 # Create Python download script
 PYTHON_SCRIPT=$(mktemp /tmp/download_model_XXXXXX.py)
-cat > "$PYTHON_SCRIPT" << EOF
+cat > "$PYTHON_SCRIPT" << 'PY'
 #!/usr/bin/env python3
 import os
 import sys
 import json
 import hashlib
+import shlex
+import subprocess
 from pathlib import Path
 from datetime import datetime
-
-# Set environment variables before imports
-os.environ['HF_HOME'] = '$HF_PATH'
-os.environ['HF_HUB_CACHE'] = '$HF_CACHE_PATH'
 
 try:
     from huggingface_hub import snapshot_download, HfApi, scan_cache_dir
@@ -314,12 +397,16 @@ except ImportError as e:
     print("Run source ./05_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment.")
     sys.exit(1)
 
-model_name = "$MODEL_NAME"
+model_name = os.environ["MODEL_NAME"]
+download_max_workers = int(os.environ.get("HF_DOWNLOAD_MAX_WORKERS", "32"))
 
-print(f"\\n{'='*60}")
+print(f"\n{'='*60}")
 print(f"Model: {model_name}")
 print(f"Download location: {os.environ['HF_HUB_CACHE']}")
-print(f"{'='*60}\\n")
+print(f"hf download workers: {download_max_workers}")
+print(f"HF_XET_HIGH_PERFORMANCE: {os.environ.get('HF_XET_HIGH_PERFORMANCE', '')}")
+print(f"HF_XET_NUM_CONCURRENT_RANGE_GETS: {os.environ.get('HF_XET_NUM_CONCURRENT_RANGE_GETS', '')}")
+print(f"{'='*60}\n")
 
 def check_model_completeness(model_name, cache_dir):
     """
@@ -347,7 +434,7 @@ def check_model_completeness(model_name, cache_dir):
         print(f"Number of files expected: {len(expected_files)}")
         
         # Check local cache
-        print("\\nChecking local cache...")
+        print("\nChecking local cache...")
         cache_info = scan_cache_dir(cache_dir)
         
         # Find our model in cache
@@ -389,7 +476,7 @@ def check_model_completeness(model_name, cache_dir):
                 print(f"  ❌ Missing: {filename}")
         
         # Summary
-        print(f"\\nLocal cache summary:")
+        print(f"\nLocal cache summary:")
         print(f"  Total size on disk: {local_size / 1e9:.1f} GB")
         print(f"  Files found: {len(expected_files) - len(missing_files)}/{len(expected_files)}")
         
@@ -408,7 +495,7 @@ def check_model_completeness(model_name, cache_dir):
         is_complete = len(missing_files) == 0 and len(corrupted_files) == 0
         
         if is_complete:
-            print("\\n✅ Model is fully downloaded and verified!")
+            print("\n✅ Model is fully downloaded and verified!")
             # Get the local path
             try:
                 from huggingface_hub import model_info
@@ -421,7 +508,7 @@ def check_model_completeness(model_name, cache_dir):
             except:
                 return True, expected_files, local_size, None
         else:
-            print("\\n⚠️  Model is incomplete or has corrupted files")
+            print("\n⚠️  Model is incomplete or has corrupted files")
             return False, expected_files, local_size
     
     except Exception as e:
@@ -433,17 +520,17 @@ result = check_model_completeness(model_name, os.environ['HF_HUB_CACHE'])
 
 if len(result) == 4 and result[0]:  # Model is complete
     is_complete, expected_files, local_size, local_path = result
-    print("\\n" + "="*60)
+    print("\n" + "="*60)
     print("MODEL ALREADY FULLY DOWNLOADED")
     print("="*60)
     print(f"Model: {model_name}")
     if local_path:
         print(f"Location: {local_path}")
     print(f"Size: {local_size / 1e9:.1f} GB")
-    print("\\nNo download needed - model is ready to use!")
+    print("\nNo download needed - model is ready to use!")
     
     # Save to downloaded_models.json
-    info_file = Path("$HF_PATH").parent / "downloaded_models.json"
+    info_file = Path(os.environ["HF_HOME"]).parent / "downloaded_models.json"
     model_info_data = {
         "model_name": model_name,
         "local_path": local_path if local_path else "cached",
@@ -477,12 +564,12 @@ if len(result) == 4 and result[0]:  # Model is complete
     sys.exit(0)
 
 # Model is not complete, proceed with download
-print("\\n" + "="*60)
+print("\n" + "="*60)
 print("STARTING DOWNLOAD")
 print("="*60)
 
 # Create a progress file to track download
-progress_file = Path("$HF_PATH").parent / f".download_progress_{model_name.replace('/', '_')}.json"
+progress_file = Path(os.environ["HF_HOME"]).parent / f".download_progress_{model_name.replace('/', '_')}.json"
 
 try:
     # Save download start info
@@ -494,26 +581,36 @@ try:
     with open(progress_file, 'w') as f:
         json.dump(progress_data, f, indent=2)
     
-    print(f"\\nDownloading {model_name}...")
+    print(f"\nDownloading {model_name}...")
     print("Note: Download will resume automatically if interrupted")
     
-    # Download with resume capability
+    # Download with resume capability through the current Hugging Face CLI.
+    hf_command = [
+        "hf",
+        "download",
+        model_name,
+        "--cache-dir",
+        os.environ["HF_HUB_CACHE"],
+        "--max-workers",
+        str(download_max_workers),
+    ]
+    print("$ " + " ".join(shlex.quote(part) for part in hf_command))
+    subprocess.run(hf_command, check=True)
+
     local_path = snapshot_download(
         repo_id=model_name,
         cache_dir=os.environ['HF_HUB_CACHE'],
-        max_workers=8,
-        force_download=False,  # This allows resuming
-        local_files_only=False
+        local_files_only=True
     )
     
-    print(f"\\n✓ Model downloaded to: {local_path}")
+    print(f"\n✓ Model downloaded to: {local_path}")
     
     # Verify completeness after download
-    print("\\nVerifying download...")
+    print("\nVerifying download...")
     final_check = check_model_completeness(model_name, os.environ['HF_HUB_CACHE'])
     
     if final_check[0]:
-        print("\\n✅ Download completed and verified successfully!")
+        print("\n✅ Download completed and verified successfully!")
         
         # Update progress file
         progress_data['status'] = 'completed'
@@ -523,7 +620,7 @@ try:
             json.dump(progress_data, f, indent=2)
         
         # Save model info
-        info_file = Path("$HF_PATH").parent / "downloaded_models.json"
+        info_file = Path(os.environ["HF_HOME"]).parent / "downloaded_models.json"
         model_info_data = {
             "model_name": model_name,
             "local_path": local_path,
@@ -554,19 +651,19 @@ try:
         with open(info_file, 'w') as f:
             json.dump(existing_data, f, indent=2)
         
-        print(f"\\n✓ Model info saved to: {info_file}")
+        print(f"\n✓ Model info saved to: {info_file}")
         
         # Clean up progress file
         if progress_file.exists():
             progress_file.unlink()
     else:
-        print("\\n⚠️  Download may be incomplete. Run this script again to resume.")
+        print("\n⚠️  Download may be incomplete. Run this script again to resume.")
         progress_data['status'] = 'incomplete'
         with open(progress_file, 'w') as f:
             json.dump(progress_data, f, indent=2)
     
 except KeyboardInterrupt:
-    print("\\n⚠️  Download interrupted by user")
+    print("\n⚠️  Download interrupted by user")
     print("Run this script again to resume the download")
     if progress_file.exists():
         progress_data['status'] = 'interrupted'
@@ -576,7 +673,7 @@ except KeyboardInterrupt:
     sys.exit(130)
     
 except Exception as e:
-    print(f"\\n❌ Error downloading model: {e}")
+    print(f"\n❌ Error downloading model: {e}")
     import traceback
     traceback.print_exc()
     
@@ -588,7 +685,7 @@ except Exception as e:
             json.dump(progress_data, f, indent=2)
     
     sys.exit(1)
-EOF
+PY
 
 # Run the download script
 print_info "Starting model download..."
