@@ -606,6 +606,12 @@ install_deepseek_sglang() {
         if [ ! -e "$cuda_home/lib/libcudart.so" ] && [ -e "$cuda_home/lib/libcudart.so.13" ]; then
             run_command ln -s libcudart.so.13 "$cuda_home/lib/libcudart.so" || return 1
         fi
+        if [ ! -e "$cuda_home/lib/libnvrtc.so" ] && [ -e "$cuda_home/lib/libnvrtc.so.13" ]; then
+            run_command ln -s libnvrtc.so.13 "$cuda_home/lib/libnvrtc.so" || return 1
+        fi
+        if [ ! -e "$cuda_home/lib/libnvrtc-builtins.so" ] && [ -e "$cuda_home/lib/libnvrtc-builtins.so.13.0" ]; then
+            run_command ln -s libnvrtc-builtins.so.13.0 "$cuda_home/lib/libnvrtc-builtins.so" || return 1
+        fi
     fi
 
     export CUDA_HOME="$cuda_home"
