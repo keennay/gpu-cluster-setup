@@ -237,18 +237,20 @@ Example usage:
         action="store_true",
         help="Allow indexed --input sampling to reuse candidates when --num-prompts exceeds the indexed pool",
     )
-    optional.add_argument("--min-output", type=int, default=DEFAULT_MIN_OUTPUT, help=f"Minimum output tokens (default: {DEFAULT_MIN_OUTPUT})")
-    optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum output tokens (default: {DEFAULT_MAX_OUTPUT})")
+    optional.add_argument("--min-output", type=int, default=DEFAULT_MIN_OUTPUT, help=f"Minimum sampled max_tokens cap (default: {DEFAULT_MIN_OUTPUT})")
+    optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum sampled max_tokens cap (default: {DEFAULT_MAX_OUTPUT})")
+    optional.add_argument("--output-cap", type=int, default=None, help="Fixed max_tokens cap per request (default: sample from --min-output/--max-output)")
+    optional.add_argument("--sample-output-cap", action="store_true", help=argparse.SUPPRESS)
     optional.add_argument("--temperature", "--temp", dest="temperature", type=float, default=0.2, help="Sampling temperature (default: 0.2)")
-    optional.add_argument("--timeout", type=int, default=600, help="Timeout per request in seconds (default: 600)")
+    optional.add_argument("--timeout", type=int, default=3600, help="Timeout per request in seconds (default: 3600)")
     optional.add_argument("--warmup", type=int, default=3, help="Number of warmup requests (default: 3)")
     optional.add_argument("--seed", type=int, default=None, help="Random seed for reproducible dataset sampling (default: random)")
     optional.add_argument("--exit-status", type=str, default="any", help="Filter rows by exit_status, or 'any' (default: any)")
     optional.add_argument(
         "--trajectory-mode",
         choices=("full", "prefix"),
-        default="full",
-        help="Use full trajectory or random prefix ending on a user observation (default: full)",
+        default="prefix",
+        help="Use full trajectory or random prefix ending on a user observation (default: prefix)",
     )
     optional.add_argument(
         "--max-sample-attempts",
@@ -256,7 +258,8 @@ Example usage:
         default=2000,
         help="Maximum candidate rows to try per requested prompt before falling back (default: 2000)",
     )
-    optional.add_argument("--no-ignore-eos", action="store_true", help="Don't force full output length (default: force full output)")
+    optional.add_argument("--ignore-eos", dest="ignore_eos", action="store_true", default=False, help="Force full output length by ignoring EOS (default: natural stopping)")
+    optional.add_argument("--no-ignore-eos", dest="ignore_eos", action="store_false", help=argparse.SUPPRESS)
     optional.add_argument(
         "--preview-samples",
         type=int,
@@ -292,6 +295,10 @@ Example usage:
         errors.append("--min-output must be >= 1")
     if args.max_output < args.min_output:
         errors.append("--max-output must be >= --min-output")
+    if args.output_cap is not None and args.output_cap < 1:
+        errors.append("--output-cap must be >= 1")
+    if args.sample_output_cap and args.output_cap is not None:
+        errors.append("--sample-output-cap cannot be combined with --output-cap")
     if args.temperature < 0:
         errors.append("--temperature/--temp must be >= 0")
     if args.max_sample_attempts < 1:
@@ -417,7 +424,8 @@ PREFIX_INDEX_PATH = Path(args.prefix_index_path) if args.prefix_index_path else 
 SAMPLE_WITH_REPLACEMENT = args.sample_with_replacement
 MIN_OUTPUT_TOKENS = args.min_output
 MAX_OUTPUT_TOKENS = args.max_output
-IGNORE_EOS = not args.no_ignore_eos
+OUTPUT_CAP = None if args.sample_output_cap else args.output_cap
+IGNORE_EOS = args.ignore_eos
 PREVIEW_SAMPLES = args.preview_samples
 RANDOM_SEED = args.seed
 EXIT_STATUS_FILTER = args.exit_status
@@ -531,6 +539,12 @@ def pick_weighted_token_count(min_tokens: int, max_tokens: int, buckets: list[To
 
 def sample_output_tokens() -> tuple[int, str]:
     return pick_weighted_token_count(MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS, OUTPUT_TOKEN_BUCKETS)
+
+
+def choose_output_cap() -> tuple[int, str]:
+    if OUTPUT_CAP is not None:
+        return OUTPUT_CAP, "fixed_cap"
+    return sample_output_tokens()
 
 
 class SweZeroSampler:
@@ -1031,7 +1045,7 @@ def build_request_samples(sample_count: int, *, show_progress: bool) -> list[Req
         sampler.preload_source_rows(show_progress=show_progress)
 
     for idx in range(sample_count):
-        output_len, output_bucket = sample_output_tokens()
+        output_len, output_bucket = choose_output_cap()
         sample = sampler.sample_request(idx, output_len, output_bucket)
         samples.append(sample)
 
@@ -1057,11 +1071,15 @@ def print_sample_preview():
         print(f"Indexed input:    {INPUT_BAND} (>={lower} <{upper})")
         print(f"Prefix index:     {PREFIX_INDEX_PATH}")
     print(f"Input clamp:      {MIN_INPUT_TOKENS} - {MAX_INPUT_TOKENS}")
-    print(f"Output clamp:     {MIN_OUTPUT_TOKENS} - {MAX_OUTPUT_TOKENS}")
+    if OUTPUT_CAP is not None:
+        print(f"Output cap:       {OUTPUT_CAP}")
+    else:
+        print(f"Output cap sampling: enabled ({MIN_OUTPUT_TOKENS} - {MAX_OUTPUT_TOKENS})")
     print("\nInput bucket profile:")
     print_bucket_profile(INPUT_TOKEN_BUCKETS, INPUT_BUCKET_DESCRIPTIONS)
-    print("\nOutput bucket profile:")
-    print_bucket_profile(OUTPUT_TOKEN_BUCKETS, OUTPUT_BUCKET_DESCRIPTIONS)
+    if OUTPUT_CAP is None:
+        print("\nOutput bucket profile:")
+        print_bucket_profile(OUTPUT_TOKEN_BUCKETS, OUTPUT_BUCKET_DESCRIPTIONS)
 
     samples = build_request_samples(PREVIEW_SAMPLES, show_progress=False)
 
@@ -1212,11 +1230,20 @@ async def warmup():
     print(f"Warming up with {WARMUP_REQUESTS} requests...")
     for i in range(WARMUP_REQUESTS):
         try:
-            await client.chat.completions.create(
-                model=MODEL,
-                messages=[{"role": "user", "content": f"Warmup request {uuid.uuid4()}. Print ok."}],
-                max_tokens=50,
-            )
+            request_params = {
+                "model": MODEL,
+                "messages": [{"role": "user", "content": f"Warmup request {uuid.uuid4()}. Print ok."}],
+                "max_tokens": 50,
+                "temperature": TEMPERATURE,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            }
+            if IGNORE_EOS:
+                request_params["extra_body"] = {"ignore_eos": True}
+
+            stream = await client.chat.completions.create(**request_params)
+            async for _ in stream:
+                pass
             print(f"\rWarmup: {i + 1}/{WARMUP_REQUESTS}", end="", flush=True)
         except Exception as exc:
             print(f"\rWarmup {i + 1} failed: {exc}", end="", flush=True)
@@ -1282,6 +1309,13 @@ async def run_benchmark():
 
     progress = {"completed": 0, "failed": 0, "start_time": time.perf_counter()}
     sglang_log_sources = ", ".join(sglang_batch_collector.process.source_paths) or "N/A"
+    sampling_policy = (
+        "indexed user-ending prefixes"
+        if INPUT_BAND
+        else "random user-ending prefixes"
+        if TRAJECTORY_MODE == "prefix"
+        else "full trajectories"
+    )
 
     print(f"\n{'=' * 60}")
     print(run_header("SWE-ZERO BENCHMARK", display_run_label))
@@ -1303,17 +1337,21 @@ async def run_benchmark():
     print(f"SGLang log source:   {sglang_log_sources}")
     print("Streaming:           True")
     print("Prompt format:       SWE-ZERO chat roles")
-    print("Sampling policy:     prefers active trajectories ending on user observations")
+    print(f"Sampling policy:     {sampling_policy}")
     print("Radix cache:         disabled (expected)")
     print(f"Total requests:      {NUM_PROMPTS}")
     print(f"Concurrency:         {CONCURRENCY} (simulating {CONCURRENCY} agents)")
     print(f"Input tokens clamp:  {MIN_INPUT_TOKENS} - {MAX_INPUT_TOKENS} (approx chars/4)")
-    print(f"Output tokens clamp: {MIN_OUTPUT_TOKENS} - {MAX_OUTPUT_TOKENS}")
+    if OUTPUT_CAP is not None:
+        print(f"Output cap:          {OUTPUT_CAP}")
+    else:
+        print(f"Output cap sampling: enabled ({MIN_OUTPUT_TOKENS} - {MAX_OUTPUT_TOKENS})")
     print(f"Temperature:         {TEMPERATURE}")
     print("Input profile (pre-clamp):")
     print_bucket_profile(INPUT_TOKEN_BUCKETS, INPUT_BUCKET_DESCRIPTIONS)
-    print("Output profile (pre-clamp):")
-    print_bucket_profile(OUTPUT_TOKEN_BUCKETS, OUTPUT_BUCKET_DESCRIPTIONS)
+    if OUTPUT_CAP is None:
+        print("Output profile (pre-clamp):")
+        print_bucket_profile(OUTPUT_TOKEN_BUCKETS, OUTPUT_BUCKET_DESCRIPTIONS)
     print(f"Timeout per request: {TIMEOUT_PER_REQUEST}s")
     print(f"ignore_eos:          {IGNORE_EOS} {'(forces full output)' if IGNORE_EOS else '(natural stopping)'}")
     print()
