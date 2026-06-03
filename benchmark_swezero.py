@@ -155,7 +155,6 @@ class RequestSample:
     input_bucket: str
     output_len: int
     output_bucket: str
-    temperature: float
     instance_id: str
     repo: str
     exit_status: str
@@ -240,6 +239,7 @@ Example usage:
     )
     optional.add_argument("--min-output", type=int, default=DEFAULT_MIN_OUTPUT, help=f"Minimum output tokens (default: {DEFAULT_MIN_OUTPUT})")
     optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum output tokens (default: {DEFAULT_MAX_OUTPUT})")
+    optional.add_argument("--temperature", "--temp", dest="temperature", type=float, default=0.2, help="Sampling temperature (default: 0.2)")
     optional.add_argument("--timeout", type=int, default=600, help="Timeout per request in seconds (default: 600)")
     optional.add_argument("--warmup", type=int, default=3, help="Number of warmup requests (default: 3)")
     optional.add_argument("--seed", type=int, default=None, help="Random seed for reproducible dataset sampling (default: random)")
@@ -292,6 +292,8 @@ Example usage:
         errors.append("--min-output must be >= 1")
     if args.max_output < args.min_output:
         errors.append("--max-output must be >= --min-output")
+    if args.temperature < 0:
+        errors.append("--temperature/--temp must be >= 0")
     if args.max_sample_attempts < 1:
         errors.append("--max-sample-attempts must be >= 1")
     if args.preview_samples < 0:
@@ -409,6 +411,7 @@ TIMEOUT_PER_REQUEST = args.timeout
 WARMUP_REQUESTS = args.warmup
 MIN_INPUT_TOKENS = args.min_input
 MAX_INPUT_TOKENS = args.max_input
+TEMPERATURE = args.temperature
 INPUT_BAND = args.input_band
 PREFIX_INDEX_PATH = Path(args.prefix_index_path) if args.prefix_index_path else None
 SAMPLE_WITH_REPLACEMENT = args.sample_with_replacement
@@ -655,7 +658,6 @@ class SweZeroSampler:
             input_bucket=input_bucket,
             output_len=output_len,
             output_bucket=output_bucket,
-            temperature=random.uniform(0.15, 0.45),
             instance_id=row.get("instance_id") or "",
             repo=row.get("repo") or "",
             exit_status=row.get("exit_status") or "",
@@ -987,7 +989,6 @@ class SweZeroIndexedSampler:
             input_bucket=self.input_band,
             output_len=output_len,
             output_bucket=output_bucket,
-            temperature=random.uniform(0.15, 0.45),
             instance_id=row.get("instance_id") or "",
             repo=row.get("repo") or "",
             exit_status=row.get("exit_status") or "",
@@ -1124,7 +1125,7 @@ async def run_single_request_streaming(sample: RequestSample, progress: dict) ->
             "model": MODEL,
             "messages": sample.messages,
             "max_tokens": sample.output_len,
-            "temperature": sample.temperature,
+            "temperature": TEMPERATURE,
             "stream": True,
             "stream_options": {"include_usage": True},
         }
@@ -1308,6 +1309,7 @@ async def run_benchmark():
     print(f"Concurrency:         {CONCURRENCY} (simulating {CONCURRENCY} agents)")
     print(f"Input tokens clamp:  {MIN_INPUT_TOKENS} - {MAX_INPUT_TOKENS} (approx chars/4)")
     print(f"Output tokens clamp: {MIN_OUTPUT_TOKENS} - {MAX_OUTPUT_TOKENS}")
+    print(f"Temperature:         {TEMPERATURE}")
     print("Input profile (pre-clamp):")
     print_bucket_profile(INPUT_TOKEN_BUCKETS, INPUT_BUCKET_DESCRIPTIONS)
     print("Output profile (pre-clamp):")

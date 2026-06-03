@@ -322,6 +322,7 @@ Example usage:
     optional.add_argument("--max-input", type=int, default=DEFAULT_MAX_INPUT, help=f"Maximum input tokens (default: {DEFAULT_MAX_INPUT})")
     optional.add_argument("--min-output", type=int, default=DEFAULT_MIN_OUTPUT, help=f"Minimum output tokens (default: {DEFAULT_MIN_OUTPUT})")
     optional.add_argument("--max-output", type=int, default=DEFAULT_MAX_OUTPUT, help=f"Maximum output tokens (default: {DEFAULT_MAX_OUTPUT})")
+    optional.add_argument("--temperature", "--temp", dest="temperature", type=float, default=0.2, help="Sampling temperature (default: 0.2)")
     optional.add_argument("--timeout", type=int, default=600, help="Timeout per request in seconds (default: 600)")
     optional.add_argument("--warmup", type=int, default=3, help="Number of warmup requests (default: 3)")
     optional.add_argument("--seed", type=int, default=None, help="Random seed for reproducible prompt sampling (default: random)")
@@ -354,6 +355,8 @@ Example usage:
         errors.append("--min-output must be >= 1")
     if args.max_output < args.min_output:
         errors.append("--max-output must be >= --min-output")
+    if args.temperature < 0:
+        errors.append("--temperature/--temp must be >= 0")
     if args.preview_samples < 0:
         errors.append("--preview-samples must be >= 0")
     if args.preview_samples == 0 and not args.model:
@@ -387,6 +390,7 @@ MIN_INPUT_TOKENS = args.min_input
 MAX_INPUT_TOKENS = args.max_input
 MIN_OUTPUT_TOKENS = args.min_output
 MAX_OUTPUT_TOKENS = args.max_output
+TEMPERATURE = args.temperature
 IGNORE_EOS = not args.no_ignore_eos
 PREVIEW_SAMPLES = args.preview_samples
 RANDOM_SEED = args.seed
@@ -846,7 +850,7 @@ async def run_single_request_streaming(request_id: int, progress: dict) -> Reque
             "model": MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": output_len,
-            "temperature": random.uniform(0.15, 0.45),
+            "temperature": TEMPERATURE,
             "stream": True,
             "stream_options": {"include_usage": True},
         }
@@ -1019,6 +1023,7 @@ async def run_benchmark():
     print(f"Concurrency:         {CONCURRENCY} (simulating {CONCURRENCY} agents)")
     print(f"Input tokens clamp:  {MIN_INPUT_TOKENS} - {MAX_INPUT_TOKENS}")
     print(f"Output tokens clamp: {MIN_OUTPUT_TOKENS} - {MAX_OUTPUT_TOKENS}")
+    print(f"Temperature:         {TEMPERATURE}")
     print("Input profile (pre-clamp):")
     print_bucket_profile(INPUT_TOKEN_BUCKETS, INPUT_BUCKET_DESCRIPTIONS)
     print("Output profile (pre-clamp):")

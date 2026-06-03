@@ -3,16 +3,16 @@
 INFERENCE_PROVIDER="SGLang"
 MODEL_REPO="deepseek-ai/DeepSeek-V4-Flash"
 MODEL_NAME="deepseek_v4"
-MAX_MODEL_LEN=999936
+MAX_MODEL_LEN=1048576
 DEFAULT_TENSOR_PARALLEL_SIZE=2
 DEFAULT_PORT=8000
-GPU_MEM_UTIL=0.95
+GPU_MEM_UTIL=0.90
 
 SPECULATIVE='--speculative-algo EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4'
 QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache --disable-chunked-prefix-cache"
 EXTRA_ARGS=""
-ENABLE_SPECULATIVE=0
+ENABLE_SPECULATIVE=1
 POSITIONAL_ARGS=()
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -85,7 +85,7 @@ configure_moe_runner_backend() {
 
     case "$sm_version" in
         sm_90)
-            BACKEND_MOE_RUNNER="marlin"
+            BACKEND_MOE_RUNNER="flashinfer_mxfp4"
             ;;
         sm_100|sm_103)
             BACKEND_MOE_RUNNER="flashinfer_mxfp4"

@@ -506,32 +506,14 @@ install_deepseek_ktransformers() {
 
     install_kt_kernel "$ktransformers_dir" || return 1
 
-    print_info "Installing SGLang for DeepSeek-V3/V4/R1/OCR..."
+    print_info "Installing SGLang for DeepSeek-V3/V4/R1/OCR from ktransformers checkout..."
 
-    local sglang_branch="merge-deepseek-v4"
-    local sglang_dir=""
-    if [ -n "${SGLANG_DIR:-}" ]; then
-        sglang_dir="$SGLANG_DIR"
-    elif [ -n "${VIRTUAL_ENV:-}" ]; then
-        sglang_dir="$VIRTUAL_ENV/sglang"
-    else
-        sglang_dir="$HOME/sglang"
+    if [ ! -x "$ktransformers_dir/install.sh" ]; then
+        print_error "ktransformers installer not found or not executable at $ktransformers_dir/install.sh"
+        return 1
     fi
 
-    if [ ! -d "$sglang_dir/.git" ]; then
-        local parent_dir
-        parent_dir=$(dirname "$sglang_dir")
-        if [ ! -d "$parent_dir" ]; then
-            run_command mkdir -p "$parent_dir" || return 1
-        fi
-        run_command git clone -b "$sglang_branch" https://github.com/kvcache-ai/sglang.git "$sglang_dir" || return 1
-    else
-        run_command git -C "$sglang_dir" fetch origin || return 1
-        run_command git -C "$sglang_dir" checkout "$sglang_branch" || return 1
-        run_command git -C "$sglang_dir" pull --ff-only origin "$sglang_branch" || return 1
-    fi
-
-    run_pip_install -e "$sglang_dir/python[all]" || return 1
+    run_command bash -c "cd \"$ktransformers_dir\" && ./install.sh sglang --editable" || return 1
     run_pip_install "tilelang==0.1.8" || return 1
     run_pip_install "apache-tvm-ffi==0.1.9" || return 1
     run_pip_install --upgrade flashinfer-python flashinfer-cubin || return 1
@@ -583,7 +565,9 @@ install_deepseek_sglang() {
 
     run_uv_install --upgrade --prerelease=explicit \
         'flash-attn-4==4.0.0b9' \
-        'sglang==0.5.12' || return 1
+        'sglang==0.5.12' \
+        'kernels==0.14.1' \
+        'kernels-data==0.14.1' || return 1
 
     local cuda_home=""
     if cuda_home=$(find_system_cuda_13_home); then
