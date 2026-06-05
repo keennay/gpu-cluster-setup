@@ -13,6 +13,8 @@ QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 EXTRA_ARGS=""
 ENABLE_SPECULATIVE=0
+DEFAULT_ENABLE_SPECULATIVE="$ENABLE_SPECULATIVE"
+ENABLE_CACHE_FLAG=0
 POSITIONAL_ARGS=()
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -74,7 +76,8 @@ is_valid_port() {
 }
 
 parse_arguments() {
-    ENABLE_SPECULATIVE=0
+    ENABLE_SPECULATIVE="$DEFAULT_ENABLE_SPECULATIVE"
+    ENABLE_CACHE_FLAG=0
     POSITIONAL_ARGS=()
 
     local arg
@@ -82,6 +85,9 @@ parse_arguments() {
         case "$arg" in
             --speculative)
                 ENABLE_SPECULATIVE=1
+                ;;
+            --cache)
+                ENABLE_CACHE_FLAG=1
                 ;;
             *)
                 POSITIONAL_ARGS+=("$arg")
@@ -104,7 +110,38 @@ build_extra_args() {
         EXTRA_ARGS+="$SPECULATIVE "
     fi
     EXTRA_ARGS+="$QUANTIZATION "
-    EXTRA_ARGS+="$NO_PREFIX_CACHE "
+    if [ "$ENABLE_CACHE_FLAG" -eq 1 ]; then
+        EXTRA_ARGS+="$NO_PREFIX_CACHE "
+    fi
+}
+
+get_speculative_value() {
+    local target="$1"
+    local previous=""
+    local token
+
+    for token in $SPECULATIVE; do
+        if [ "$previous" = "$target" ]; then
+            printf '%s' "$token"
+            return
+        fi
+        previous="$token"
+    done
+}
+
+print_speculative_config() {
+    if [ "$ENABLE_SPECULATIVE" -ne 1 ] || [ -z "$SPECULATIVE" ]; then
+        return
+    fi
+
+    if [ "$INFERENCE_PROVIDER" = "SGLang" ]; then
+        echo "Speculative Algo: $(get_speculative_value --speculative-algo)"
+        echo "Speculative Number of Steps: $(get_speculative_value --speculative-num-steps)"
+        echo "Speculative Eagle TopK: $(get_speculative_value --speculative-eagle-topk)"
+        echo "Speculative Number of Draft Tokens: $(get_speculative_value --speculative-num-draft-tokens)"
+    else
+        echo "Speculative Config: $SPECULATIVE"
+    fi
 }
 
 get_tensor_parallel_size() {
@@ -226,6 +263,7 @@ main() {
         echo "GPU selection: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE"
     fi
     echo "Port: $INFERENCE_PORT"
+    print_speculative_config
     echo ""
 
     local base_command+=" vllm serve $MODEL_REPO"

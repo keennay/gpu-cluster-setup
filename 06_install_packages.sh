@@ -875,7 +875,7 @@ install_nemotron_trtllm() {
 
 install_nemotron_vllm() {
     print_info "Installing vLLM for Nemotron-3..."
-    run_uv_install vllm==0.20.0 --torch-backend=auto
+    run_uv_install vllm==0.22.0 --torch-backend=auto
 }
 
 install_qwen3_ktransformers() {
