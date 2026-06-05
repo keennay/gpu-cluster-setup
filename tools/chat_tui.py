@@ -9,7 +9,7 @@ import urllib.request
 
 
 API_KEY = os.environ.get("OPENAI_API_KEY", "YOUR_API_KEY")
-MODEL = os.environ.get("OPENAI_MODEL", "qwen3")
+MODEL = os.environ.get("OPENAI_MODEL", "deepseek")
 MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "32768"))
 ENDPOINT = os.environ.get("OPENAI_ENDPOINT", "http://127.0.0.1:8000")
 

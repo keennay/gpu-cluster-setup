@@ -126,8 +126,7 @@ print_info "  1. Claude Code (@anthropic-ai/claude-code)"
 print_info "  2. Claude Code Router (@musistudio/claude-code-router)"
 print_info "  3. Gemini CLI (@google/gemini-cli)"
 print_info "  4. OpenAI Codex (@openai/codex)"
-print_info "  5. Qwen Code (@qwen-code/qwen-code)"
-print_info "  6. OpenCode AI (opencode-ai)"
+print_info "  5. OpenCode AI (opencode-ai)"
 echo ""
 
 prompt_yes_no INSTALL_CLIS "Install coding CLIs? (y/n): "
@@ -186,14 +185,6 @@ if [[ "$INSTALL_CLIS" =~ ^[Yy]$ ]]; then
         print_info "Installing OpenAI Codex..."
         npm install -g @openai/codex
         [ $? -eq 0 ] && print_info "OpenAI Codex installed" || print_warning "Failed to install OpenAI Codex"
-    fi
-
-    # Qwen Code
-    prompt_yes_no INSTALL_QWEN "  Install Qwen Code? (y/n): "
-    if [[ "$INSTALL_QWEN" =~ ^[Yy]$ ]]; then
-        print_info "Installing Qwen Code..."
-        bash -c "$(curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.sh)"
-        [ $? -eq 0 ] && print_info "Qwen Code installed" || print_warning "Failed to install Qwen Code"
     fi
 
     # OpenCode AI

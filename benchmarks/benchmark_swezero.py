@@ -11,9 +11,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
-TOOLS_DIR = Path(__file__).resolve().parent / "tools"
-if str(TOOLS_DIR) not in sys.path:
-    sys.path.insert(0, str(TOOLS_DIR))
+HELPERS_DIR = Path(__file__).resolve().parent / "helpers"
+if str(HELPERS_DIR) not in sys.path:
+    sys.path.insert(0, str(HELPERS_DIR))
 
 from benchmark_sglang_metrics import (
     SGLangBatchMetricsCollector,
@@ -143,7 +143,7 @@ def default_prefix_index_path() -> tuple[Path | None, str]:
 
 
 def prefix_index_build_command() -> str:
-    return "python tools/benchmark_build_swezero_prefix_index.py"
+    return "python ./helpers/benchmark_build_swezero_prefix_index.py"
 
 
 @dataclass

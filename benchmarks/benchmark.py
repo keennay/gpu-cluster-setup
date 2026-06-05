@@ -8,9 +8,9 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-TOOLS_DIR = Path(__file__).resolve().parent / "tools"
-if str(TOOLS_DIR) not in sys.path:
-    sys.path.insert(0, str(TOOLS_DIR))
+HELPERS_DIR = Path(__file__).resolve().parent / "helpers"
+if str(HELPERS_DIR) not in sys.path:
+    sys.path.insert(0, str(HELPERS_DIR))
 
 from benchmark_sglang_metrics import (
     SGLangBatchMetricsCollector,
