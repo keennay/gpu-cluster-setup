@@ -215,7 +215,7 @@ fi
 
 if [[ "$ENV_TYPE" =~ ^[0-9]+$ ]]; then
     print_error "Invalid environment selection: $ENV_TYPE"
-    return 1
+    return 1 2>/dev/null || exit 1
 fi
 
 # Set environment name based on type
@@ -227,7 +227,7 @@ ENV_PATH="$HOME/env_${ENV_NAME}"
 if [ ! -d "$ENV_PATH" ]; then
     print_error "Environment '$ENV_NAME' not found at $ENV_PATH"
     print_info "Run 05_setup_env.sh first to create it"
-    return 1
+    return 1 2>/dev/null || exit 1
 fi
 
 # Check if already in a virtual environment
@@ -249,11 +249,17 @@ fi
 # Check if activate_ml script exists, use it if available
 if [ -f "$ENV_PATH/activate_ml" ]; then
     print_info "Using activate_ml script..."
-    source "$ENV_PATH/activate_ml"
-else
+    if ! source "$ENV_PATH/activate_ml"; then
+        print_error "Failed to activate environment '$ENV_NAME' with $ENV_PATH/activate_ml"
+        return 1 2>/dev/null || exit 1
+    fi
+elif [ -f "$ENV_PATH/bin/activate" ]; then
     # Fallback to manual activation
     print_info "Activating $ENV_NAME environment..."
-    source "$ENV_PATH/bin/activate"
+    if ! source "$ENV_PATH/bin/activate"; then
+        print_error "Failed to activate environment '$ENV_NAME' with $ENV_PATH/bin/activate"
+        return 1 2>/dev/null || exit 1
+    fi
     
     # Determine HF_PATH - check if already set, otherwise use default
     if [ -n "$HF_HOME" ]; then
@@ -346,6 +352,10 @@ else
         export PATH="/usr/local/cuda/bin:$PATH"
         export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
     fi
+else
+    print_error "No activation script found for environment '$ENV_NAME'"
+    print_info "Expected $ENV_PATH/activate_ml or $ENV_PATH/bin/activate"
+    return 1 2>/dev/null || exit 1
 fi
 
 find_system_cuda_13_home() {
@@ -379,7 +389,10 @@ find_system_cuda_13_home() {
 
         [ -x "$candidate/bin/nvcc" ] || continue
         release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
-        [ "$release" = "13.0" ] || continue
+        case "$release" in
+            13.*) ;;
+            *) continue ;;
+        esac
         [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
         [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
         [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
@@ -407,7 +420,8 @@ sys.exit(1)
 PY
 }
 
-if [ "$ENV_TYPE" = "deepseek-sglang" ]; then
+setup_cuda_13_runtime() {
+    local env_label="$1"
     CUDA_13_HOME=""
     CUDA_13_SOURCE=""
     if CUDA_13_HOME=$(find_system_cuda_13_home); then
@@ -419,18 +433,46 @@ if [ "$ENV_TYPE" = "deepseek-sglang" ]; then
     if [ -n "$CUDA_13_HOME" ]; then
         export CUDA_HOME="$CUDA_13_HOME"
         export CUDA_PATH="$CUDA_13_HOME"
-        export PATH="$CUDA_13_HOME/bin:$PATH"
-        export LD_LIBRARY_PATH="$CUDA_13_HOME/lib:$CUDA_13_HOME/lib64:${LD_LIBRARY_PATH:-}"
-        export LIBRARY_PATH="$CUDA_13_HOME/lib:$CUDA_13_HOME/lib64:${LIBRARY_PATH:-}"
+        prepend_env_path_once PATH "$CUDA_13_HOME/bin"
+        prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib64"
+        prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib"
+        prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib64"
+        prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib"
         if [ -d "$CUDA_13_HOME/include/cccl" ]; then
-            export CPATH="$CUDA_13_HOME/include/cccl:${CPATH:-}"
+            prepend_env_path_once CPATH "$CUDA_13_HOME/include/cccl"
         fi
-        print_info "DeepSeek SGLang CUDA toolkit: $CUDA_HOME ($CUDA_13_SOURCE)"
+        print_info "$env_label CUDA toolkit: $CUDA_HOME ($CUDA_13_SOURCE)"
     else
-        print_warning "DeepSeek SGLang CUDA 13.0 toolkit not found on the system or in the virtual environment."
-        print_info "Run ./06_install_packages.sh --env deepseek-sglang to install nvidia-cuda-nvcc and FlashMLA."
+        print_warning "$env_label CUDA 13 toolkit not found on the system or in the virtual environment."
+        print_info "Run ./06_install_packages.sh --env $ENV_TYPE to install the required packages."
     fi
-fi
+}
+
+prepend_env_path_once() {
+    local var_name="$1"
+    local dir="$2"
+    local current="${!var_name:-}"
+
+    [ -n "$dir" ] || return 0
+    case ":$current:" in
+        *":$dir:"*) return 0 ;;
+    esac
+
+    if [ -n "$current" ]; then
+        export "$var_name=$dir:$current"
+    else
+        export "$var_name=$dir"
+    fi
+}
+
+case "$ENV_TYPE" in
+    deepseek-sglang)
+        setup_cuda_13_runtime "DeepSeek SGLang"
+        ;;
+    gemma-vllm)
+        setup_cuda_13_runtime "Gemma vLLM"
+        ;;
+esac
 
 export DG_JIT_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
 export FLASHINFER_WORKSPACE_BASE="${VIRTUAL_ENV:-$ENV_PATH}"

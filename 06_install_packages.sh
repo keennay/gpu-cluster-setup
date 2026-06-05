@@ -381,7 +381,10 @@ find_system_cuda_13_home() {
 
         [ -x "$candidate/bin/nvcc" ] || continue
         release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
-        [ "$release" = "13.0" ] || continue
+        case "$release" in
+            13.*) ;;
+            *) continue ;;
+        esac
         [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
         [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
         [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
@@ -422,7 +425,42 @@ install_gemma_vllm() {
     run_uv_install -U vllm --pre \
         --extra-index-url https://wheels.vllm.ai/nightly/cu129 \
         --extra-index-url https://download.pytorch.org/whl/cu129 \
-        --index-strategy unsafe-best-match
+        --index-strategy unsafe-best-match || return 1
+
+    local cuda_home=""
+    local cuda_source=""
+    if cuda_home=$(find_system_cuda_13_home); then
+        cuda_source="system"
+    elif cuda_home=$(find_venv_cuda_13_home); then
+        cuda_source="virtualenv"
+    else
+        print_info "No complete CUDA 13 toolkit found; installing CUDA 13 packages into the virtual environment."
+        run_uv_install \
+            nvidia-cuda-nvcc \
+            nvidia-cuda-crt \
+            nvidia-nvvm \
+            nvidia-cuda-cccl \
+            nvidia-cuda-runtime \
+            nvidia-cuda-nvrtc || return 1
+
+        cuda_home=$(find_venv_cuda_13_home) || {
+            print_error "CUDA 13 nvcc was not found inside the active virtual environment."
+            print_info "Expected it under: $VIRTUAL_ENV/lib/python*/site-packages/nvidia/cu13/bin/nvcc"
+            return 1
+        }
+        cuda_source="virtualenv"
+    fi
+
+    export CUDA_HOME="$cuda_home"
+    export CUDA_PATH="$cuda_home"
+    export PATH="$cuda_home/bin:$PATH"
+    export LD_LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
+    export LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
+    if [ -d "$cuda_home/include/cccl" ]; then
+        export CPATH="$cuda_home/include/cccl:${CPATH:-}"
+    fi
+
+    print_info "Gemma vLLM CUDA toolkit: $CUDA_HOME ($cuda_source)"
 }
 
 install_glm_sglang() {
@@ -571,9 +609,9 @@ install_deepseek_sglang() {
 
     local cuda_home=""
     if cuda_home=$(find_system_cuda_13_home); then
-        print_info "Using system CUDA 13.0 toolkit at $cuda_home"
+        print_info "Using system CUDA 13 toolkit at $cuda_home"
     else
-        print_info "No complete system CUDA 13.0 toolkit found; installing CUDA 13.0 compiler packages into the virtual environment."
+        print_info "No complete system CUDA 13 toolkit found; installing CUDA 13 compiler packages into the virtual environment."
         run_uv_install \
             nvidia-cuda-nvcc==13.0.88 \
             nvidia-cuda-crt==13.0.88 \
@@ -585,7 +623,7 @@ install_deepseek_sglang() {
             print_info "Expected it under: $VIRTUAL_ENV/lib/python*/site-packages/nvidia/cu13/bin/nvcc"
             return 1
         }
-        print_info "Using virtualenv CUDA 13.0 toolkit at $cuda_home"
+        print_info "Using virtualenv CUDA 13 toolkit at $cuda_home"
 
         if [ ! -e "$cuda_home/lib/libcudart.so" ] && [ -e "$cuda_home/lib/libcudart.so.13" ]; then
             run_command ln -s libcudart.so.13 "$cuda_home/lib/libcudart.so" || return 1

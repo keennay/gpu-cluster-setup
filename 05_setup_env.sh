@@ -481,6 +481,115 @@ echo ""
 # Create activation script with environment variables
 print_info "Creating activation script with ML environment variables..."
 
+CUDA_13_ACTIVATE_SNIPPET=""
+case "$ENV_TYPE" in
+    deepseek-sglang|gemma-vllm)
+        CUDA_13_ACTIVATE_SNIPPET=$(cat <<'CUDA_13_SNIPPET'
+
+find_system_cuda_13_home() {
+    local candidates=()
+
+    if [ -n "${CUDA_HOME:-}" ]; then
+        candidates+=("$CUDA_HOME")
+    fi
+    if [ -n "${CUDA_PATH:-}" ]; then
+        candidates+=("$CUDA_PATH")
+    fi
+
+    candidates+=(
+        /usr/local/cuda-13.0
+        /usr/local/cuda-13
+        /usr/local/cuda
+    )
+
+    local candidate release
+    local seen=":"
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="${candidate%/}"
+        if [ -n "${VIRTUAL_ENV:-}" ] && [[ "$candidate" == "$VIRTUAL_ENV"* ]]; then
+            continue
+        fi
+        case "$seen" in
+            *":$candidate:"*) continue ;;
+        esac
+        seen+="$candidate:"
+
+        [ -x "$candidate/bin/nvcc" ] || continue
+        release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
+        case "$release" in
+            13.*) ;;
+            *) continue ;;
+        esac
+        [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
+        [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
+        [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
+        [ -e "$candidate/include/cuda/std/utility" ] || [ -e "$candidate/include/cccl/cuda/std/utility" ] || continue
+
+        echo "$candidate"
+        return 0
+    done
+
+    return 1
+}
+
+find_venv_cuda_13_home() {
+    python - <<'PY'
+import pathlib
+import site
+import sys
+
+for site_dir in site.getsitepackages():
+    candidate = pathlib.Path(site_dir) / "nvidia" / "cu13"
+    if (candidate / "bin" / "nvcc").is_file():
+        print(candidate)
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+prepend_env_path_once() {
+    local var_name="$1"
+    local dir="$2"
+    local current="${!var_name:-}"
+
+    [ -n "$dir" ] || return 0
+    case ":$current:" in
+        *":$dir:"*) return 0 ;;
+    esac
+
+    if [ -n "$current" ]; then
+        export "$var_name=$dir:$current"
+    else
+        export "$var_name=$dir"
+    fi
+}
+
+CUDA_13_HOME=""
+CUDA_13_SOURCE=""
+if CUDA_13_HOME=$(find_system_cuda_13_home); then
+    CUDA_13_SOURCE="system"
+elif CUDA_13_HOME=$(find_venv_cuda_13_home); then
+    CUDA_13_SOURCE="virtualenv"
+fi
+
+if [ -n "$CUDA_13_HOME" ]; then
+    export CUDA_HOME="$CUDA_13_HOME"
+    export CUDA_PATH="$CUDA_13_HOME"
+    prepend_env_path_once PATH "$CUDA_13_HOME/bin"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib64"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib64"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib"
+    if [ -d "$CUDA_13_HOME/include/cccl" ]; then
+        prepend_env_path_once CPATH "$CUDA_13_HOME/include/cccl"
+    fi
+fi
+CUDA_13_SNIPPET
+)
+        ;;
+esac
+
 cat > "$ENV_PATH/activate_ml" << EOF
 #!/bin/bash
 # Activate virtual environment
@@ -500,6 +609,7 @@ export XDG_CACHE_HOME="\${VIRTUAL_ENV:-$ENV_PATH}/.cache"
 # Set ML environment variables
 export HF_HOME="$HF_PATH"
 export HF_HUB_CACHE="$HF_PATH/hub"
+${CUDA_13_ACTIVATE_SNIPPET}
 
 # GPU architecture for PyTorch
 ${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
@@ -508,6 +618,9 @@ echo "ML environment activated with:"
 echo "  - Virtual env: $ENV_PATH"
 echo "  - HF_HOME: $HF_PATH"
 echo "  - HF_HUB_CACHE: $HF_PATH/hub"
+if [ -n "\${CUDA_13_HOME:-}" ]; then
+    echo "  - CUDA 13 toolkit: \${CUDA_HOME} (\${CUDA_13_SOURCE})"
+fi
 ${TORCH_CUDA_ARCH_LIST:+echo "  - TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"}
 echo "  - Python: \$(python --version)"
 EOF
