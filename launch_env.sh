@@ -420,8 +420,25 @@ sys.exit(1)
 PY
 }
 
+configure_cuda_13_paths() {
+    local env_label="$1"
+
+    export CUDA_HOME="$CUDA_13_HOME"
+    export CUDA_PATH="$CUDA_13_HOME"
+    prepend_env_path_once PATH "$CUDA_13_HOME/bin"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib64"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib64"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib"
+    if [ -d "$CUDA_13_HOME/include/cccl" ]; then
+        prepend_env_path_once CPATH "$CUDA_13_HOME/include/cccl"
+    fi
+    print_info "$env_label CUDA toolkit: $CUDA_HOME ($CUDA_13_SOURCE)"
+}
+
 setup_cuda_13_runtime() {
     local env_label="$1"
+
     CUDA_13_HOME=""
     CUDA_13_SOURCE=""
     if CUDA_13_HOME=$(find_system_cuda_13_home); then
@@ -431,17 +448,7 @@ setup_cuda_13_runtime() {
     fi
 
     if [ -n "$CUDA_13_HOME" ]; then
-        export CUDA_HOME="$CUDA_13_HOME"
-        export CUDA_PATH="$CUDA_13_HOME"
-        prepend_env_path_once PATH "$CUDA_13_HOME/bin"
-        prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib64"
-        prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib"
-        prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib64"
-        prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib"
-        if [ -d "$CUDA_13_HOME/include/cccl" ]; then
-            prepend_env_path_once CPATH "$CUDA_13_HOME/include/cccl"
-        fi
-        print_info "$env_label CUDA toolkit: $CUDA_HOME ($CUDA_13_SOURCE)"
+        configure_cuda_13_paths "$env_label"
     else
         print_warning "$env_label CUDA 13 toolkit not found on the system or in the virtual environment."
         print_info "Run ./06_install_packages.sh --env $ENV_TYPE to install the required packages."
@@ -468,9 +475,6 @@ prepend_env_path_once() {
 case "$ENV_TYPE" in
     deepseek-sglang)
         setup_cuda_13_runtime "DeepSeek SGLang"
-        ;;
-    gemma-vllm)
-        setup_cuda_13_runtime "Gemma vLLM"
         ;;
 esac
 

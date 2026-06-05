@@ -483,7 +483,7 @@ print_info "Creating activation script with ML environment variables..."
 
 CUDA_13_ACTIVATE_SNIPPET=""
 case "$ENV_TYPE" in
-    deepseek-sglang|gemma-vllm)
+    deepseek-sglang)
         CUDA_13_ACTIVATE_SNIPPET=$(cat <<'CUDA_13_SNIPPET'
 
 find_system_cuda_13_home() {

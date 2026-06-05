@@ -422,45 +422,48 @@ install_gemma_sglang() {
 install_gemma_vllm() {
     print_info "Installing packages for Gemma-4 (vLLM)..."
 
-    run_uv_install -U vllm --pre \
-        --extra-index-url https://wheels.vllm.ai/nightly/cu129 \
-        --extra-index-url https://download.pytorch.org/whl/cu129 \
-        --index-strategy unsafe-best-match || return 1
-
     local cuda_home=""
     local cuda_source=""
+    local vllm_package=""
+    local vllm_index=""
+    local torch_index=""
+    local torch_backend=""
+    local vllm_commit="c66b19800bb3d9ff958d5db82463aa19d2bbc255"
+
     if cuda_home=$(find_system_cuda_13_home); then
         cuda_source="system"
-    elif cuda_home=$(find_venv_cuda_13_home); then
-        cuda_source="virtualenv"
+        vllm_package="vllm==0.22.1rc1.dev214+gc66b19800"
+        vllm_index="https://wheels.vllm.ai/${vllm_commit}/cu130"
+        torch_index="https://download.pytorch.org/whl/cu130"
+        torch_backend="cu130"
+        print_info "Detected system CUDA 13 toolkit at $cuda_home; installing Gemma vLLM CUDA 13 nightly."
     else
-        print_info "No complete CUDA 13 toolkit found; installing CUDA 13 packages into the virtual environment."
-        run_uv_install \
-            nvidia-cuda-nvcc \
-            nvidia-cuda-crt \
-            nvidia-nvvm \
-            nvidia-cuda-cccl \
-            nvidia-cuda-runtime \
-            nvidia-cuda-nvrtc || return 1
-
-        cuda_home=$(find_venv_cuda_13_home) || {
-            print_error "CUDA 13 nvcc was not found inside the active virtual environment."
-            print_info "Expected it under: $VIRTUAL_ENV/lib/python*/site-packages/nvidia/cu13/bin/nvcc"
-            return 1
-        }
-        cuda_source="virtualenv"
+        vllm_package="vllm==0.22.1rc1.dev214+gc66b19800.cu129"
+        vllm_index="https://wheels.vllm.ai/${vllm_commit}/cu129"
+        torch_index="https://download.pytorch.org/whl/cu129"
+        torch_backend="cu129"
+        print_info "No complete system CUDA 13 toolkit found; installing Gemma vLLM CUDA 12.9 nightly."
     fi
 
-    export CUDA_HOME="$cuda_home"
-    export CUDA_PATH="$cuda_home"
-    export PATH="$cuda_home/bin:$PATH"
-    export LD_LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
-    export LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
-    if [ -d "$cuda_home/include/cccl" ]; then
-        export CPATH="$cuda_home/include/cccl:${CPATH:-}"
+    run_uv_install -U "$vllm_package" --pre \
+        --extra-index-url "$vllm_index" \
+        --extra-index-url "$torch_index" \
+        --torch-backend "$torch_backend" \
+        --index-strategy unsafe-best-match || return 1
+
+    if [ -n "$cuda_home" ]; then
+        export CUDA_HOME="$cuda_home"
+        export CUDA_PATH="$cuda_home"
+        export PATH="$cuda_home/bin:$PATH"
+        export LD_LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
+        export LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
+        if [ -d "$cuda_home/include/cccl" ]; then
+            export CPATH="$cuda_home/include/cccl:${CPATH:-}"
+        fi
+        print_info "Gemma vLLM CUDA toolkit: $CUDA_HOME ($cuda_source)"
     fi
 
-    print_info "Gemma vLLM CUDA toolkit: $CUDA_HOME ($cuda_source)"
+    print_info "Gemma vLLM package: $vllm_package ($torch_backend)"
 }
 
 install_glm_sglang() {
