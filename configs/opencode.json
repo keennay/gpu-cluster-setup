@@ -9,20 +9,32 @@
         "apiKey": "YOUR_API_KEY"
       },
       "models": {
-        "glm-4.7-flash": {
-          "name": "GLM-4.7-Flash"
+        "qwen": {
+          "name": "Qwen"
         },
-        "MiniMaxAI/MiniMax-M2.5": {
-          "name": "MiniMax-M2.5"
+        "deepseek": {
+          "name": "DeepSeek"
         },
-        "moonshotai/Kimi-K2.5": {
-          "name": "Kimi-K2.5"
+        "gemma": {
+          "name": "Gemma"
         },
-        "nvidia/nemotron-3-super": {
-          "name": "Nemotron 3 Super"
+        "glm": {
+          "name": "GLM"
+        },
+        "ling": {
+          "name": "Ling"
+        },
+        "minimax": {
+          "name": "Minimax"
+        },
+        "nemotron": {
+          "name": "Nemotron"
+        },
+        "kimi": {
+          "name": "Kimi"
         }
       }
     }
   },
-  "model": "local-models/glm-4.7-flash"
+  "model": "local-models/deepseek"
 }

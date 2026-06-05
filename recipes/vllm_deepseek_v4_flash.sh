@@ -3,6 +3,7 @@
 INFERENCE_PROVIDER="vLLM"
 MODEL_REPO="deepseek-ai/DeepSeek-V4-Flash"
 MODEL_NAME="deepseek_v4"
+SERVED_MODEL_NAME="deepseek"
 MAX_MODEL_LEN=999936
 DEFAULT_TENSOR_PARALLEL_SIZE=2
 DEFAULT_PORT=8000
@@ -257,7 +258,7 @@ main() {
     echo "Starting $INFERENCE_PROVIDER Server"
     echo "============================================================"
     echo "Model: $MODEL_REPO"
-    echo "Served as: $MODEL_NAME"
+    echo "Served as: $SERVED_MODEL_NAME"
     echo "Tensor parallel size: $TENSOR_PARALLEL_SIZE"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "GPU selection: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE"
@@ -267,7 +268,7 @@ main() {
     echo ""
 
     local base_command+=" vllm serve $MODEL_REPO"
-    base_command+=" --served-model-name $MODEL_NAME"
+    base_command+=" --served-model-name $SERVED_MODEL_NAME"
     base_command+=" --kv-cache-dtype fp8"
     base_command+=" --block-size 256"
     base_command+=" --trust-remote-code"
