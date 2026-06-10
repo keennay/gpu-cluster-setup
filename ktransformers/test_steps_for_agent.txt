@@ -19,7 +19,7 @@ Step 2:
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Stop the SGLang process group with SIGTERM and wait 30 seconds. If any are still running after 30 seconds, send SIGKILL. Confirm the following holds true before continuing: no process matches sglang.launch_server, sglang::scheduler, sglang::tokenizer, or sglang::detokenizer.
 	Terminal prompt `${MESSAGE} "Starting the KTransformers Script Now!"`
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 01_launch"` 
-	Run `./01_launch.sh ${KT_TEST_ENV}`
+	Run `./01_launch.sh ${KT_TEST_ENV} --logs`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 
 Step 3:
@@ -36,15 +36,15 @@ Step 3:
 
 Step 4:
 	Agent 1:
-	Stop `./01_launch.sh ${KT_TEST_ENV}`
+	Stop `./01_launch.sh ${KT_TEST_ENV} --logs`
 	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 10 when tasked to repeat from Step 8.
 
 Step 5:
 	Agent 1:
-	Stop `./02_record.sh ${KT_TEST_ENV}` if currently running.
+	Stop `./02_record.sh ${KT_TEST_ENV} --logs` if currently running.
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Stop the SGLang process group with SIGTERM and wait 30 seconds. If any are still running after 30 seconds, send SIGKILL. Confirm the following holds true before continuing: no process matches sglang.launch_server, sglang::scheduler, sglang::tokenizer, or sglang::detokenizer.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 02_record_<iteration>/10"` 
-	Launch `./02_record.sh ${KT_TEST_ENV}`
+	Launch `./02_record.sh ${KT_TEST_ENV} --logs`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 Step 6:
 	Agent 2:
@@ -81,10 +81,10 @@ Step 8:
 	Run `python ./tools/combine_expert_distrbution_recordings.py experts/${KT_EXPERTS_PATH}/01` (This script should launch Python and run that file which exists in the tools directory under this script).
 Step 9:
 	Agent 1:
-	Stop `./02_record.sh ${KT_TEST_ENV}`.
+	Stop `./02_record.sh ${KT_TEST_ENV} --logs`.
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Stop the SGLang process group with SIGTERM and wait 30 seconds. If any are still running after 30 seconds, send SIGKILL. Confirm the following holds true before continuing: no process matches sglang.launch_server, sglang::scheduler, sglang::tokenizer, or sglang::detokenizer.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 03_launch"`
-	Launch `./03_launch.sh ${KT_TEST_ENV}`
+	Launch `./03_launch.sh ${KT_TEST_ENV} --logs`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 Step 10:
 	Agent 2:
@@ -98,15 +98,15 @@ Step 10:
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 03_launch | Reason: <reason>"` with <reason> being a concise message especially for capturing any SGLang OOM errors, and restart from Step 9.
 Step 11:
 	Agent 1:
-	Stop `./03_launch.sh ${KT_TEST_ENV}`
+	Stop `./03_launch.sh ${KT_TEST_ENV} --logs`
 	If ${STOP_TEST_EARLY_BOOLEAN}=true, proceed to Step 18 from this point. Otherwise continue below.
 	Define <iteration> as the current script iteration starting from 01 and incrementing from Step 14 when tasked to repeat from Step 12.
 Step 12:
 	Agent 1:
-	Stop `./03_record.sh ${KT_TEST_ENV}` if currently running.
+	Stop `./03_record.sh ${KT_TEST_ENV} --logs` if currently running.
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Stop the SGLang process group with SIGTERM and wait 30 seconds. If any are still running after 30 seconds, send SIGKILL. Confirm the following holds true before continuing: no process matches sglang.launch_server, sglang::scheduler, sglang::tokenizer, or sglang::detokenizer.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 03_record_<iteration>/10"` 
-	Launch `./03_record.sh ${KT_TEST_ENV}`
+	Launch `./03_record.sh ${KT_TEST_ENV} --logs`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 Step 13:
 	Agent 2:
@@ -143,10 +143,10 @@ Step 15:
 	Run `python ./tools/combine_expert_distrbution_recordings.py experts/${KT_EXPERTS_PATH}/02` (This script should launch Python and run that file which exists in the tools directory under this script).
 Step 16:
 	Agent 1:
-	Stop `./03_record.sh ${KT_TEST_ENV}`
+	Stop `./03_record.sh ${KT_TEST_ENV} --logs`
 	Confirm no SGlang processes are running in GPU (allow uvx nvitop to continue running, ignore it). Stop the SGLang process group with SIGTERM and wait 30 seconds. If any are still running after 30 seconds, send SIGKILL. Confirm the following holds true before continuing: no process matches sglang.launch_server, sglang::scheduler, sglang::tokenizer, or sglang::detokenizer.
 	Terminal prompt `${MESSAGE} "Launching: SGLang for 04_launch"`
-	Launch `./04_launch.sh ${KT_TEST_ENV}`
+	Launch `./04_launch.sh ${KT_TEST_ENV} --logs`
 	Wait until sglang launch completion including, "The server is fired up and ready to roll!"
 Step 17:
 	Agent 2:
