@@ -1,12 +1,12 @@
-KT_EXPERTS_PATH="kimi_k26/h200x2"
-KT_PYTHON_ENV=$HOME/env_qwen3-ktransformers
+KT_EXPERTS_PATH="deepseek_v4_flash/h200x1"
+KT_PYTHON_ENV=$HOME/env_custom_pip
 KT_TEST_ENV="./envs/${KT_EXPERTS_PATH}.env"
-KT_BENCHMARK_MODEL="kimi_k2"
+KT_BENCHMARK_MODEL="deepseek"
 KT_REPO_ROOT="${KT_REPO_ROOT:-$(pwd)}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmarks/benchmark_swezero.py}"
-KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 2 --input 20k --output-cap 8000"
+KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 10 --input 20k --output-cap 8000"
 MESSAGE="hermes send --to discord"
-STOP_TEST_EARLY_BOOLEAN=true
+STOP_TEST_EARLY_BOOLEAN=false
 
 Step 1:
 	Ensure the terminal has already activated the following pip env: ${KT_PYTHON_ENV}. If not, activate it.

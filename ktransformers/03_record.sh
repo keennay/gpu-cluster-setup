@@ -32,7 +32,6 @@ cmd=(
   python -m sglang.launch_server \
     --host 0.0.0.0 \
     --port 8000 \
-    --api-key YOUR_API_KEY \
     --model-path "$model_path" \
     --kt-weight-path "$model_path" \
     --kt-cpuinfer "$KT_CPUINFER" \
