@@ -6,6 +6,7 @@ KT_BENCHMARK_MODEL="deepseek"
 KT_REPO_ROOT="${KT_REPO_ROOT:-$(pwd)}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmarks/benchmark_swezero.py}"
 KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 10 --input 20k --output-cap 8000"
+KT_TEST_PLAN_FILE="plan_gpu1.md"
 MESSAGE="hermes send --to discord"
 STOP_TEST_EARLY_BOOLEAN=false
 
@@ -161,4 +162,4 @@ Step 17:
 	Stop the python instance of ${KT_BENCHMARK_PATH}.
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 04_launch | Reason: <reason>"` with <reason> being a concise message especially for capturing any SGLang OOM errors, and restart from Step 16.
 Step 18:
-	Output "COMPLETE". If ${STOP_TEST_EARLY_BOOLEAN}=true, then show the differences in Output tokens/sec & TTFT between the 2 results files: 01_launch.txt & 03_launch.txt, in great detail, and if any improvements were made. Otherwise show the differences in Output tokens/sec & TTFT betwneen the 3 results files: 01_launch.txt, 03_launch.txt, 04_launch.txt, in great detail, and if any improvements were made. Show what % of overall MoE layer experts were utilized in the expert frequency runs, and if the GPU expert placements helped at all. Include the total duration of the script, by using the timestamp of the creations of `test_plan_for_agent.md` and `./results/${KT_EXPERTS_PATH}/<files>`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt. Terminal prompt `${MESSAGE} "<summary>"`
+	Output "COMPLETE". If ${STOP_TEST_EARLY_BOOLEAN}=true, then show the differences in Output tokens/sec & TTFT between the 2 results files: 01_launch.txt & 03_launch.txt, in great detail, and if any improvements were made. Otherwise show the differences in Output tokens/sec & TTFT betwneen the 3 results files: 01_launch.txt, 03_launch.txt, 04_launch.txt, in great detail, and if any improvements were made. Show what % of overall MoE layer experts were utilized in the expert frequency runs, and if the GPU expert placements helped at all. Include the total duration of the script, by using the timestamp of the creations of `${KT_TEST_PLAN_FILE}` and `./results/${KT_EXPERTS_PATH}/<files>`. Write this to ./results/${KT_EXPERTS_PATH}/summary.txt. Terminal prompt `${MESSAGE} "<summary>"`

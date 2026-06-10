@@ -1,6 +1,6 @@
 .codex/
 __pycache__/
-test_plan_for_agent.md
+plan*.md
 experts/
 experts_backup/
 logs/
