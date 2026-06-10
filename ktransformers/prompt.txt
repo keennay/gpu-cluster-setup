@@ -1,0 +1,1 @@
+Read steps.txt and create an agentic coding work plan in plan.md to work autonomously. Follow the plan in plan.md.

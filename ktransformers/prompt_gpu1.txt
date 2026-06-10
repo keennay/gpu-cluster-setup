@@ -1,1 +1,0 @@
-Read steps_gpu1.txt and create an agentic coding work plan in plan_gpu1.md to work autonomously. Follow the plan in plan_gpu1.md.
