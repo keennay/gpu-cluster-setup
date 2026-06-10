@@ -89,6 +89,7 @@ load_launch_config() {
 
   ADDITIONAL_SGLANG_ENVS="${ADDITIONAL_SGLANG_ENVS:-}"
   ADDITIONAL_SGLANG_ARGS="${ADDITIONAL_SGLANG_ARGS:-}"
+  SGLANG_PORT="${SGLANG_PORT:-8000}"
 
   model_path="$HF_HUB_CACHE/$MODEL"
   if [[ ! -e "$model_path" ]]; then

@@ -31,7 +31,7 @@ cmd=(
   numactl --cpunodebind="$NUMACTL_CPUNODEBIND" --membind="$NUMACTL_MEMBIND"
   python -m sglang.launch_server \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port "$SGLANG_PORT" \
     --model-path "$model_path" \
     --kt-weight-path "$model_path" \
     --kt-cpuinfer "$KT_CPUINFER" \
