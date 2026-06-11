@@ -15,7 +15,7 @@ cmd=(
   env CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES"
   SGLANG_EXPERT_DISTRIBUTION_RECORDER_DIR="$recorder_dir"
   "${ADDITIONAL_SGLANG_ENV_ARGS[@]}"
-  numactl --cpunodebind="$NUMACTL_CPUNODEBIND" --membind="$NUMACTL_MEMBIND"
+  "${NUMACTL_CMD[@]}"
   python -m sglang.launch_server \
     --host 0.0.0.0 \
     --port "$HTTP_PORT" \
@@ -38,7 +38,7 @@ cmd=(
     --served-model-name "$SERVED_MODEL_NAME" \
     --enable-mixed-chunk \
     --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
-    --numa-node "${NUMA_NODE_ARGS[@]}" \
+    "${SGLANG_NUMA_NODE_ARGS[@]}" \
     --enable-p2p-check \
     --disable-shared-experts-fusion \
     --disable-radix-cache \

@@ -64,8 +64,14 @@ load_launch_config() {
 
   : "${MODEL:?MODEL must be set in $config_file}"
   : "${CUDA_VISIBLE_DEVICES:?CUDA_VISIBLE_DEVICES must be set in $config_file}"
-  : "${NUMACTL_CPUNODEBIND:?NUMACTL_CPUNODEBIND must be set in $config_file}"
-  : "${NUMACTL_MEMBIND:?NUMACTL_MEMBIND must be set in $config_file}"
+  if [[ -z ${NUMACTL_CPUNODEBIND+x} ]]; then
+    echo "Error: NUMACTL_CPUNODEBIND must be set in $config_file" >&2
+    exit 2
+  fi
+  if [[ -z ${NUMACTL_MEMBIND+x} ]]; then
+    echo "Error: NUMACTL_MEMBIND must be set in $config_file" >&2
+    exit 2
+  fi
   : "${KT_CPUINFER:?KT_CPUINFER must be set in $config_file}"
   : "${KT_THREADPOOL_COUNT:?KT_THREADPOOL_COUNT must be set in $config_file}"
   : "${KT_NUM_GPU_EXPERTS:?KT_NUM_GPU_EXPERTS must be set in $config_file}"
@@ -77,7 +83,10 @@ load_launch_config() {
   : "${CHUNKED_PREFILL_SIZE:?CHUNKED_PREFILL_SIZE must be set in $config_file}"
   : "${SERVED_MODEL_NAME:?SERVED_MODEL_NAME must be set in $config_file}"
   : "${TENSOR_PARALLEL_SIZE:?TENSOR_PARALLEL_SIZE must be set in $config_file}"
-  : "${NUMA_NODE:?NUMA_NODE must be set in $config_file}"
+  if [[ -z ${NUMA_NODE+x} ]]; then
+    echo "Error: NUMA_NODE must be set in $config_file" >&2
+    exit 2
+  fi
   : "${EXPERTS_PATH:?EXPERTS_PATH must be set in $config_file}"
 
   EXPERTS_PATH="${EXPERTS_PATH#/}"
@@ -97,7 +106,24 @@ load_launch_config() {
     exit 2
   fi
 
-  read -r -a NUMA_NODE_ARGS <<< "$NUMA_NODE"
+  NUMACTL_CMD=()
+  NUMACTL_ARGS=()
+  if [[ -n "$NUMACTL_CPUNODEBIND" ]]; then
+    NUMACTL_ARGS+=(--cpunodebind="$NUMACTL_CPUNODEBIND")
+  fi
+  if [[ -n "$NUMACTL_MEMBIND" ]]; then
+    NUMACTL_ARGS+=(--membind="$NUMACTL_MEMBIND")
+  fi
+  if (( ${#NUMACTL_ARGS[@]} )); then
+    NUMACTL_CMD=(numactl "${NUMACTL_ARGS[@]}")
+  fi
+
+  NUMA_NODE_ARGS=()
+  SGLANG_NUMA_NODE_ARGS=()
+  if [[ -n "$NUMA_NODE" ]]; then
+    read -r -a NUMA_NODE_ARGS <<< "$NUMA_NODE"
+    SGLANG_NUMA_NODE_ARGS=(--numa-node "${NUMA_NODE_ARGS[@]}")
+  fi
   ADDITIONAL_SGLANG_ENV_ARGS=()
   if [[ -n "$ADDITIONAL_SGLANG_ENVS" ]]; then
     read -r -a ADDITIONAL_SGLANG_ENV_ARGS <<< "$ADDITIONAL_SGLANG_ENVS"
