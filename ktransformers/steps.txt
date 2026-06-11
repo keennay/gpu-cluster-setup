@@ -5,7 +5,7 @@ SGLANG_PORT="${SGLANG_PORT:-8000}"
 KT_BENCHMARK_MODEL="deepseek"
 KT_REPO_ROOT="${KT_REPO_ROOT:-$(pwd)}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-$(cd "${KT_REPO_ROOT}/.." && pwd)/benchmarks/benchmark_swezero.py}"
-KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 10 --input 20k --output-cap 8000"
+KT_BENCHMARK_FLAGS="--num-prompts 100 --concurrency 10 --input 8k --output-cap 1000"
 KT_TEST_PLAN_FILE="plan.md"
 MESSAGE="hermes send --to discord"
 STOP_TEST_EARLY_BOOLEAN=false
@@ -28,12 +28,12 @@ Step 2:
 Step 3:
 	Agent 2:
 	Terminal prompt `${MESSAGE} "Launching: Benchmark for 01_launch"` 
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 52 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 47 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
 	Wait until completion, the window should show `RESULTS`
 	Export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/01_launch.txt
 	Terminal prompt `${MESSAGE} "<above_results>"`
 	Stop the python instance of ${KT_BENCHMARK_PATH}
-	If ${KT_BENCHMARK_PATH} crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 01_launch"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 52 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
+	If ${KT_BENCHMARK_PATH} crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 01_launch"` and restart: `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 47 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 01_launch"`
 	If Agent 1's SGLang instance failed at any point before completion, Terminal prompt `${MESSAGE} "Fail: SGLang for 01_launch | Reason: <reason>"` with <reason> being a concise message especially for capturing any SGLang OOM errors, and restart from Step 2.
 	If successful, proceed to Step 4.
 
@@ -92,7 +92,7 @@ Step 9:
 Step 10:
 	Agent 2:
 	Terminal prompt `${MESSAGE} "Launching: Benchmark for 03_launch"`
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 52 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 03_launch"`
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 47 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 03_launch"`
 	Wait until completion, the window should show `RESULTS`
 	If ${KT_BENCHMARK_PATH} crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 03_launch"` and restart Step 10.
 	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/03_launch.txt
@@ -154,7 +154,7 @@ Step 16:
 Step 17:
 	Agent 2:
 	Terminal prompt `${MESSAGE} "Launching: Benchmark for 04_launch"`
-	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 52 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 04_launch"`
+	Launch `python ${KT_BENCHMARK_PATH} ${KT_BENCHMARK_FLAGS} --seed 47 --model $KT_BENCHMARK_MODEL --label "${KT_EXPERTS_PATH} | 04_launch"`
 	Wait until completion, the window should show `RESULTS`
 	If ${KT_BENCHMARK_PATH} crashed at any moment during this step, Terminal prompt `${MESSAGE} "Fail: Benchmark for 04_launch"` and restart Step 17.
 	If successfully reached this point, export that window from `RESULTS` to ./results/${KT_EXPERTS_PATH}/04_launch.txt
