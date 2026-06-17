@@ -420,50 +420,8 @@ install_gemma_sglang() {
 }
 
 install_gemma_vllm() {
-    print_info "Installing packages for Gemma-4 (vLLM)..."
-
-    local cuda_home=""
-    local cuda_source=""
-    local vllm_package=""
-    local vllm_index=""
-    local torch_index=""
-    local torch_backend=""
-    local vllm_commit="c66b19800bb3d9ff958d5db82463aa19d2bbc255"
-
-    if cuda_home=$(find_system_cuda_13_home); then
-        cuda_source="system"
-        vllm_package="vllm==0.22.1rc1.dev214+gc66b19800"
-        vllm_index="https://wheels.vllm.ai/${vllm_commit}/cu130"
-        torch_index="https://download.pytorch.org/whl/cu130"
-        torch_backend="cu130"
-        print_info "Detected system CUDA 13 toolkit at $cuda_home; installing Gemma vLLM CUDA 13 nightly."
-    else
-        vllm_package="vllm==0.22.1rc1.dev214+gc66b19800.cu129"
-        vllm_index="https://wheels.vllm.ai/${vllm_commit}/cu129"
-        torch_index="https://download.pytorch.org/whl/cu129"
-        torch_backend="cu129"
-        print_info "No complete system CUDA 13 toolkit found; installing Gemma vLLM CUDA 12.9 nightly."
-    fi
-
-    run_uv_install -U "$vllm_package" --pre \
-        --extra-index-url "$vllm_index" \
-        --extra-index-url "$torch_index" \
-        --torch-backend "$torch_backend" \
-        --index-strategy unsafe-best-match || return 1
-
-    if [ -n "$cuda_home" ]; then
-        export CUDA_HOME="$cuda_home"
-        export CUDA_PATH="$cuda_home"
-        export PATH="$cuda_home/bin:$PATH"
-        export LD_LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
-        export LIBRARY_PATH="$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
-        if [ -d "$cuda_home/include/cccl" ]; then
-            export CPATH="$cuda_home/include/cccl:${CPATH:-}"
-        fi
-        print_info "Gemma vLLM CUDA toolkit: $CUDA_HOME ($cuda_source)"
-    fi
-
-    print_info "Gemma vLLM package: $vllm_package ($torch_backend)"
+    print_info "Installing vLLM for Gemma-4..."
+    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 install_glm_sglang() {
@@ -604,11 +562,8 @@ install_deepseek_ktransformers() {
 install_deepseek_sglang() {
     print_info "Installing SGLang for DeepSeek..."
 
-    run_uv_install --upgrade --prerelease=explicit \
-        'flash-attn-4==4.0.0b9' \
-        'sglang==0.5.12' \
-        'kernels==0.14.1' \
-        'kernels-data==0.14.1' || return 1
+    run_uv_install --upgrade --prerelease=allow \
+        'sglang==0.5.13' || return 1
 
     local cuda_home=""
     if cuda_home=$(find_system_cuda_13_home); then
@@ -703,11 +658,8 @@ install_gptoss_transformers() {
 }
 
 install_gptoss_vllm() {
-    print_info "Installing vLLM GPT-OSS build..."
-    run_uv_install --pre vllm==0.10.1+gptoss \
-        --extra-index-url https://wheels.vllm.ai/gpt-oss/ \
-        --extra-index-url https://download.pytorch.org/whl/nightly/cu128 \
-        --index-strategy unsafe-best-match
+    print_info "Installing vLLM for gpt-oss..."
+    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 install_kimi_ktransformers() {
@@ -901,7 +853,7 @@ install_minimax_transformers() {
 
 install_minimax_vllm() {
     print_info "Installing vLLM for MiniMax-M2.X..."
-    run_uv_install -U vllm --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 install_nemotron_sglang() {
@@ -916,7 +868,7 @@ install_nemotron_trtllm() {
 
 install_nemotron_vllm() {
     print_info "Installing vLLM for Nemotron-3..."
-    run_uv_install vllm==0.22.0 --torch-backend=auto
+    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 install_qwen3_ktransformers() {
