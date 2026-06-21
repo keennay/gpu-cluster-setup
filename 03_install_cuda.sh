@@ -1,6 +1,6 @@
 #!/bin/bash
-# Script: 02_install_dependencies.sh
-# Purpose: Check and install system dependencies for ML environment
+# Script: 03_install_cuda.sh
+# Purpose: Check and install CUDA/NVIDIA dependencies for ML environment
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -656,7 +656,6 @@ OS_TYPE=""
 PKG_INSTALL_CMD=""
 PKG_UPDATE_CMD=""
 PKG_QUERY_CMD=""
-PKG_CLEAN_CMD=""
 OS_ID=""
 OS_NAME=""
 OS_VERSION_ID=""
@@ -687,7 +686,6 @@ detect_os_package_manager() {
         PKG_INSTALL_CMD="${SUDO_PREFIX}apt install -y"
         PKG_UPDATE_CMD="${SUDO_PREFIX}apt update"
         PKG_QUERY_CMD="dpkg -l"
-        PKG_CLEAN_CMD="${SUDO_PREFIX}apt clean"
         return 0
     fi
 
@@ -699,11 +697,9 @@ detect_os_package_manager() {
         if command -v dnf &> /dev/null; then
             PKG_INSTALL_CMD="${SUDO_PREFIX}dnf install -y"
             PKG_UPDATE_CMD="${SUDO_PREFIX}dnf makecache"
-            PKG_CLEAN_CMD="${SUDO_PREFIX}dnf clean all"
         else
             PKG_INSTALL_CMD="${SUDO_PREFIX}yum install -y"
             PKG_UPDATE_CMD="${SUDO_PREFIX}yum makecache"
-            PKG_CLEAN_CMD="${SUDO_PREFIX}yum clean all"
         fi
         PKG_QUERY_CMD="rpm -qa"
         return 0
@@ -732,95 +728,7 @@ else
     print_info "✓ $OS_NAME $OS_VERSION_ID detected"
 fi
 echo ""
-# Check disk space
-print_info "Checking disk space..."
-AVAILABLE_SPACE=$(df -BG /var | awk 'NR==2 {print $4}' | sed 's/G//')
-if [ "$AVAILABLE_SPACE" -lt 5 ]; then
-    print_error "Low disk space: ${AVAILABLE_SPACE}GB available on /var"
-    print_error "At least 5GB recommended for package installation"
-    if [ -n "$PKG_CLEAN_CMD" ]; then
-        print_info "Free up space with: $PKG_CLEAN_CMD"
-    fi
-    exit 1
-else
-    print_info "✓ Disk space: ${AVAILABLE_SPACE}GB available"
-fi
-echo ""
-# System packages - define based on OS type
-if [ "$OS_TYPE" = "ubuntu" ]; then
-    SYSTEM_PACKAGES=(
-        # Essential build tools
-        "build-essential"
-        "gcc"
-        "g++"
-        "make"
-        "cmake"
-        "pkg-config"
-        "protobuf-compiler"
-
-        # NUMA optimization
-        "numactl"
-        "libnuma-dev"
-        "libhwloc-dev"
-        
-        # Essential Python dependencies
-        "libssl-dev"
-        "libffi-dev"
-        "liblzma-dev"
-        "libbz2-dev"
-        "libreadline-dev"
-        "libsqlite3-dev"
-        "libncurses-dev"
-        "zlib1g-dev"
-    )
-elif [ "$OS_TYPE" = "rhel" ]; then
-    SYSTEM_PACKAGES=(
-        # Essential build tools
-        "gcc"
-        "gcc-c++"
-        "make"
-        "cmake"
-        "pkgconf-pkg-config"
-        "protobuf-compiler"
-
-        # NUMA optimization
-        "numactl"
-        "numactl-devel"
-        "hwloc-devel"
-        
-        # Essential Python dependencies
-        "openssl-devel"
-        "libffi-devel"
-        "zlib-devel"
-        "xz-devel"
-        "bzip2-devel"
-        "readline-devel"
-        "ncurses-devel"
-        "sqlite-devel"
-    )
-fi
-# Check packages
-print_info "Checking system dependencies..."
-MISSING_PACKAGES=()
-for pkg in "${SYSTEM_PACKAGES[@]}"; do
-    if [ "$OS_TYPE" = "ubuntu" ]; then
-        if dpkg -l 2>/dev/null | grep -q "^ii  $pkg"; then
-            print_info "  ✓ $pkg"
-        else
-            print_error "  ✗ $pkg"
-            MISSING_PACKAGES+=($pkg)
-        fi
-    elif [ "$OS_TYPE" = "rhel" ]; then
-        if rpm -qa | grep -q "^$pkg"; then
-            print_info "  ✓ $pkg"
-        else
-            print_error "  ✗ $pkg"
-            MISSING_PACKAGES+=($pkg)
-        fi
-    fi
-done
 # Check CUDA driver and toolkit
-echo ""
 print_info "Checking CUDA driver and toolkit..."
 
 # Check for NVIDIA driver and get supported CUDA version
@@ -866,14 +774,6 @@ fi
 collect_installed_cuda_versions
 
 echo ""
-# Report and install
-SYSTEM_PACKAGES_MISSING_COUNT=${#MISSING_PACKAGES[@]}
-if [ $SYSTEM_PACKAGES_MISSING_COUNT -gt 0 ]; then
-    print_warning "Missing ${SYSTEM_PACKAGES_MISSING_COUNT} packages: ${MISSING_PACKAGES[*]}"
-else
-    print_info "All core system packages already installed."
-fi
-
 if command -v nvcc &> /dev/null; then
     print_info "CUDA toolkit detected - reinstall, upgrade, or downgrade options available."
 else
@@ -881,125 +781,6 @@ else
     CUDA_MISSING=true
 fi
 echo ""
-
-INSTALL_SYSTEM_PACKAGES="n"
-if [ $SYSTEM_PACKAGES_MISSING_COUNT -gt 0 ]; then
-    if [ "$AUTO_YES" = true ]; then
-        INSTALL_SYSTEM_PACKAGES="y"
-    else
-        read -p "Do you want to install missing packages? (y/n): " INSTALL_SYSTEM_PACKAGES
-    fi
-fi
-
-if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
-    # Install system packages first
-    if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
-        print_info "Installing missing packages..."
-        echo ""
-        
-        # Clean package cache first if low on space
-        if [ "$AVAILABLE_SPACE" -lt 10 ]; then
-            if [ "$AUTO_YES" = true ]; then
-                CLEAN_CACHE="y"
-            else
-                print_warning "Low disk space (${AVAILABLE_SPACE}GB). Clean package cache to free space?"
-                read -p "Clean package cache? (y/n): " CLEAN_CACHE
-            fi
-            
-            if [[ "$CLEAN_CACHE" =~ ^[Yy]$ ]]; then
-                print_info "Cleaning package cache to free space..."
-                if [ -n "$PKG_CLEAN_CMD" ]; then
-                    $PKG_CLEAN_CMD
-                else
-                    print_warning "No package cache clean command available for this OS"
-                fi
-            else
-                print_warning "Proceeding without cleaning package cache - installation may fail if space runs out"
-            fi
-        fi
-        
-        # Update package lists
-        if [ "$OS_TYPE" = "ubuntu" ]; then
-            $PKG_UPDATE_CMD
-        elif [ "$OS_TYPE" = "rhel" ]; then
-            $PKG_UPDATE_CMD
-        fi
-        
-        if [ $? -ne 0 ]; then
-            print_error "Package update failed - check your internet connection and disk space"
-            INSTALL_SUCCESS=false
-        else
-            if [ -n "$PKG_INSTALL_CMD" ]; then
-                $PKG_INSTALL_CMD ${MISSING_PACKAGES[*]}
-            fi
-            
-            if [ $? -ne 0 ]; then
-                print_error "Failed to install some packages"
-                INSTALL_SUCCESS=false
-            fi
-        fi
-    fi
-    
-    # Check and fix gcc/g++ version mismatch after package installation
-    if [ "$INSTALL_SUCCESS" = true ]; then
-        print_info "Checking gcc/g++ version compatibility..."
-        
-        # Get installed gcc version
-        if command -v gcc &> /dev/null; then
-            GCC_VERSION=$(gcc --version | head -1 | grep -oE '[0-9]+' | head -1)
-            print_info "Detected gcc-$GCC_VERSION"
-            
-            # Check if matching g++ version exists
-            if command -v g++-$GCC_VERSION &> /dev/null; then
-                print_info "✓ g++-$GCC_VERSION already available"
-            else
-                if [ "$AUTO_YES" = true ]; then
-                    INSTALL_GPP="y"
-                else
-                    read -p "Install g++-$GCC_VERSION to match gcc-$GCC_VERSION? (y/n): " INSTALL_GPP
-                fi
-                
-                if [[ "$INSTALL_GPP" =~ ^[Yy]$ ]]; then
-                    print_info "Installing g++-$GCC_VERSION to match gcc-$GCC_VERSION..."
-                    if [ "$OS_TYPE" = "ubuntu" ]; then
-                        if $PKG_INSTALL_CMD g++-$GCC_VERSION; then
-                            print_info "✓ g++-$GCC_VERSION installed"
-                            
-                            # Ask about setting as default
-                            if [ "$AUTO_YES" = true ]; then
-                                SET_DEFAULT="y"
-                            else
-                                read -p "Set g++-$GCC_VERSION as default g++ compiler? (y/n): " SET_DEFAULT
-                            fi
-                            
-                            if [[ "$SET_DEFAULT" =~ ^[Yy]$ ]]; then
-                                if sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
-                                    print_info "✓ Set g++-$GCC_VERSION as default g++ compiler"
-                                else
-                                    print_warning "Could not set g++-$GCC_VERSION as default"
-                                fi
-                            else
-                                print_info "Skipped setting g++-$GCC_VERSION as default"
-                            fi
-                        else
-                            print_warning "Could not install g++-$GCC_VERSION - CUDA compilation may fail"
-                        fi
-                    elif [ "$OS_TYPE" = "rhel" ]; then
-                        # RHEL variants typically have matching gcc/g++ versions in the gcc-c++ package
-                        print_info "✓ gcc-c++ package provides matching g++ version"
-                    fi
-                else
-                    print_warning "Skipped g++-$GCC_VERSION installation - CUDA compilation may fail"
-                fi
-            fi
-        fi
-    fi
-fi
-
-if [ "$INSTALL_SUCCESS" != true ]; then
-    print_error "❌ Installation had errors - check messages above"
-    exit 1
-fi
 
 # Install/Upgrade CUDA toolkit
 echo ""

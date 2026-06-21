@@ -112,12 +112,12 @@ echo ""
 load_nvm_node
 
 if ! command -v npm &> /dev/null; then
-    print_error "npm not found - install Node.js first by running ./01_init.sh"
+    print_error "npm not found - install Node.js first by running ./01_install_dependencies.sh"
     exit 1
 fi
 
 if ! command -v curl &> /dev/null; then
-    print_error "curl not found - install basic Linux essentials first by running ./01_init.sh"
+    print_error "curl not found - install basic Linux essentials first by running ./01_install_dependencies.sh"
     exit 1
 fi
 

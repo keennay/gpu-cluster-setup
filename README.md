@@ -9,9 +9,9 @@ For this, it's assumed your working directory is either `/` or `/workspace`. Edi
 #### GPU Instance with Ubuntu user (For ex: Prime Intellect):
 `sudo mkdir -p /workspace ; sudo chown -R ubuntu:ubuntu /workspace ; cd /workspace ; git clone https://github.com/keennay/gpu-cluster-setup.git ; mv gpu-cluster-setup scripts ; cd scripts`<br>
 #### Remaining:
-`./01_init.sh`<br>
+`./01_install_dependencies.sh`<br>
 `./02_install_coding_clis.sh`<br>
-`./03_install_dependencies.sh`<br>
+`./03_install_cuda.sh`<br>
 `./04_install_python.sh`<br>
 `source ./05_setup_env.sh`<br>
 `./06_install_packages.sh`<br>
