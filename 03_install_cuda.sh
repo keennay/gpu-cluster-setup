@@ -442,10 +442,6 @@ install_nvidia_driver_for_gpu_support() {
     local kernel_driver_loaded=false
     local kernel_driver_was_loaded=false
 
-    if ! command -v nvcc &> /dev/null; then
-        return 0
-    fi
-
     if ! has_nvidia_pci_devices; then
         print_info "No NVIDIA GPU detected via PCI enumeration; skipping driver installation."
         return 0
@@ -1209,7 +1205,22 @@ echo ""
                 if [ -n "$TARGET_CUDA_VERSION_NORMALIZED" ]; then
                     DRIVER_CUDA_STREAM="$TARGET_CUDA_VERSION_NORMALIZED"
                 fi
-                install_nvidia_driver_for_gpu_support "$DRIVER_CUDA_STREAM"
+
+                RUN_DRIVER_INSTALL=false
+                case "$CUDA_SELECTION" in
+                    latest|custom)
+                        RUN_DRIVER_INSTALL=true
+                        ;;
+                    keep)
+                        if [ -n "$CURRENT_CUDA_VERSION_NORMALIZED" ]; then
+                            RUN_DRIVER_INSTALL=true
+                        fi
+                        ;;
+                esac
+
+                if [ "$RUN_DRIVER_INSTALL" = true ]; then
+                    install_nvidia_driver_for_gpu_support "$DRIVER_CUDA_STREAM"
+                fi
             fi
         
         echo ""
