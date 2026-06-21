@@ -12,6 +12,10 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 
+is_valid_cuda_version_arg() {
+    [[ "$1" =~ ^[0-9]+$ || "$1" =~ ^[0-9]+\.[0-9]+$ || "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CUDA_CACHE_DIR="/tmp/cuda-cache"
 if ! mkdir -p "$CUDA_CACHE_DIR" 2>/dev/null; then
@@ -647,9 +651,33 @@ INSTALL_SUCCESS=true
 CURRENT_CUDA_VERSION_NORMALIZED=""
 # Parse arguments
 AUTO_YES=false
-if [[ "$1" == "-y" ]]; then
-    AUTO_YES=true
-fi
+CUDA_VERSION_ARG=""
+for arg in "$@"; do
+    case "$arg" in
+        -y|--auto)
+            AUTO_YES=true
+            ;;
+        -h|--help)
+            echo "Usage: $0 [-y|--auto] [cuda-version]"
+            echo "  -y, --auto      Automatically accept yes/no prompts"
+            echo "  cuda-version    Automatically select custom CUDA version (e.g. 12.9, 13, 13.0.2-1)"
+            exit 0
+            ;;
+        *)
+            if is_valid_cuda_version_arg "$arg"; then
+                if [ -n "$CUDA_VERSION_ARG" ]; then
+                    print_error "Only one CUDA version argument is allowed."
+                    exit 1
+                fi
+                CUDA_VERSION_ARG="$arg"
+            else
+                print_error "Invalid argument: $arg"
+                print_error "CUDA version must be numeric, such as 12.9, 13, 13.0.1, or 13.0.2-1."
+                exit 1
+            fi
+            ;;
+    esac
+done
 
 # OS/package manager detection
 OS_TYPE=""
@@ -836,55 +864,65 @@ echo ""
 
             print_info "Installed CUDA versions detected: $INSTALLED_CUDA_VERSIONS_DISPLAY"
             print_info "Current CUDA version: $CURRENT_CUDA_DISPLAY"
-            echo "Choose CUDA installation option:"
-            echo "  1) Keep current version"
-            echo "  2) Install latest version ($LATEST_CUDA_VERSION)"
-            echo "  3) Install custom version"
-            echo "  4) Skip CUDA installation"
             CUDA_SELECTION=""
             CUDA_SKIP_REASON=""
-            read -p "Enter choice (1/2/3/4): " CUDA_CHOICE
-            while [[ ! "$CUDA_CHOICE" =~ ^[1234]$ ]]; do
-                read -p "Please enter 1, 2, 3, or 4: " CUDA_CHOICE
-            done
-            case $CUDA_CHOICE in
-                1)
-                    CUDA_SELECTION="keep"
-                    CUDA_INSTALL_REQUESTED=false
-                    if [ "$CURRENT_CUDA_DISPLAY" = "None" ]; then
-                        print_warning "CUDA toolkit remains uninstalled. GPU-accelerated workflows will not be available."
-                    else
-                        print_info "Keeping existing CUDA toolkit ($CURRENT_CUDA_DISPLAY)."
-                    fi
-                    ;;
-                2)
-                    CUDA_SELECTION="latest"
-                    CUDA_INSTALL_REQUESTED=true
-                    TARGET_CUDA_VERSION="$LATEST_CUDA_VERSION"
-                    ;;
-                3)
-                    CUDA_SELECTION="custom"
-                    while true; do
-                        read -p "Enter desired CUDA version (e.g. 13, 13.0, 13.0.1, or 13.0.2-1): " CUSTOM_VERSION
-                        if [[ "$CUSTOM_VERSION" =~ ^[0-9]+$ || "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+$ || "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
-                            if [[ "$CUSTOM_VERSION" =~ ^[0-9]+$ ]]; then
-                                CUSTOM_VERSION="${CUSTOM_VERSION}.0"
-                            fi
-                            TARGET_CUDA_VERSION="$CUSTOM_VERSION"
-                            CUDA_INSTALL_REQUESTED=true
-                            break
+            if [ -n "$CUDA_VERSION_ARG" ]; then
+                CUDA_SELECTION="custom"
+                CUDA_INSTALL_REQUESTED=true
+                TARGET_CUDA_VERSION="$CUDA_VERSION_ARG"
+                if [[ "$TARGET_CUDA_VERSION" =~ ^[0-9]+$ ]]; then
+                    TARGET_CUDA_VERSION="${TARGET_CUDA_VERSION}.0"
+                fi
+                print_info "CUDA version argument provided; selecting custom CUDA $TARGET_CUDA_VERSION."
+            else
+                echo "Choose CUDA installation option:"
+                echo "  1) Keep current version"
+                echo "  2) Install latest version ($LATEST_CUDA_VERSION)"
+                echo "  3) Install custom version"
+                echo "  4) Skip CUDA installation"
+                read -p "Enter choice (1/2/3/4): " CUDA_CHOICE
+                while [[ ! "$CUDA_CHOICE" =~ ^[1234]$ ]]; do
+                    read -p "Please enter 1, 2, 3, or 4: " CUDA_CHOICE
+                done
+                case $CUDA_CHOICE in
+                    1)
+                        CUDA_SELECTION="keep"
+                        CUDA_INSTALL_REQUESTED=false
+                        if [ "$CURRENT_CUDA_DISPLAY" = "None" ]; then
+                            print_warning "CUDA toolkit remains uninstalled. GPU-accelerated workflows will not be available."
                         else
-                            print_error "Invalid version number. Use major, major.minor, major.minor.patch, or major.minor.patch-release (e.g. 13, 13.0, 13.0.1, or 13.0.2-1)."
+                            print_info "Keeping existing CUDA toolkit ($CURRENT_CUDA_DISPLAY)."
                         fi
-                    done
-                    ;;
-                4)
-                    CUDA_SELECTION="skip"
-                    CUDA_INSTALL_REQUESTED=false
-                    CUDA_SKIP_REASON="user_skip"
-                    print_info "Skipping CUDA toolkit installation per user selection (option 4)."
-                    ;;
-            esac
+                        ;;
+                    2)
+                        CUDA_SELECTION="latest"
+                        CUDA_INSTALL_REQUESTED=true
+                        TARGET_CUDA_VERSION="$LATEST_CUDA_VERSION"
+                        ;;
+                    3)
+                        CUDA_SELECTION="custom"
+                        while true; do
+                            read -p "Enter desired CUDA version (e.g. 13, 13.0, 13.0.1, or 13.0.2-1): " CUSTOM_VERSION
+                            if is_valid_cuda_version_arg "$CUSTOM_VERSION"; then
+                                if [[ "$CUSTOM_VERSION" =~ ^[0-9]+$ ]]; then
+                                    CUSTOM_VERSION="${CUSTOM_VERSION}.0"
+                                fi
+                                TARGET_CUDA_VERSION="$CUSTOM_VERSION"
+                                CUDA_INSTALL_REQUESTED=true
+                                break
+                            else
+                                print_error "Invalid version number. Use major, major.minor, major.minor.patch, or major.minor.patch-release (e.g. 13, 13.0, 13.0.1, or 13.0.2-1)."
+                            fi
+                        done
+                        ;;
+                    4)
+                        CUDA_SELECTION="skip"
+                        CUDA_INSTALL_REQUESTED=false
+                        CUDA_SKIP_REASON="user_skip"
+                        print_info "Skipping CUDA toolkit installation per user selection (option 4)."
+                        ;;
+                esac
+            fi
 
             TARGET_CUDA_VERSION_MAJOR=""
             TARGET_CUDA_VERSION_MINOR=""
