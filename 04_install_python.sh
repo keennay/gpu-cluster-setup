@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script: 03_install_python.sh
+# Script: 04_install_python.sh
 # Purpose: Check and install the latest Python via pyenv and uv
 
 # Colors
@@ -15,19 +15,48 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 
+is_valid_python_version_arg() {
+    [[ "$1" =~ ^[0-9]+(\.[0-9]+)+$ ]]
+}
+
 # Parse arguments
 AUTO_YES=false
-if [[ "$1" == "-y" ]]; then
-    AUTO_YES=true
-fi
+PYTHON_VERSION_ARG=""
+for arg in "$@"; do
+    case "$arg" in
+        -y|--auto)
+            AUTO_YES=true
+            ;;
+        -h|--help)
+            echo "Usage: $0 [-y|--auto] [python-version]"
+            echo "  -y, --auto        Automatically accept yes/no prompts"
+            echo "  python-version    Automatically select custom Python version (e.g. 3.11.15)"
+            exit 0
+            ;;
+        *)
+            if is_valid_python_version_arg "$arg"; then
+                if [ -n "$PYTHON_VERSION_ARG" ]; then
+                    print_error "Only one Python version argument is allowed."
+                    exit 1
+                fi
+                PYTHON_VERSION_ARG="$arg"
+            else
+                print_error "Invalid argument: $arg"
+                print_error "Python version must be numeric, such as 3.11.15."
+                exit 1
+            fi
+            ;;
+    esac
+done
 
 NEEDS_PATH_UPDATE=false
 
 # Function to reload shell environment
 reload_shell_env() {
     # Source bashrc to get latest PATH
-    if [ -f ~/.bashrc ]; then
-        source ~/.bashrc
+    if [ -f "$HOME/.bashrc" ]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.bashrc"
     fi
     
     # Reload pyenv if installed
@@ -104,7 +133,7 @@ ensure_pyenv() {
         INSTALL_PYENV="y"
         print_info "Automatic mode enabled (-y): installing pyenv"
     else
-        read -p "Install pyenv? (y/n): " INSTALL_PYENV
+        read -r -p "Install pyenv? (y/n): " INSTALL_PYENV
     fi
 
     if [[ ! "$INSTALL_PYENV" =~ ^[Yy]$ ]]; then
@@ -230,7 +259,11 @@ fi
 
 PYTHON_ACTION=""
 
-if [ "$PYTHON_PRESENT" = false ]; then
+if [ -n "$PYTHON_VERSION_ARG" ]; then
+    PYTHON_ACTION="install_custom"
+    TARGET_PYTHON_VERSION="$PYTHON_VERSION_ARG"
+    print_info "Python version argument provided; selecting custom Python $TARGET_PYTHON_VERSION."
+elif [ "$PYTHON_PRESENT" = false ]; then
     print_warning "No existing python3 installation detected; a new version will be installed."
     PYTHON_ACTION="install_latest"
 else
@@ -239,7 +272,7 @@ else
         echo "  1) Keep current version ($CURRENT_PYTHON_VERSION)"
         echo "  2) Install latest version via pyenv ($LATEST_PYTHON_VERSION)"
         echo "  3) Install custom version via pyenv"
-        read -p "Enter choice (1/2/3): " PYTHON_CHOICE
+        read -r -p "Enter choice (1/2/3): " PYTHON_CHOICE
 
         if [[ ! "$PYTHON_CHOICE" =~ ^[123]$ ]]; then
             print_error "Invalid choice. Please enter 1, 2, or 3."
@@ -260,10 +293,10 @@ else
 fi
 
 CUSTOM_VERSION=""
-if [ "$PYTHON_ACTION" = "install_custom" ]; then
+if [ "$PYTHON_ACTION" = "install_custom" ] && [ -z "$TARGET_PYTHON_VERSION" ]; then
     while true; do
-        read -p "Enter desired Python version (e.g. 3.11.8): " CUSTOM_VERSION
-        if [[ "$CUSTOM_VERSION" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+        read -r -p "Enter desired Python version (e.g. 3.11.8): " CUSTOM_VERSION
+        if is_valid_python_version_arg "$CUSTOM_VERSION"; then
             break
         else
             print_error "Invalid version format. Please use numeric values like 3.11.8"
@@ -295,8 +328,7 @@ else
     else
         print_info "Installing Python $TARGET_PYTHON_VERSION via pyenv..."
         print_info "This compiles Python from source and may take several minutes."
-        MAKE_OPTS="-j$(nproc)" pyenv install "$TARGET_PYTHON_VERSION"
-        if [ $? -ne 0 ]; then
+        if ! MAKE_OPTS="-j$(nproc)" pyenv install "$TARGET_PYTHON_VERSION"; then
             print_error "Failed to install Python $TARGET_PYTHON_VERSION"
             exit 1
         fi
@@ -334,7 +366,7 @@ else
     if [ "$AUTO_YES" = true ]; then
         INSTALL_UV="y"
     else
-        read -p "Install uv? (y/n): " INSTALL_UV
+        read -r -p "Install uv? (y/n): " INSTALL_UV
     fi
     
     if [[ "$INSTALL_UV" =~ ^[Yy]$ ]]; then
@@ -342,8 +374,10 @@ else
         curl -LsSf https://astral.sh/uv/install.sh | sh
         
         # Add to PATH if not present
-        if ! grep -q ".cargo/bin" ~/.bashrc; then
-            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+        if ! grep -q ".cargo/bin" "$HOME/.bashrc"; then
+            # Keep this literal so future shells expand their own HOME and PATH.
+            # shellcheck disable=SC2016
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$HOME/.bashrc"
             print_info "Added cargo/bin to PATH in ~/.bashrc"
             NEEDS_PATH_UPDATE=true
         fi
@@ -431,19 +465,23 @@ if [ -n "$PYTHON3_BIN_PATH" ] && ! command -v python &> /dev/null; then
         mkdir -p "$SYMLINK_DIR"
     fi
 
-    while true; do
-        read -p "Create python symlink pointing to python3 at $SYMLINK_PATH? (y/n): " CREATE_PYTHON_SYMLINK
-        if [[ "$CREATE_PYTHON_SYMLINK" =~ ^[YyNn]$ ]]; then
-            break
-        fi
-        print_error "Please answer y or n."
-    done
+    if [ "$AUTO_YES" = true ]; then
+        CREATE_PYTHON_SYMLINK="y"
+    else
+        while true; do
+            read -r -p "Create python symlink pointing to python3 at $SYMLINK_PATH? (y/n): " CREATE_PYTHON_SYMLINK
+            if [[ "$CREATE_PYTHON_SYMLINK" =~ ^[YyNn]$ ]]; then
+                break
+            fi
+            print_error "Please answer y or n."
+        done
+    fi
 
     if [[ "$CREATE_PYTHON_SYMLINK" =~ ^[Yy]$ ]]; then
         if ln -sf "$PYTHON3_BIN_PATH" "$SYMLINK_PATH"; then
             print_info "Created python symlink at $SYMLINK_PATH"
             if [ "$SYMLINK_DIR" = "$HOME/.local/bin" ] && ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
-                print_warning "~/.local/bin is not currently on PATH; add it to your shell profile to use the python alias."
+                print_warning "$HOME/.local/bin is not currently on PATH; add it to your shell profile to use the python alias."
             fi
         else
             print_error "Failed to create python symlink at $SYMLINK_PATH"

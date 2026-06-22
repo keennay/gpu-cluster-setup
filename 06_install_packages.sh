@@ -4,8 +4,9 @@
 # Purpose: Provide environment placeholders without installing packages.
 # Usage: ./06_install_packages.sh [--env ENV_NAME]
 
-if [ -f ~/.bashrc ]; then
-    source ~/.bashrc
+if [ -f "$HOME/.bashrc" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.bashrc"
 fi
 
 RED='\033[0;31m'
@@ -648,6 +649,7 @@ install_deepseek_vllm() {
     run_command chmod +x "$deepgemm_installer" || return 1
 
     print_info "Installing DeepGEMM for DeepSeek vLLM..."
+    # shellcheck disable=SC2016
     run_command env VIRTUAL_ENV="$VIRTUAL_ENV" PATH="$VIRTUAL_ENV/bin:$PATH" \
         bash -c 'cd "$1" && bash "$2"' _ "$VIRTUAL_ENV" "$deepgemm_installer" || return 1
 }
@@ -787,6 +789,7 @@ install_ling_vllm() {
         run_command git clone https://github.com/vllm-project/vllm.git "$target_dir" || return 1
     fi
 
+    # shellcheck disable=SC2016
     run_command env VLLM_USE_PRECOMPILED=1 bash -c 'cd "$1" && uv pip install --editable . --torch-backend=auto' _ "$target_dir" || return 1
 }
 

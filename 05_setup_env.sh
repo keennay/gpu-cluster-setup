@@ -5,8 +5,9 @@
 # Usage: source 05_setup_env.sh [--auto] [env_name]
 
 # Source bashrc to ensure environment is properly loaded
-if [ -f ~/.bashrc ]; then
-    source ~/.bashrc
+if [ -f "$HOME/.bashrc" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.bashrc"
 fi
 
 # Colors
@@ -255,7 +256,7 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "30) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-30): " choice
+        read -r -p "Enter your choice (1-30): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
@@ -294,7 +295,7 @@ if [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Where would you like to store HuggingFace models?"
     print_info "Default: $DEFAULT_HF_PATH"
-    read -p "Enter path (press Enter for default): " HF_PATH_INPUT
+    read -r -p "Enter path (press Enter for default): " HF_PATH_INPUT
     
     if [ -z "$HF_PATH_INPUT" ]; then
         HF_PATH="$DEFAULT_HF_PATH"
@@ -347,7 +348,7 @@ if [ -d "$ENV_PATH" ]; then
         echo ""
         
         while true; do
-            read -p "Rebuild environment? (y/n): " RECREATE
+            read -r -p "Rebuild environment? (y/n): " RECREATE
             case ${RECREATE,,} in
                 y|yes)
                     print_info "Destroying existing environment..."
@@ -374,17 +375,23 @@ fi
 if [ ! -d "$ENV_PATH" ]; then
     if uses_pip_venv; then
         print_info "Creating pip virtual environment at $ENV_PATH using $PYTHON_BIN..."
-        "$PYTHON_BIN" -m venv "$ENV_PATH"
+        VENV_CREATED=false
+        if "$PYTHON_BIN" -m venv "$ENV_PATH"; then
+            VENV_CREATED=true
+        fi
     else
         print_info "Creating uv virtual environment at $ENV_PATH using $PYTHON_BIN..."
         UV_VENV_ARGS=()
         if [[ "${RECREATE:-n}" =~ ^([Yy]|[Yy][Ee][Ss])$ ]]; then
             UV_VENV_ARGS+=(--clear)
         fi
-        uv venv "${UV_VENV_ARGS[@]}" "$ENV_PATH" --python "$PYTHON_BIN"
+        VENV_CREATED=false
+        if uv venv "${UV_VENV_ARGS[@]}" "$ENV_PATH" --python "$PYTHON_BIN"; then
+            VENV_CREATED=true
+        fi
     fi
     
-    if [ $? -eq 0 ]; then
+    if [ "$VENV_CREATED" = true ]; then
         print_info "✓ Virtual environment created successfully"
     else
         print_error "Failed to create virtual environment"
@@ -399,7 +406,9 @@ fi
 # Install baseline Hugging Face Hub tooling into the selected environment.
 if ! install_huggingface_hub; then
     fail_script "Failed to install Hugging Face Hub"
-    return 1 2>/dev/null || exit 1
+    if [ "$BEING_SOURCED" = true ]; then
+        return 1
+    fi
 fi
 
 # Detect GPU architecture
@@ -418,9 +427,9 @@ if command -v nvidia-smi &> /dev/null; then
             print_info "  → $GPU_NAME (Volta) detected: sm_70"
             
         elif [[ "$GPU_NAME" == *"T4"* ]] || \
-             ([[ "$GPU_NAME" == *"RTX 5000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]) || \
-             ([[ "$GPU_NAME" == *"RTX 4000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]) || \
-             ([[ "$GPU_NAME" == *"RTX 6000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]); then
+             { [[ "$GPU_NAME" == *"RTX 5000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]; } || \
+             { [[ "$GPU_NAME" == *"RTX 4000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]; } || \
+             { [[ "$GPU_NAME" == *"RTX 6000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]; }; then
             TORCH_CUDA_ARCH_LIST="7.5"
             print_info "  → $GPU_NAME (Turing) detected: sm_75"
             
@@ -443,9 +452,9 @@ if command -v nvidia-smi &> /dev/null; then
         elif [[ "$GPU_NAME" == *"RTX 4090"* ]] || [[ "$GPU_NAME" == *"4090"* ]] || \
              [[ "$GPU_NAME" == *"RTX 4070 TI"* ]] || [[ "$GPU_NAME" == *"4070 TI"* ]] || \
              [[ "$GPU_NAME" == *"L40S"* ]] || [[ "$GPU_NAME" == *"L40"* ]] || [[ "$GPU_NAME" == *"L4"* ]] || \
-             ([[ "$GPU_NAME" == *"RTX 6000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]) || \
-             ([[ "$GPU_NAME" == *"RTX 5000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]) || \
-             ([[ "$GPU_NAME" == *"RTX 4000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]); then
+             { [[ "$GPU_NAME" == *"RTX 6000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]; } || \
+             { [[ "$GPU_NAME" == *"RTX 5000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]; } || \
+             { [[ "$GPU_NAME" == *"RTX 4000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]; }; then
             TORCH_CUDA_ARCH_LIST="8.9"
             print_info "  → $GPU_NAME (Ada Lovelace) detected: sm_89"
             
@@ -458,7 +467,7 @@ if command -v nvidia-smi &> /dev/null; then
             print_info "  → $GPU_NAME (Blackwell) detected: sm_100"
             
         elif [[ "$GPU_NAME" == *"RTX 5090"* ]] || [[ "$GPU_NAME" == *"5090"* ]] || \
-	     ([[ "$GPU_NAME" == *"RTX PRO 6000"* ]] && [[ "$GPU_NAME" == *"BLACKWELL"* ]]); then
+             { [[ "$GPU_NAME" == *"RTX PRO 6000"* ]] && [[ "$GPU_NAME" == *"BLACKWELL"* ]]; }; then
             TORCH_CUDA_ARCH_LIST="12.0"
             print_info "  → $GPU_NAME (Blackwell) detected: sm_120"
             
@@ -677,6 +686,7 @@ echo ""
 # ACTIVATE IF BEING SOURCED
 if [ "$BEING_SOURCED" = true ]; then
     print_info "Activating ML environment..."
+    # shellcheck source=/dev/null
     source "$ENV_PATH/bin/activate"
     export DG_JIT_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
     export FLASHINFER_WORKSPACE_BASE="${VIRTUAL_ENV:-$ENV_PATH}"

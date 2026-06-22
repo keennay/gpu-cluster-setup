@@ -246,6 +246,40 @@ fi
 
 echo ""
 
+# Install ShellCheck for shell script linting
+if command -v shellcheck &> /dev/null; then
+    print_info "ShellCheck already installed ($(shellcheck --version | awk '/^version:/ {print $2; exit}'))"
+else
+    if [ "$OS_TYPE" = "ubuntu" ]; then
+        SHELLCHECK_PACKAGE="shellcheck"
+    else
+        SHELLCHECK_PACKAGE="ShellCheck"
+    fi
+
+    if [ "$AUTO_YES" = true ]; then
+        INSTALL_SHELLCHECK="y"
+    else
+        read -r -p "Install ShellCheck shell script linter ($SHELLCHECK_PACKAGE)? (y/n): " INSTALL_SHELLCHECK
+    fi
+
+    if [[ "$INSTALL_SHELLCHECK" =~ ^[Yy]$ ]]; then
+        print_info "Installing ShellCheck..."
+        if $PKG_INSTALL_CMD "$SHELLCHECK_PACKAGE"; then
+            print_info "✓ ShellCheck installed"
+        else
+            print_warning "Failed to install ShellCheck package: $SHELLCHECK_PACKAGE"
+            if [ "$OS_TYPE" = "rhel" ]; then
+                print_warning "On RHEL-compatible systems, ShellCheck is commonly provided by EPEL."
+                print_info "Enable EPEL, then rerun this script or install ShellCheck manually."
+            fi
+        fi
+    else
+        print_info "Skipped installing ShellCheck"
+    fi
+fi
+
+echo ""
+
 # Core/build dependencies for ML and Python package compilation
 if [ "$OS_TYPE" = "ubuntu" ]; then
     CORE_BUILD_DEPENDENCIES=(
