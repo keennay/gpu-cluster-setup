@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script: install_models.sh
-# Purpose: Download Hugging Face models to a custom location with easy replication
+# Purpose: Download Hugging Face models or datasets to a custom location with easy replication
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -10,6 +10,7 @@ NC='\033[0m' # No Color
 # Default values
 DEFAULT_HF_PATH="/workspace/models/huggingface"
 DEFAULT_MODEL="PrimeIntellect/INTELLECT-2"
+DEFAULT_REPO_TYPE="auto"
 DEFAULT_HF_DOWNLOAD_MAX_WORKERS=32
 DEFAULT_HF_XET_NUM_CONCURRENT_RANGE_GETS=32
 
@@ -82,6 +83,7 @@ PY
 
 # Parse command line arguments
 MODEL_NAME=""
+REPO_TYPE="${REPO_TYPE:-$DEFAULT_REPO_TYPE}"
 HF_PATH=""
 HF_CACHE_PATH=""
 QUANTIZATION=""
@@ -91,6 +93,14 @@ while [[ $# -gt 0 ]]; do
         -m|--model)
             MODEL_NAME="$2"
             shift 2
+            ;;
+        -r|--repo-type)
+            REPO_TYPE="$2"
+            shift 2
+            ;;
+        --dataset)
+            REPO_TYPE="dataset"
+            shift
             ;;
         -p|--path)
             HF_PATH="$2"
@@ -105,10 +115,12 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [OPTIONS]"
+            echo "Usage: $0 [REPO_ID] [OPTIONS]"
             echo "Options:"
-            echo "  -m, --model MODEL_NAME     Model to download (e.g., 'openai/gpt-oss-120b')"
-            echo "  -p, --path PATH           Custom path for models (default: $DEFAULT_HF_PATH or \$HF_HOME)"
+            echo "  -m, --model REPO_ID        Hugging Face repo to download (e.g., 'openai/gpt-oss-120b')"
+            echo "  -r, --repo-type TYPE       Optional override: auto, model, dataset, or space (default: $DEFAULT_REPO_TYPE)"
+            echo "  --dataset                  Optional shortcut for --repo-type dataset"
+            echo "  -p, --path PATH           Custom path for Hugging Face cache (default: $DEFAULT_HF_PATH or \$HF_HOME)"
             echo "  -q, --quantization TYPE   Download quantized version (e.g., 'GGUF', 'GPTQ')"
             echo "  --auto                    Use default settings without prompting"
             echo "  -h, --help               Show this help message"
@@ -120,18 +132,46 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Examples:"
             echo "  $0"
+            echo "  $0 'AlienKevin/SWE-ZERO-12M-trajectories'"
             echo "  $0 -m 'PrimeIntellect/INTELLECT-2'"
+            echo "  $0 -m 'AlienKevin/SWE-ZERO-12M-trajectories'"
             echo "  $0 -m 'Qwen/Qwen3-30B-A3B-Instruct-2507' -q GGUF"
             echo "  $0 -m 'deepseek-ai/DeepSeek-V3' -p /mnt/storage/models"
             exit 0
             ;;
         *)
-            print_error "Unknown option: $1"
-            echo "Use -h or --help for usage information"
-            exit 1
+            if [[ "$1" == -* ]]; then
+                print_error "Unknown option: $1"
+                echo "Use -h or --help for usage information"
+                exit 1
+            fi
+
+            if [ -n "$MODEL_NAME" ]; then
+                print_error "Only one Hugging Face repo can be downloaded at a time"
+                echo "Use -h or --help for usage information"
+                exit 1
+            fi
+
+            MODEL_NAME="$1"
+            shift
             ;;
     esac
 done
+
+REPO_TYPE=$(printf '%s' "$REPO_TYPE" | tr '[:upper:]' '[:lower:]')
+case "$REPO_TYPE" in
+    auto|model|dataset|space) ;;
+    *)
+        print_error "Invalid repo type: $REPO_TYPE"
+        print_info "Use one of: auto, model, dataset, space"
+        exit 1
+        ;;
+esac
+
+if [ -n "$QUANTIZATION" ] && [ "$REPO_TYPE" != "model" ] && [ "$REPO_TYPE" != "auto" ]; then
+    print_error "Quantization suffixes are only supported for model downloads"
+    exit 1
+fi
 
 # Determine HuggingFace path
 # Priority: 1) Command line arg, 2) HF_HOME env var, 3) HF_HUB_CACHE env var, 4) Interactive prompt/default
@@ -152,7 +192,7 @@ else
     # No environment variable set, ask user (same logic as 05_setup_env.sh)
     if [ "$AUTO_MODE" = false ]; then
         echo ""
-        print_info "Where would you like to store HuggingFace models?"
+        print_info "Where would you like to store HuggingFace models and datasets?"
         print_info "Default: $DEFAULT_HF_PATH"
         read -p "Enter path (press Enter for default): " HF_PATH_INPUT
         
@@ -221,6 +261,29 @@ if ! check_hf_fast_download_tooling; then
 fi
 
 # Interactive mode if no model specified
+if [ -z "$MODEL_NAME" ] && [ "$REPO_TYPE" != "model" ] && [ "$REPO_TYPE" != "auto" ]; then
+    if [ "$AUTO_MODE" = true ]; then
+        print_error "No $REPO_TYPE repo specified"
+        print_info "Use: $0 --repo-type $REPO_TYPE -m 'organization/repo-name'"
+        exit 1
+    fi
+
+    echo "----------------------------------------"
+    echo "Hugging Face $REPO_TYPE Downloader"
+    echo "----------------------------------------"
+    echo ""
+    if [ "$REPO_TYPE" = "dataset" ]; then
+        read -p "Enter dataset repo name (e.g., AlienKevin/SWE-ZERO-12M-trajectories): " MODEL_NAME
+    else
+        read -p "Enter $REPO_TYPE repo name (e.g., organization/repo-name): " MODEL_NAME
+    fi
+
+    if [ -z "$MODEL_NAME" ]; then
+        print_error "No $REPO_TYPE repo specified"
+        exit 1
+    fi
+fi
+
 if [ -z "$MODEL_NAME" ]; then
     echo "----------------------------------------"
     echo "Hugging Face Model Downloader"
@@ -338,7 +401,7 @@ if [ -n "$QUANTIZATION" ]; then
 fi
 
 # Setup directories
-print_info "Setting up model directory..."
+print_info "Setting up Hugging Face cache directory..."
 setup_directory "$HF_PATH"
 setup_directory "$HF_CACHE_PATH"
 
@@ -346,6 +409,7 @@ setup_directory "$HF_CACHE_PATH"
 export HF_HOME="$HF_PATH"
 export HF_HUB_CACHE="$HF_CACHE_PATH"
 export MODEL_NAME
+export REPO_TYPE
 
 # Enable Hugging Face's current high-performance download path. These are read
 # by huggingface_hub at import time, so they must be exported before Python runs.
@@ -372,338 +436,383 @@ esac
 print_info "Environment variables set:"
 print_info "  HF_HOME=$HF_HOME"
 print_info "  HF_HUB_CACHE=$HF_HUB_CACHE"
+print_info "  REPO_TYPE=$REPO_TYPE"
 print_info "  HF_XET_HIGH_PERFORMANCE=$HF_XET_HIGH_PERFORMANCE"
 print_info "  HF_XET_NUM_CONCURRENT_RANGE_GETS=$HF_XET_NUM_CONCURRENT_RANGE_GETS"
 print_info "  HF_DOWNLOAD_MAX_WORKERS=$HF_DOWNLOAD_MAX_WORKERS"
 
 # Create Python download script
-PYTHON_SCRIPT=$(mktemp /tmp/download_model_XXXXXX.py)
+PYTHON_SCRIPT=$(mktemp /tmp/download_hf_repo_XXXXXX.py)
 cat > "$PYTHON_SCRIPT" << 'PY'
 #!/usr/bin/env python3
 import os
 import sys
 import json
-import hashlib
 import shlex
 import subprocess
 from pathlib import Path
 from datetime import datetime
 
 try:
-    from huggingface_hub import snapshot_download, HfApi, scan_cache_dir
+    from huggingface_hub import snapshot_download, HfApi
     from huggingface_hub.utils import LocalEntryNotFoundError
 except ImportError as e:
     print(f"Error: Missing required package: {e}")
     print("Run source ./05_setup_env.sh first; it installs Hugging Face Hub tooling into the selected environment.")
     sys.exit(1)
 
-model_name = os.environ["MODEL_NAME"]
+repo_id = os.environ["MODEL_NAME"]
+requested_repo_type = os.environ.get("REPO_TYPE", "auto")
 download_max_workers = int(os.environ.get("HF_DOWNLOAD_MAX_WORKERS", "32"))
+cache_dir = Path(os.environ["HF_HUB_CACHE"])
+
+def get_remote_info(api, repo_id, repo_type):
+    kwargs = {"repo_id": repo_id, "files_metadata": True}
+    try:
+        if repo_type == "model":
+            return api.model_info(**kwargs)
+        if repo_type == "dataset":
+            return api.dataset_info(**kwargs)
+        return api.repo_info(**kwargs, repo_type=repo_type)
+    except TypeError:
+        kwargs.pop("files_metadata", None)
+        if repo_type == "model":
+            return api.model_info(**kwargs)
+        if repo_type == "dataset":
+            return api.dataset_info(**kwargs)
+        return api.repo_info(**kwargs, repo_type=repo_type)
+
+def resolve_repo_type(api, repo_id, requested_repo_type):
+    if requested_repo_type != "auto":
+        return requested_repo_type, get_remote_info(api, repo_id, requested_repo_type)
+
+    errors = []
+    for candidate in ("model", "dataset", "space"):
+        try:
+            return candidate, get_remote_info(api, repo_id, candidate)
+        except Exception as exc:
+            errors.append(f"{candidate}: {exc}")
+
+    raise RuntimeError(
+        f"Could not find Hugging Face repo '{repo_id}' as a model, dataset, or space.\n"
+        + "\n".join(f"  - {error}" for error in errors)
+    )
+
+api = HfApi()
+repo_type, initial_remote_info = resolve_repo_type(api, repo_id, requested_repo_type)
+cache_repo_dir = cache_dir / f"{repo_type}s--{repo_id.replace('/', '--')}"
+repo_label = repo_type.capitalize()
 
 print(f"\n{'='*60}")
-print(f"Model: {model_name}")
-print(f"Download location: {os.environ['HF_HUB_CACHE']}")
+print(f"{repo_label}: {repo_id}")
+print(f"Repo type: {repo_type}")
+if requested_repo_type == "auto":
+    print("Repo type detection: auto")
+print(f"Download location: {cache_dir}")
+print(f"Repository cache directory: {cache_repo_dir}")
 print(f"hf download workers: {download_max_workers}")
 print(f"HF_XET_HIGH_PERFORMANCE: {os.environ.get('HF_XET_HIGH_PERFORMANCE', '')}")
 print(f"HF_XET_NUM_CONCURRENT_RANGE_GETS: {os.environ.get('HF_XET_NUM_CONCURRENT_RANGE_GETS', '')}")
 print(f"{'='*60}\n")
 
-def check_model_completeness(model_name, cache_dir):
+def local_snapshot(repo_id, repo_type, cache_dir):
+    return snapshot_download(
+        repo_id=repo_id,
+        repo_type=repo_type,
+        cache_dir=str(cache_dir),
+        local_files_only=True,
+    )
+
+def save_repo_info(local_path, local_size, timestamp_key):
+    info_file = Path(os.environ["HF_HOME"]).parent / "downloaded_models.json"
+    repo_info_data = {
+        "repo_id": repo_id,
+        "repo_type": repo_type,
+        "model_name": repo_id,
+        "local_path": str(local_path) if local_path else "cached",
+        "cache_dir": str(cache_dir),
+        "cache_repo_dir": str(cache_repo_dir),
+        "size_gb": local_size / 1e9,
+        timestamp_key: datetime.now().isoformat(),
+    }
+
+    existing_data = []
+    if info_file.exists():
+        with open(info_file, "r") as f:
+            try:
+                existing_data = json.load(f)
+            except Exception:
+                existing_data = []
+
+    repo_found = False
+    for i, item in enumerate(existing_data):
+        item_repo_id = item.get("repo_id", item.get("model_name"))
+        item_repo_type = item.get("repo_type", "model")
+        if item_repo_id == repo_id and item_repo_type == repo_type:
+            existing_data[i] = repo_info_data
+            repo_found = True
+            break
+
+    if not repo_found:
+        existing_data.append(repo_info_data)
+
+    with open(info_file, "w") as f:
+        json.dump(existing_data, f, indent=2)
+
+    return info_file
+
+def write_download_result(local_path):
+    result_file = os.environ.get("DOWNLOAD_RESULT_FILE")
+    if not result_file:
+        return
+
+    with open(result_file, "w") as f:
+        f.write(f"DOWNLOAD_REPO_ID={shlex.quote(repo_id)}\n")
+        f.write(f"DOWNLOAD_REPO_TYPE={shlex.quote(repo_type)}\n")
+        f.write(f"DOWNLOAD_CACHE_REPO_DIR={shlex.quote(str(cache_repo_dir))}\n")
+        f.write(f"DOWNLOAD_LOCAL_PATH={shlex.quote(str(local_path) if local_path else '')}\n")
+
+def check_repo_completeness(repo_id, repo_type, cache_dir):
     """
-    Check if model is already fully downloaded and verify integrity
+    Check if a Hugging Face Hub repo is already fully downloaded and verify file sizes.
     """
     try:
         api = HfApi()
-        
-        # Get expected files from remote
+
         print("Checking remote repository...")
-        remote_info = api.model_info(model_name)
+        remote_info = get_remote_info(api, repo_id, repo_type)
         expected_files = {}
         total_size = 0
-        
+
         for sibling in remote_info.siblings:
-            if hasattr(sibling, 'rfilename') and hasattr(sibling, 'size'):
+            if hasattr(sibling, "rfilename") and hasattr(sibling, "size"):
                 expected_files[sibling.rfilename] = {
-                    'size': sibling.size,
-                    'lfs': getattr(sibling, 'lfs', None)
+                    "size": sibling.size,
+                    "lfs": getattr(sibling, "lfs", None),
                 }
                 if sibling.size:
                     total_size += sibling.size
-        
-        print(f"Expected model size: {total_size / 1e9:.1f} GB")
+
+        print(f"Expected {repo_type} size: {total_size / 1e9:.1f} GB")
         print(f"Number of files expected: {len(expected_files)}")
-        
-        # Check local cache
+
         print("\nChecking local cache...")
-        cache_info = scan_cache_dir(cache_dir)
-        
-        # Find our model in cache
-        local_model = None
-        for repo in cache_info.repos:
-            if repo.repo_id == model_name:
-                local_model = repo
-                break
-        
-        if not local_model:
-            print("Model not found in local cache")
+        if not cache_repo_dir.exists():
+            print(f"{repo_label} not found in local cache")
+            print(f"Expected cache directory: {cache_repo_dir}")
             return False, expected_files, 0
-        
-        # Check each expected file
+
+        try:
+            local_path = Path(local_snapshot(repo_id, repo_type, cache_dir))
+        except LocalEntryNotFoundError:
+            print(f"{repo_label} snapshot is not fully available in local cache")
+            return False, expected_files, 0
+
         missing_files = []
         corrupted_files = []
         local_size = 0
-        
+
         for filename, file_info in expected_files.items():
-            file_found = False
-            for revision in local_model.revisions:
-                for cached_file in revision.files:
-                    # Match by file path
-                    if cached_file.file_path.name == filename.split('/')[-1]:
-                        file_found = True
-                        local_size += cached_file.size_on_disk
-                        
-                        # Check file size
-                        if file_info['size'] and cached_file.size_on_disk != file_info['size']:
-                            corrupted_files.append(filename)
-                            print(f"  ❌ Size mismatch: {filename}")
-                            print(f"     Expected: {file_info['size']}, Got: {cached_file.size_on_disk}")
-                        break
-                if file_found:
-                    break
-            
-            if not file_found:
+            file_path = local_path / filename
+            if not file_path.exists():
                 missing_files.append(filename)
                 print(f"  ❌ Missing: {filename}")
-        
-        # Summary
-        print(f"\nLocal cache summary:")
+                continue
+
+            file_size = file_path.stat().st_size
+            local_size += file_size
+            if file_info["size"] and file_size != file_info["size"]:
+                corrupted_files.append(filename)
+                print(f"  ❌ Size mismatch: {filename}")
+                print(f"     Expected: {file_info['size']}, Got: {file_size}")
+
+        print("\nLocal cache summary:")
+        print(f"  Repository cache directory: {cache_repo_dir}")
         print(f"  Total size on disk: {local_size / 1e9:.1f} GB")
         print(f"  Files found: {len(expected_files) - len(missing_files)}/{len(expected_files)}")
-        
+
         if missing_files:
             print(f"  Missing files: {len(missing_files)}")
-            for f in missing_files[:5]:  # Show first 5 missing
+            for f in missing_files[:5]:
                 print(f"    - {f}")
             if len(missing_files) > 5:
                 print(f"    ... and {len(missing_files) - 5} more")
-        
+
         if corrupted_files:
             print(f"  Corrupted files: {len(corrupted_files)}")
             for f in corrupted_files[:5]:
                 print(f"    - {f}")
-        
+
         is_complete = len(missing_files) == 0 and len(corrupted_files) == 0
-        
+
         if is_complete:
-            print("\n✅ Model is fully downloaded and verified!")
-            # Get the local path
-            try:
-                from huggingface_hub import model_info
-                local_path = snapshot_download(
-                    repo_id=model_name,
-                    cache_dir=cache_dir,
-                    local_files_only=True
-                )
-                return True, expected_files, local_size, local_path
-            except:
-                return True, expected_files, local_size, None
+            print(f"\n✅ {repo_label} is fully downloaded and verified!")
+            return True, expected_files, local_size, str(local_path)
         else:
-            print("\n⚠️  Model is incomplete or has corrupted files")
+            print(f"\n⚠️  {repo_label} is incomplete or has corrupted files")
             return False, expected_files, local_size
-    
+
     except Exception as e:
-        print(f"Error checking model completeness: {e}")
+        print(f"Error checking {repo_type} completeness: {e}")
         return False, {}, 0
 
-# Check if model is already downloaded
-result = check_model_completeness(model_name, os.environ['HF_HUB_CACHE'])
+# Check if repo is already downloaded
+result = check_repo_completeness(repo_id, repo_type, cache_dir)
 
-if len(result) == 4 and result[0]:  # Model is complete
+if len(result) == 4 and result[0]:  # Repo is complete
     is_complete, expected_files, local_size, local_path = result
     print("\n" + "="*60)
-    print("MODEL ALREADY FULLY DOWNLOADED")
+    print(f"{repo_label.upper()} ALREADY FULLY DOWNLOADED")
     print("="*60)
-    print(f"Model: {model_name}")
+    print(f"{repo_label}: {repo_id}")
+    print(f"Repository cache directory: {cache_repo_dir}")
     if local_path:
         print(f"Location: {local_path}")
     print(f"Size: {local_size / 1e9:.1f} GB")
-    print("\nNo download needed - model is ready to use!")
-    
-    # Save to downloaded_models.json
-    info_file = Path(os.environ["HF_HOME"]).parent / "downloaded_models.json"
-    model_info_data = {
-        "model_name": model_name,
-        "local_path": local_path if local_path else "cached",
-        "cache_dir": os.environ['HF_HUB_CACHE'],
-        "size_gb": local_size / 1e9,
-        "verified_at": datetime.now().isoformat()
-    }
-    
-    existing_data = []
-    if info_file.exists():
-        with open(info_file, 'r') as f:
-            try:
-                existing_data = json.load(f)
-            except:
-                existing_data = []
-    
-    # Update or add entry
-    model_found = False
-    for i, m in enumerate(existing_data):
-        if m['model_name'] == model_name:
-            existing_data[i] = model_info_data
-            model_found = True
-            break
-    
-    if not model_found:
-        existing_data.append(model_info_data)
-    
-    with open(info_file, 'w') as f:
-        json.dump(existing_data, f, indent=2)
-    
+    print(f"\nNo download needed - {repo_type} is ready to use!")
+
+    save_repo_info(local_path, local_size, "verified_at")
+    write_download_result(local_path)
     sys.exit(0)
 
-# Model is not complete, proceed with download
+# Repo is not complete, proceed with download
 print("\n" + "="*60)
 print("STARTING DOWNLOAD")
 print("="*60)
 
 # Create a progress file to track download
-progress_file = Path(os.environ["HF_HOME"]).parent / f".download_progress_{model_name.replace('/', '_')}.json"
+safe_repo_name = repo_id.replace("/", "_")
+progress_file = Path(os.environ["HF_HOME"]).parent / f".download_progress_{repo_type}_{safe_repo_name}.json"
+progress_data = {}
 
 try:
     # Save download start info
     progress_data = {
-        "model_name": model_name,
+        "repo_id": repo_id,
+        "repo_type": repo_type,
+        "model_name": repo_id,
         "started_at": datetime.now().isoformat(),
-        "status": "downloading"
+        "status": "downloading",
+        "cache_repo_dir": str(cache_repo_dir),
     }
-    with open(progress_file, 'w') as f:
+    with open(progress_file, "w") as f:
         json.dump(progress_data, f, indent=2)
-    
-    print(f"\nDownloading {model_name}...")
+
+    print(f"\nDownloading {repo_type} {repo_id}...")
     print("Note: Download will resume automatically if interrupted")
-    
+
     # Download with resume capability through the current Hugging Face CLI.
     hf_command = [
         "hf",
         "download",
-        model_name,
+        repo_id,
         "--cache-dir",
-        os.environ["HF_HUB_CACHE"],
+        str(cache_dir),
         "--max-workers",
         str(download_max_workers),
     ]
+    if repo_type != "model":
+        hf_command.extend(["--repo-type", repo_type])
+
     print("$ " + " ".join(shlex.quote(part) for part in hf_command))
     subprocess.run(hf_command, check=True)
 
     local_path = snapshot_download(
-        repo_id=model_name,
-        cache_dir=os.environ['HF_HUB_CACHE'],
-        local_files_only=True
+        repo_id=repo_id,
+        repo_type=repo_type,
+        cache_dir=str(cache_dir),
+        local_files_only=True,
     )
-    
-    print(f"\n✓ Model downloaded to: {local_path}")
-    
+
+    if not cache_repo_dir.exists():
+        raise RuntimeError(f"Expected cache repo directory was not created: {cache_repo_dir}")
+
+    print(f"\n✓ {repo_label} downloaded to: {local_path}")
+    print(f"✓ Repository cache directory: {cache_repo_dir}")
+
     # Verify completeness after download
     print("\nVerifying download...")
-    final_check = check_model_completeness(model_name, os.environ['HF_HUB_CACHE'])
-    
+    final_check = check_repo_completeness(repo_id, repo_type, cache_dir)
+
     if final_check[0]:
         print("\n✅ Download completed and verified successfully!")
-        
+
         # Update progress file
-        progress_data['status'] = 'completed'
-        progress_data['completed_at'] = datetime.now().isoformat()
-        progress_data['local_path'] = local_path
-        with open(progress_file, 'w') as f:
+        progress_data["status"] = "completed"
+        progress_data["completed_at"] = datetime.now().isoformat()
+        progress_data["local_path"] = local_path
+        with open(progress_file, "w") as f:
             json.dump(progress_data, f, indent=2)
-        
-        # Save model info
-        info_file = Path(os.environ["HF_HOME"]).parent / "downloaded_models.json"
-        model_info_data = {
-            "model_name": model_name,
-            "local_path": local_path,
-            "cache_dir": os.environ['HF_HUB_CACHE'],
-            "downloaded_at": datetime.now().isoformat()
-        }
-        
-        # Append to existing file
-        existing_data = []
-        if info_file.exists():
-            with open(info_file, 'r') as f:
-                try:
-                    existing_data = json.load(f)
-                except:
-                    existing_data = []
-        
-        # Update or add entry
-        model_found = False
-        for i, m in enumerate(existing_data):
-            if m['model_name'] == model_name:
-                existing_data[i] = model_info_data
-                model_found = True
-                break
-        
-        if not model_found:
-            existing_data.append(model_info_data)
-        
-        with open(info_file, 'w') as f:
-            json.dump(existing_data, f, indent=2)
-        
-        print(f"\n✓ Model info saved to: {info_file}")
-        
+
+        local_size = final_check[2] if len(final_check) >= 3 else 0
+        info_file = save_repo_info(local_path, local_size, "downloaded_at")
+        print(f"\n✓ Repository info saved to: {info_file}")
+        write_download_result(local_path)
+
         # Clean up progress file
         if progress_file.exists():
             progress_file.unlink()
     else:
         print("\n⚠️  Download may be incomplete. Run this script again to resume.")
-        progress_data['status'] = 'incomplete'
-        with open(progress_file, 'w') as f:
+        progress_data["status"] = "incomplete"
+        with open(progress_file, "w") as f:
             json.dump(progress_data, f, indent=2)
-    
+
 except KeyboardInterrupt:
     print("\n⚠️  Download interrupted by user")
     print("Run this script again to resume the download")
     if progress_file.exists():
-        progress_data['status'] = 'interrupted'
-        progress_data['interrupted_at'] = datetime.now().isoformat()
-        with open(progress_file, 'w') as f:
+        progress_data["status"] = "interrupted"
+        progress_data["interrupted_at"] = datetime.now().isoformat()
+        with open(progress_file, "w") as f:
             json.dump(progress_data, f, indent=2)
     sys.exit(130)
-    
+
 except Exception as e:
-    print(f"\n❌ Error downloading model: {e}")
+    print(f"\n❌ Error downloading {repo_type}: {e}")
     import traceback
     traceback.print_exc()
-    
-    if progress_file.exists():
-        progress_data['status'] = 'error'
-        progress_data['error'] = str(e)
-        progress_data['error_at'] = datetime.now().isoformat()
-        with open(progress_file, 'w') as f:
+
+    if progress_file.exists() and progress_data:
+        progress_data["status"] = "error"
+        progress_data["error"] = str(e)
+        progress_data["error_at"] = datetime.now().isoformat()
+        with open(progress_file, "w") as f:
             json.dump(progress_data, f, indent=2)
-    
+
     sys.exit(1)
 PY
 
 # Run the download script
-print_info "Starting model download..."
+PYTHON_RESULT_FILE=$(mktemp /tmp/download_hf_repo_result_XXXXXX.env)
+export DOWNLOAD_RESULT_FILE="$PYTHON_RESULT_FILE"
+
+print_info "Starting Hugging Face repository download..."
 python3 "$PYTHON_SCRIPT"
 RESULT=$?
 
+if [ -f "$PYTHON_RESULT_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$PYTHON_RESULT_FILE"
+fi
+
 # Cleanup
-rm -f "$PYTHON_SCRIPT"
+rm -f "$PYTHON_SCRIPT" "$PYTHON_RESULT_FILE"
 
 if [ $RESULT -eq 0 ]; then
-    print_info "Model downloaded successfully!"
+    DOWNLOAD_REPO_TYPE="${DOWNLOAD_REPO_TYPE:-$REPO_TYPE}"
+    DOWNLOAD_REPO_ID="${DOWNLOAD_REPO_ID:-$MODEL_NAME}"
+    DOWNLOAD_CACHE_REPO_DIR="${DOWNLOAD_CACHE_REPO_DIR:-$HF_CACHE_PATH/${DOWNLOAD_REPO_TYPE}s--${MODEL_NAME//\//--}}"
+
+    print_info "Hugging Face $DOWNLOAD_REPO_TYPE downloaded successfully!"
     
-    # Create a reference script for this model
-    MODEL_SAFE_NAME=$(echo "$MODEL_NAME" | sed 's/[^a-zA-Z0-9-]/_/g')
-    # Store the load script in the parent directory of HF_PATH
-    LOAD_SCRIPT="$(dirname "$HF_PATH")/load_${MODEL_SAFE_NAME}.sh"
+    if [ "$DOWNLOAD_REPO_TYPE" = "model" ]; then
+        # Create a reference script for this model
+        MODEL_SAFE_NAME=$(echo "$MODEL_NAME" | sed 's/[^a-zA-Z0-9-]/_/g')
+        # Store the load script in the parent directory of HF_PATH
+        LOAD_SCRIPT="$(dirname "$HF_PATH")/load_${MODEL_SAFE_NAME}.sh"
     
-    cat > "$LOAD_SCRIPT" << EOF
+        cat > "$LOAD_SCRIPT" << EOF
 #!/bin/bash
 # Auto-generated script to load $MODEL_NAME
 export HF_HOME="$HF_PATH"
@@ -723,27 +832,33 @@ echo "To serve with SGLang:"
 echo "python -m sglang.launch_server --model-path $MODEL_NAME --trust-remote-code"
 EOF
     
-    chmod +x "$LOAD_SCRIPT"
-    print_info "Created load script: $LOAD_SCRIPT"
+        chmod +x "$LOAD_SCRIPT"
+        print_info "Created load script: $LOAD_SCRIPT"
+    fi
     
     echo ""
     echo "=========================================="
     echo "✅ Setup Complete!"
     echo "=========================================="
-    echo "Model: $MODEL_NAME"
-    echo "Location: $HF_PATH"
+    echo "Repository: $DOWNLOAD_REPO_ID"
+    echo "Type: $DOWNLOAD_REPO_TYPE"
+    echo "HF_HOME: $HF_PATH"
+    echo "HF_HUB_CACHE: $HF_CACHE_PATH"
+    echo "Repository cache: $DOWNLOAD_CACHE_REPO_DIR"
     echo ""
-    echo "To use this model in the future:"
+    echo "To use this cache in the future:"
     echo "1. Set environment variable:"
     echo "   export HF_HOME='$HF_PATH'"
     echo "   export HF_HUB_CACHE='$HF_CACHE_PATH'"
-    echo ""
-    echo "2. Or source the load script:"
-    echo "   source $LOAD_SCRIPT"
-    echo ""
-    echo "Note: If using custom architecture models, use --trust-remote-code flag"
+    if [ "$DOWNLOAD_REPO_TYPE" = "model" ]; then
+        echo ""
+        echo "2. Or source the load script:"
+        echo "   source $LOAD_SCRIPT"
+        echo ""
+        echo "Note: If using custom architecture models, use --trust-remote-code flag"
+    fi
     echo "=========================================="
 else
-    print_error "Model download failed!"
+    print_error "Hugging Face repository download failed!"
     exit 1
 fi
