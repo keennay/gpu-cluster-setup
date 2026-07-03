@@ -25,6 +25,9 @@ fi
 CUDA_PACKAGE_DOWNLOADS=()
 INSTALLED_CUDA_VERSIONS=()
 INSTALLED_CUDA_VERSIONS_DISPLAY="None"
+CUDA_DEFAULT_CANDIDATE_VERSIONS=()
+CUDA_DEFAULT_CANDIDATE_DIRS=()
+PREINSTALL_CUDA_DEFAULT_VERSION=""
 SUDO_PREFIX=""
 
 # Detect the highest CUDA toolkit package stream available in the provided repositories
@@ -232,14 +235,6 @@ resolve_ubuntu_driver_package() {
 }
 
 resolve_rhel_driver_package() {
-    local cuda_stream="$1"
-
-    if [ -z "$cuda_stream" ]; then
-        echo "nvidia-open"
-        return 0
-    fi
-
-    local runtime_package="cuda-runtime-$(echo "$cuda_stream" | sed 's/\./-/g')"
     local version_major
     version_major=$(echo "$OS_VERSION_ID" | cut -d. -f1)
     version_major=${version_major:-9}
@@ -254,24 +249,6 @@ resolve_rhel_driver_package() {
         local primary_url
         primary_url=$(get_rhel_primary_url "$repo")
         if [ -z "$primary_url" ]; then
-            continue
-        fi
-
-        local required_driver_version
-        required_driver_version=$(curl -fsSL "$primary_url" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="$runtime_package" '
-            BEGIN { RS="</package>" }
-            $0 ~ "<name>" pkg "</name>" {
-                if (match($0, /name="nvidia-driver-cuda"[^>]*ver="[^"]+"/)) {
-                    dep = substr($0, RSTART, RLENGTH)
-                    sub(/^.*ver="/, "", dep)
-                    sub(/".*$/, "", dep)
-                    print dep
-                    exit
-                }
-            }
-        ')
-
-        if [ -z "$required_driver_version" ]; then
             continue
         fi
 
@@ -309,25 +286,15 @@ resolve_rhel_driver_package() {
             }
         ')
 
-        local selected_line=""
-        local candidate_version
-        local candidate_path
-        while IFS=$'\t' read -r candidate_version candidate_path; do
-            if [ -z "$candidate_version" ] || [ -z "$candidate_path" ]; then
-                continue
-            fi
-
-            if [ "$(printf "%s\n%s\n" "$required_driver_version" "$candidate_version" | sort -V | head -1)" = "$required_driver_version" ]; then
-                selected_line=$(printf "%s\t%s\n%s" "$candidate_version" "$candidate_path" "$selected_line")
-            fi
-        done <<< "$candidate_lines"
-
-        if [ -z "$selected_line" ]; then
+        if [ -z "$candidate_lines" ]; then
             continue
         fi
 
+        local selected_line
+        selected_line=$(printf "%s\n" "$candidate_lines" | sort -V -k1,1 | tail -1)
+
         local selected_driver_path
-        selected_driver_path=$(printf "%s" "$selected_line" | sort -V -k1,1 | tail -1 | cut -f2)
+        selected_driver_path=$(printf "%s" "$selected_line" | cut -f2)
         if [ -z "$selected_driver_path" ]; then
             continue
         fi
@@ -338,7 +305,7 @@ resolve_rhel_driver_package() {
         local driver_rpm_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/${selected_driver_path}"
 
         if [ ! -f "$driver_rpm_file" ]; then
-            print_info "Downloading matching NVIDIA open driver package from NVIDIA repository..."
+            print_info "Downloading latest NVIDIA open driver package from NVIDIA repository..."
             if wget -O "$driver_rpm_file" "$driver_rpm_url"; then
                 CUDA_PACKAGE_DOWNLOADS+=("$driver_rpm_file")
             else
@@ -356,6 +323,33 @@ resolve_rhel_driver_package() {
 
     echo "nvidia-open"
     return 0
+}
+
+rhel_package_candidate_version() {
+    local package_name="$1"
+
+    if command -v dnf &> /dev/null; then
+        dnf repoquery --latest-limit 1 --qf '%{version}-%{release}' "$package_name" 2>/dev/null | sort -V | tail -1
+        return 0
+    fi
+
+    if command -v repoquery &> /dev/null; then
+        repoquery --qf '%{version}-%{release}' "$package_name" 2>/dev/null | sort -V | tail -1
+        return 0
+    fi
+
+    echo ""
+}
+
+install_resolved_driver_package() {
+    local driver_package="$1"
+
+    if [ "$OS_TYPE" = "rhel" ] && [ ! -f "$driver_package" ] && [ "$driver_package" = "nvidia-open" ] && command -v dnf &> /dev/null; then
+        ${SUDO_PREFIX}dnf install -y --best "$driver_package"
+        return $?
+    fi
+
+    $PKG_INSTALL_CMD "$driver_package"
 }
 
 has_nvidia_pci_devices() {
@@ -506,7 +500,7 @@ install_nvidia_driver_for_gpu_support() {
                     local rpm_version=""
                     rpm_name=$(rpm -qp --qf '%{NAME}\n' "$driver_package" 2>/dev/null)
                     rpm_version=$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$driver_package" 2>/dev/null)
-                    if [ -n "$rpm_name" ]; then
+                    if [ -n "$rpm_name" ] && rpm -q "$rpm_name" &> /dev/null; then
                         driver_package_installed_version=$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' "$rpm_name" 2>/dev/null | head -1)
                     fi
                     if [ -z "$driver_package_installed_version" ]; then
@@ -516,9 +510,18 @@ install_nvidia_driver_for_gpu_support() {
                         driver_package_needs_update=true
                         driver_install_reason="newer candidate $rpm_version is available (installed: $driver_package_installed_version)"
                     fi
-                elif ! rpm -q "$driver_package" &> /dev/null; then
-                    driver_package_needs_update=true
-                    driver_install_reason="required driver package is not installed"
+                else
+                    if rpm -q "$driver_package" &> /dev/null; then
+                        driver_package_installed_version=$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' "$driver_package" 2>/dev/null | head -1)
+                    fi
+                    driver_package_candidate_version=$(rhel_package_candidate_version "$driver_package")
+                    if [ -z "$driver_package_installed_version" ]; then
+                        driver_package_needs_update=true
+                        driver_install_reason="required driver package is not installed"
+                    elif [ -n "$driver_package_candidate_version" ] && [ "$driver_package_installed_version" != "$driver_package_candidate_version" ]; then
+                        driver_package_needs_update=true
+                        driver_install_reason="newer candidate $driver_package_candidate_version is available (installed: $driver_package_installed_version)"
+                    fi
                 fi
             fi
             ;;
@@ -543,7 +546,7 @@ install_nvidia_driver_for_gpu_support() {
         fi
 
         print_info "Installing/upgrading NVIDIA driver package: $driver_package_display"
-        if ! $PKG_INSTALL_CMD "$driver_package"; then
+        if ! install_resolved_driver_package "$driver_package"; then
             print_warning "Failed to install $driver_package_display."
             INSTALL_SUCCESS=false
             return 0
@@ -597,6 +600,7 @@ install_nvidia_driver_for_gpu_support() {
 collect_installed_cuda_versions() {
     INSTALLED_CUDA_VERSIONS=()
     local packages=()
+    local cuda_dir
 
     if [ "$OS_TYPE" = "ubuntu" ]; then
         if command -v dpkg &> /dev/null; then
@@ -630,6 +634,17 @@ collect_installed_cuda_versions() {
         fi
     done
 
+    for cuda_dir in /usr/local/cuda-*; do
+        if [ ! -d "$cuda_dir" ]; then
+            continue
+        fi
+
+        local dir_version=${cuda_dir##*/cuda-}
+        if [[ $dir_version =~ ^[0-9]+(\.[0-9]+){1,3}$ ]]; then
+            INSTALLED_CUDA_VERSIONS+=("$dir_version")
+        fi
+    done
+
     if [ ${#INSTALLED_CUDA_VERSIONS[@]} -gt 0 ]; then
         mapfile -t INSTALLED_CUDA_VERSIONS < <(printf "%s
 " "${INSTALLED_CUDA_VERSIONS[@]}" | awk '!seen[$0]++' | sort -V)
@@ -640,6 +655,222 @@ collect_installed_cuda_versions() {
     else
         INSTALLED_CUDA_VERSIONS_DISPLAY="None"
     fi
+}
+
+collect_cuda_default_candidates() {
+    CUDA_DEFAULT_CANDIDATE_VERSIONS=()
+    CUDA_DEFAULT_CANDIDATE_DIRS=()
+
+    local candidate_lines=()
+    local cuda_dir
+    for cuda_dir in /usr/local/cuda-*; do
+        if [ ! -d "$cuda_dir" ]; then
+            continue
+        fi
+
+        local dir_version=${cuda_dir##*/cuda-}
+        if [[ $dir_version =~ ^[0-9]+(\.[0-9]+){1,3}$ ]]; then
+            candidate_lines+=("${dir_version}	${cuda_dir}")
+        fi
+    done
+
+    if [ ${#candidate_lines[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    local version
+    local path
+    while IFS=$'\t' read -r version path; do
+        if [ -n "$version" ] && [ -n "$path" ]; then
+            CUDA_DEFAULT_CANDIDATE_VERSIONS+=("$version")
+            CUDA_DEFAULT_CANDIDATE_DIRS+=("$path")
+        fi
+    done < <(printf "%s\n" "${candidate_lines[@]}" | awk '!seen[$1]++' | sort -V -k1,1)
+}
+
+get_cuda_default_version_for_link() {
+    local link_path="$1"
+
+    if [ ! -e "$link_path" ]; then
+        echo ""
+        return 0
+    fi
+
+    local current_target
+    current_target=$(readlink -f "$link_path" 2>/dev/null)
+    if [ -z "$current_target" ]; then
+        echo ""
+        return 0
+    fi
+
+    local current_version=${current_target##*/cuda-}
+    if [[ $current_version =~ ^[0-9]+(\.[0-9]+){1,3}$ ]]; then
+        echo "$current_version"
+        return 0
+    fi
+
+    echo ""
+}
+
+get_current_cuda_default_version() {
+    get_cuda_default_version_for_link "/usr/local/cuda"
+}
+
+cuda_alternative_group_exists() {
+    local alternative_name="$1"
+
+    command -v update-alternatives &> /dev/null || return 1
+    update-alternatives --display "$alternative_name" >/dev/null 2>&1
+}
+
+cuda_alternative_has_path() {
+    local alternative_name="$1"
+    local cuda_dir="$2"
+
+    cuda_alternative_group_exists "$alternative_name" || return 1
+    update-alternatives --display "$alternative_name" 2>/dev/null | awk -v path="$cuda_dir" '
+        $1 == path { found=1 }
+        END { exit !found }
+    '
+}
+
+set_cuda_default_link() {
+    local alternative_name="$1"
+    local link_path="$2"
+    local version="$3"
+    local allow_symlink_fallback="${4:-false}"
+    local cuda_dir="/usr/local/cuda-${version}"
+
+    if [ ! -d "$cuda_dir" ]; then
+        print_warning "Cannot set CUDA $version as default because $cuda_dir was not found."
+        return 1
+    fi
+
+    if cuda_alternative_group_exists "$alternative_name"; then
+        if ! cuda_alternative_has_path "$alternative_name" "$cuda_dir"; then
+            print_warning "$cuda_dir is not registered with update-alternatives group $alternative_name; leaving $link_path unchanged."
+            return 1
+        fi
+
+        if ${SUDO_PREFIX}update-alternatives --set "$alternative_name" "$cuda_dir"; then
+            print_info "Set $alternative_name default: $link_path -> $cuda_dir"
+            return 0
+        fi
+
+        print_warning "Failed to set update-alternatives group $alternative_name to $cuda_dir"
+        return 1
+    fi
+
+    if [ "$allow_symlink_fallback" != true ]; then
+        return 0
+    fi
+
+    if [ -e "$link_path" ] && [ ! -L "$link_path" ]; then
+        print_warning "$link_path exists and is not a symlink; leaving CUDA default unchanged."
+        print_warning "Set the default manually after reviewing $link_path."
+        return 1
+    fi
+
+    if ${SUDO_PREFIX}ln -sfnT "$cuda_dir" "$link_path"; then
+        print_info "Set CUDA default: $link_path -> $cuda_dir"
+        return 0
+    fi
+
+    print_warning "Failed to set $link_path -> $cuda_dir"
+    return 1
+}
+
+set_default_cuda_version() {
+    local version="$1"
+    local major_version=${version%%.*}
+    local result=0
+
+    set_cuda_default_link "cuda" "/usr/local/cuda" "$version" true || result=1
+
+    if cuda_alternative_group_exists "cuda-${major_version}"; then
+        set_cuda_default_link "cuda-${major_version}" "/usr/local/cuda-${major_version}" "$version" false || true
+    fi
+
+    return "$result"
+}
+
+restore_preinstall_cuda_default_before_prompt() {
+    if [ "$AUTO_YES" = true ]; then
+        return 0
+    fi
+
+    if [ -z "$PREINSTALL_CUDA_DEFAULT_VERSION" ]; then
+        return 0
+    fi
+
+    if [ ! -d "/usr/local/cuda-${PREINSTALL_CUDA_DEFAULT_VERSION}" ]; then
+        return 0
+    fi
+
+    local current_default
+    current_default=$(get_current_cuda_default_version)
+    if [ "$current_default" = "$PREINSTALL_CUDA_DEFAULT_VERSION" ]; then
+        return 0
+    fi
+
+    print_info "Restoring pre-install CUDA default ($PREINSTALL_CUDA_DEFAULT_VERSION) before default selection prompt."
+    set_default_cuda_version "$PREINSTALL_CUDA_DEFAULT_VERSION" || true
+}
+
+prompt_for_default_cuda_version() {
+    collect_installed_cuda_versions
+    collect_cuda_default_candidates
+
+    if [ ${#CUDA_DEFAULT_CANDIDATE_VERSIONS[@]} -eq 0 ]; then
+        print_warning "No versioned CUDA toolkit directories found under /usr/local; leaving CUDA default unchanged."
+        return 0
+    fi
+
+    restore_preinstall_cuda_default_before_prompt
+
+    print_info "Installed CUDA versions detected: $INSTALLED_CUDA_VERSIONS_DISPLAY"
+
+    local current_default
+    current_default=$(get_current_cuda_default_version)
+
+    if [ "$AUTO_YES" = true ]; then
+        if [ -n "$TARGET_CUDA_VERSION_NORMALIZED" ] && [ -d "/usr/local/cuda-${TARGET_CUDA_VERSION_NORMALIZED}" ]; then
+            print_info "Automatic mode enabled (-y): setting CUDA $TARGET_CUDA_VERSION_NORMALIZED as the default."
+            set_default_cuda_version "$TARGET_CUDA_VERSION_NORMALIZED" || true
+        else
+            print_warning "Automatic mode enabled (-y), but the requested CUDA install directory was not found; leaving CUDA default unchanged."
+        fi
+        return 0
+    fi
+
+    echo "Choose the CUDA version to make default for /usr/local/cuda:"
+    local index
+    for index in "${!CUDA_DEFAULT_CANDIDATE_VERSIONS[@]}"; do
+        local version="${CUDA_DEFAULT_CANDIDATE_VERSIONS[$index]}"
+        local path="${CUDA_DEFAULT_CANDIDATE_DIRS[$index]}"
+        local marker=""
+        if [ "$version" = "$current_default" ]; then
+            marker=" (current default)"
+        fi
+        echo "  $((index + 1))) CUDA $version - $path$marker"
+    done
+
+    local skip_choice=$(( ${#CUDA_DEFAULT_CANDIDATE_VERSIONS[@]} + 1 ))
+    echo "  $skip_choice) Leave current default unchanged"
+
+    local default_choice
+    read -p "Enter choice (1-$skip_choice): " default_choice
+    while ! [[ "$default_choice" =~ ^[0-9]+$ ]] || [ "$default_choice" -lt 1 ] || [ "$default_choice" -gt "$skip_choice" ]; do
+        read -p "Please enter a number from 1 to $skip_choice: " default_choice
+    done
+
+    if [ "$default_choice" -eq "$skip_choice" ]; then
+        print_info "Leaving CUDA default unchanged."
+        return 0
+    fi
+
+    local selected_index=$((default_choice - 1))
+    set_default_cuda_version "${CUDA_DEFAULT_CANDIDATE_VERSIONS[$selected_index]}" || true
 }
 
 # Track overall success
@@ -796,6 +1027,7 @@ else
 fi
 
 collect_installed_cuda_versions
+PREINSTALL_CUDA_DEFAULT_VERSION=$(get_current_cuda_default_version)
 
 echo ""
 if command -v nvcc &> /dev/null; then
@@ -1141,6 +1373,8 @@ echo ""
                     fi
                 done
                 if [ "$CUDA_INSTALLED" = true ]; then
+                    prompt_for_default_cuda_version
+
                     CUDA_HOME_IN_BASHRC=false
                     CUDA_PATH_IN_BASHRC=false
                     CUDA_LD_LIBRARY_PATH_IN_BASHRC=false
@@ -1228,7 +1462,11 @@ echo ""
             if [ ${#CUDA_PACKAGE_DOWNLOADS[@]} -gt 0 ]; then
                 echo ""
                 print_info "CUDA support package(s) downloaded: ${CUDA_PACKAGE_DOWNLOADS[*]}"
-                read -p "Delete downloaded package(s)? (y/n): " DELETE_CUDA_PKG
+                if [ "$AUTO_YES" = true ]; then
+                    DELETE_CUDA_PKG="y"
+                else
+                    read -p "Delete downloaded package(s)? (y/n): " DELETE_CUDA_PKG
+                fi
                 if [[ "$DELETE_CUDA_PKG" =~ ^[Yy]$ ]]; then
                     for pkg_file in "${CUDA_PACKAGE_DOWNLOADS[@]}"; do
                         rm -f "$pkg_file"

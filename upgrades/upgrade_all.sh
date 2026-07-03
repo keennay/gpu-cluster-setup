@@ -8,7 +8,6 @@ scripts=(
   "upgrade_claude.sh"
   "upgrade_ccr.sh"
   "upgrade_codex.sh"
-  "upgrade_cursor.sh"
   "upgrade_gemini.sh"
   "upgrade_opencode.sh"
 )

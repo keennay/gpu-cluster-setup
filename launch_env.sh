@@ -17,6 +17,135 @@ NC='\033[0m'
 print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+
+prepend_env_path_once() {
+    local var_name="$1"
+    local dir="$2"
+    local current="${!var_name:-}"
+
+    [ -n "$dir" ] || return 0
+    [ -d "$dir" ] || return 0
+    case ":$current:" in
+        *":$dir:"*) return 0 ;;
+    esac
+
+    if [ -n "$current" ]; then
+        export "$var_name=$dir:$current"
+    else
+        export "$var_name=$dir"
+    fi
+}
+
+cuda_home_is_valid() {
+    local cuda_home="$1"
+
+    [ -n "$cuda_home" ] || return 1
+    cuda_home="${cuda_home%/}"
+    [ -d "$cuda_home" ] || return 1
+    [ -x "$cuda_home/bin/nvcc" ] || return 1
+}
+
+cuda_version_for_home() {
+    local cuda_home="$1"
+
+    cuda_home="${cuda_home%/}"
+    if ! cuda_home_is_valid "$cuda_home"; then
+        echo ""
+        return 1
+    fi
+
+    "$cuda_home/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -1
+}
+
+detect_default_cuda_home() {
+    local candidates=()
+    local nvcc_path=""
+
+    candidates+=("/usr/local/cuda")
+    if [ -n "${CUDA_HOME:-}" ]; then
+        candidates+=("$CUDA_HOME")
+    fi
+    if [ -n "${CUDA_PATH:-}" ]; then
+        candidates+=("$CUDA_PATH")
+    fi
+    if nvcc_path=$(command -v nvcc 2>/dev/null); then
+        candidates+=("$(cd -- "$(dirname -- "$nvcc_path")/.." && pwd)")
+    fi
+
+    local candidate
+    local seen=":"
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="${candidate%/}"
+        case "$seen" in
+            *":$candidate:"*) continue ;;
+        esac
+        seen+="$candidate:"
+
+        if cuda_home_is_valid "$candidate"; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+apply_env_cuda_selection() {
+    local cuda_config="$ENV_PATH/.cuda_env"
+    CUDA_ENV_MODE="bashrc"
+    CUDA_ENV_HOME=""
+    CUDA_ENV_VERSION=""
+
+    if [ -f "$cuda_config" ]; then
+        # shellcheck source=/dev/null
+        source "$cuda_config"
+    fi
+
+    case "${CUDA_ENV_MODE:-bashrc}" in
+        explicit)
+            if ! cuda_home_is_valid "$CUDA_ENV_HOME"; then
+                print_error "Selected CUDA toolkit is not available: $CUDA_ENV_HOME"
+                print_error "Install CUDA first with ./03_install_cuda.sh or rerun 05_setup_env.sh to select another CUDA version."
+                return 1
+            fi
+            export CUDA_HOME="${CUDA_ENV_HOME%/}"
+            export CUDA_PATH="$CUDA_HOME"
+            export ML_ENV_CUDA_SOURCE="environment selection"
+            ;;
+        bashrc|"")
+            local default_cuda_home
+            if ! default_cuda_home=$(detect_default_cuda_home); then
+                print_error "No CUDA toolkit detected. Install CUDA first with ./03_install_cuda.sh."
+                return 1
+            fi
+            export CUDA_HOME="${default_cuda_home%/}"
+            export CUDA_PATH="$CUDA_HOME"
+            export CUDA_ENV_MODE="bashrc"
+            export ML_ENV_CUDA_SOURCE="bashrc default"
+            ;;
+        *)
+            print_error "Invalid CUDA_ENV_MODE in $cuda_config: $CUDA_ENV_MODE"
+            return 1
+            ;;
+    esac
+
+    prepend_env_path_once PATH "$CUDA_HOME/bin"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_HOME/lib64"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_HOME/lib"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_HOME/lib64"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_HOME/lib"
+    if [ -d "$CUDA_HOME/include/cccl" ]; then
+        prepend_env_path_once CPATH "$CUDA_HOME/include/cccl"
+    fi
+
+    export ML_ENV_CUDA_APPLIED=1
+    export ML_ENV_CUDA_HOME="$CUDA_HOME"
+    export ML_ENV_CUDA_VERSION
+    ML_ENV_CUDA_VERSION=$(cuda_version_for_home "$CUDA_HOME")
+    print_info "CUDA toolkit: $ML_ENV_CUDA_HOME (${ML_ENV_CUDA_VERSION:-unknown}, $ML_ENV_CUDA_SOURCE)"
+}
+
 resolve_env_type() {
     local input="${1#env_}"
 
@@ -351,136 +480,17 @@ elif [ -f "$ENV_PATH/bin/activate" ]; then
         print_warning "nvidia-smi not found - no GPU detected"
     fi
 
-    # CUDA paths if nvcc is available
-    if command -v nvcc &> /dev/null; then
-        export PATH="/usr/local/cuda/bin:$PATH"
-        export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
-    fi
 else
     print_error "No activation script found for environment '$ENV_NAME'"
     print_info "Expected $ENV_PATH/activate_ml or $ENV_PATH/bin/activate"
     return 1 2>/dev/null || exit 1
 fi
 
-find_system_cuda_13_home() {
-    local candidates=()
-
-    if [ -n "${CUDA_HOME:-}" ]; then
-        candidates+=("$CUDA_HOME")
+if [ "${ML_ENV_CUDA_APPLIED:-}" != "1" ]; then
+    if ! apply_env_cuda_selection; then
+        return 1 2>/dev/null || exit 1
     fi
-    if [ -n "${CUDA_PATH:-}" ]; then
-        candidates+=("$CUDA_PATH")
-    fi
-
-    candidates+=(
-        /usr/local/cuda-13.0
-        /usr/local/cuda-13
-        /usr/local/cuda
-    )
-
-    local candidate release
-    local seen=":"
-    for candidate in "${candidates[@]}"; do
-        [ -n "$candidate" ] || continue
-        candidate="${candidate%/}"
-        if [ -n "${VIRTUAL_ENV:-}" ] && [[ "$candidate" == "$VIRTUAL_ENV"* ]]; then
-            continue
-        fi
-        case "$seen" in
-            *":$candidate:"*) continue ;;
-        esac
-        seen+="$candidate:"
-
-        [ -x "$candidate/bin/nvcc" ] || continue
-        release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
-        case "$release" in
-            13.*) ;;
-            *) continue ;;
-        esac
-        [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
-        [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
-        [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
-        [ -e "$candidate/include/cuda/std/utility" ] || [ -e "$candidate/include/cccl/cuda/std/utility" ] || continue
-
-        echo "$candidate"
-        return 0
-    done
-
-    return 1
-}
-
-find_venv_cuda_13_home() {
-    python - <<'PY'
-import pathlib
-import site
-import sys
-
-for site_dir in site.getsitepackages():
-    candidate = pathlib.Path(site_dir) / "nvidia" / "cu13"
-    if (candidate / "bin" / "nvcc").is_file():
-        print(candidate)
-        sys.exit(0)
-sys.exit(1)
-PY
-}
-
-configure_cuda_13_paths() {
-    local env_label="$1"
-
-    export CUDA_HOME="$CUDA_13_HOME"
-    export CUDA_PATH="$CUDA_13_HOME"
-    prepend_env_path_once PATH "$CUDA_13_HOME/bin"
-    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib64"
-    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib"
-    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib64"
-    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib"
-    if [ -d "$CUDA_13_HOME/include/cccl" ]; then
-        prepend_env_path_once CPATH "$CUDA_13_HOME/include/cccl"
-    fi
-    print_info "$env_label CUDA toolkit: $CUDA_HOME ($CUDA_13_SOURCE)"
-}
-
-setup_cuda_13_runtime() {
-    local env_label="$1"
-
-    CUDA_13_HOME=""
-    CUDA_13_SOURCE=""
-    if CUDA_13_HOME=$(find_system_cuda_13_home); then
-        CUDA_13_SOURCE="system"
-    elif CUDA_13_HOME=$(find_venv_cuda_13_home); then
-        CUDA_13_SOURCE="virtualenv"
-    fi
-
-    if [ -n "$CUDA_13_HOME" ]; then
-        configure_cuda_13_paths "$env_label"
-    else
-        print_warning "$env_label CUDA 13 toolkit not found on the system or in the virtual environment."
-        print_info "Run ./06_install_packages.sh --env $ENV_TYPE to install the required packages."
-    fi
-}
-
-prepend_env_path_once() {
-    local var_name="$1"
-    local dir="$2"
-    local current="${!var_name:-}"
-
-    [ -n "$dir" ] || return 0
-    case ":$current:" in
-        *":$dir:"*) return 0 ;;
-    esac
-
-    if [ -n "$current" ]; then
-        export "$var_name=$dir:$current"
-    else
-        export "$var_name=$dir"
-    fi
-}
-
-case "$ENV_TYPE" in
-    deepseek-sglang)
-        setup_cuda_13_runtime "DeepSeek SGLang"
-        ;;
-esac
+fi
 
 export DG_JIT_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
 export FLASHINFER_WORKSPACE_BASE="${VIRTUAL_ENV:-$ENV_PATH}"
@@ -506,7 +516,9 @@ if [ ! -f "$ENV_PATH/activate_ml" ]; then
     if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then
         echo "  - TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"
     fi
-    if command -v nvcc &> /dev/null; then
+    if [ -n "${ML_ENV_CUDA_HOME:-}" ]; then
+        echo "  - CUDA toolkit: $ML_ENV_CUDA_HOME (${ML_ENV_CUDA_VERSION:-unknown}, ${ML_ENV_CUDA_SOURCE:-configured})"
+    elif command -v nvcc &> /dev/null; then
         echo "  - CUDA: $(nvcc --version | grep release | awk '{print $6}')"
     fi
 fi
