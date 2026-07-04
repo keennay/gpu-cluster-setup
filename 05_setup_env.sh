@@ -199,6 +199,182 @@ resolve_env_name() {
     echo "$env_type"
 }
 
+CUDA_CANDIDATE_VERSIONS=()
+CUDA_CANDIDATE_HOMES=()
+SELECTED_CUDA_MODE=""
+SELECTED_CUDA_HOME=""
+SELECTED_CUDA_VERSION=""
+
+cuda_home_is_valid() {
+    local cuda_home="$1"
+
+    [ -n "$cuda_home" ] || return 1
+    cuda_home="${cuda_home%/}"
+    [ -d "$cuda_home" ] || return 1
+    [ -x "$cuda_home/bin/nvcc" ] || return 1
+}
+
+cuda_version_for_home() {
+    local cuda_home="$1"
+
+    cuda_home="${cuda_home%/}"
+    if ! cuda_home_is_valid "$cuda_home"; then
+        echo ""
+        return 1
+    fi
+
+    "$cuda_home/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -1
+}
+
+detect_bashrc_cuda_home() {
+    local candidates=()
+    local nvcc_path=""
+
+    candidates+=("/usr/local/cuda")
+    if [ -n "${CUDA_HOME:-}" ]; then
+        candidates+=("$CUDA_HOME")
+    fi
+    if [ -n "${CUDA_PATH:-}" ]; then
+        candidates+=("$CUDA_PATH")
+    fi
+    if nvcc_path=$(command -v nvcc 2>/dev/null); then
+        candidates+=("$(cd -- "$(dirname -- "$nvcc_path")/.." && pwd)")
+    fi
+
+    local candidate
+    local seen=":"
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="${candidate%/}"
+        case "$seen" in
+            *":$candidate:"*) continue ;;
+        esac
+        seen+="$candidate:"
+
+        if cuda_home_is_valid "$candidate"; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+collect_cuda_candidates() {
+    CUDA_CANDIDATE_VERSIONS=()
+    CUDA_CANDIDATE_HOMES=()
+
+    local candidate_lines=()
+    local cuda_dir
+    for cuda_dir in /usr/local/cuda-*; do
+        [ -d "$cuda_dir" ] || continue
+
+        local dir_version=${cuda_dir##*/cuda-}
+        [[ "$dir_version" =~ ^[0-9]+(\.[0-9]+){1,3}$ ]] || continue
+        cuda_home_is_valid "$cuda_dir" || continue
+
+        local actual_version
+        actual_version=$(cuda_version_for_home "$cuda_dir")
+        if [ -n "$actual_version" ]; then
+            candidate_lines+=("${actual_version}	${cuda_dir}")
+        fi
+    done
+
+    [ ${#candidate_lines[@]} -gt 0 ] || return 0
+
+    local version
+    local path
+    while IFS=$'\t' read -r version path; do
+        if [ -n "$version" ] && [ -n "$path" ]; then
+            CUDA_CANDIDATE_VERSIONS+=("$version")
+            CUDA_CANDIDATE_HOMES+=("$path")
+        fi
+    done < <(printf "%s\n" "${candidate_lines[@]}" | awk '!seen[$1]++' | sort -V -k1,1)
+}
+
+select_cuda_for_env() {
+    collect_cuda_candidates
+
+    local bashrc_cuda_home=""
+    local bashrc_cuda_version=""
+    if bashrc_cuda_home=$(detect_bashrc_cuda_home); then
+        bashrc_cuda_version=$(cuda_version_for_home "$bashrc_cuda_home")
+    fi
+
+    if [ -z "$bashrc_cuda_home" ] && [ ${#CUDA_CANDIDATE_HOMES[@]} -eq 0 ]; then
+        fail_script "No CUDA toolkit detected. Install CUDA first with ./03_install_cuda.sh before setting up an ML environment."
+        return 1
+    fi
+
+    if [ "$AUTO_MODE" = true ]; then
+        if [ -n "$bashrc_cuda_home" ]; then
+            SELECTED_CUDA_MODE="bashrc"
+            SELECTED_CUDA_HOME=""
+            SELECTED_CUDA_VERSION="$bashrc_cuda_version"
+            print_info "Auto mode: using default bashrc CUDA for $ENV_NAME (CUDA $SELECTED_CUDA_VERSION at $bashrc_cuda_home)"
+        else
+            local last_index=$(( ${#CUDA_CANDIDATE_HOMES[@]} - 1 ))
+            SELECTED_CUDA_MODE="explicit"
+            SELECTED_CUDA_HOME="${CUDA_CANDIDATE_HOMES[$last_index]}"
+            SELECTED_CUDA_VERSION="${CUDA_CANDIDATE_VERSIONS[$last_index]}"
+            print_info "Auto mode: using CUDA $SELECTED_CUDA_VERSION for $ENV_NAME ($SELECTED_CUDA_HOME)"
+        fi
+        return 0
+    fi
+
+    echo ""
+    print_info "Select CUDA toolkit for environment '$ENV_NAME':"
+
+    local option_modes=()
+    local option_homes=()
+    local option_versions=()
+    local option=1
+
+    if [ -n "$bashrc_cuda_home" ]; then
+        echo "  $option) Use default bashrc CUDA (CUDA $bashrc_cuda_version at $bashrc_cuda_home)"
+        option_modes+=("bashrc")
+        option_homes+=("")
+        option_versions+=("$bashrc_cuda_version")
+        option=$((option + 1))
+    fi
+
+    local index
+    for index in "${!CUDA_CANDIDATE_HOMES[@]}"; do
+        echo "  $option) CUDA ${CUDA_CANDIDATE_VERSIONS[$index]} - ${CUDA_CANDIDATE_HOMES[$index]}"
+        option_modes+=("explicit")
+        option_homes+=("${CUDA_CANDIDATE_HOMES[$index]}")
+        option_versions+=("${CUDA_CANDIDATE_VERSIONS[$index]}")
+        option=$((option + 1))
+    done
+
+    local max_choice=${#option_modes[@]}
+    local cuda_choice=""
+    read -r -p "Enter choice (1-$max_choice): " cuda_choice
+    while ! [[ "$cuda_choice" =~ ^[0-9]+$ ]] || [ "$cuda_choice" -lt 1 ] || [ "$cuda_choice" -gt "$max_choice" ]; do
+        read -r -p "Please enter a number from 1 to $max_choice: " cuda_choice
+    done
+
+    local selected_index=$((cuda_choice - 1))
+    SELECTED_CUDA_MODE="${option_modes[$selected_index]}"
+    SELECTED_CUDA_HOME="${option_homes[$selected_index]}"
+    SELECTED_CUDA_VERSION="${option_versions[$selected_index]}"
+
+    if [ "$SELECTED_CUDA_MODE" = "bashrc" ]; then
+        print_info "Environment '$ENV_NAME' will use the default bashrc CUDA (CUDA $SELECTED_CUDA_VERSION)."
+    else
+        print_info "Environment '$ENV_NAME' will use CUDA $SELECTED_CUDA_VERSION at $SELECTED_CUDA_HOME."
+    fi
+}
+
+write_cuda_env_config() {
+    cat > "$ENV_PATH/.cuda_env" << EOF
+# CUDA toolkit selection for this ML environment.
+CUDA_ENV_MODE="$SELECTED_CUDA_MODE"
+CUDA_ENV_HOME="$SELECTED_CUDA_HOME"
+CUDA_ENV_VERSION="$SELECTED_CUDA_VERSION"
+EOF
+}
+
 # Check if being sourced
 if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
     BEING_SOURCED=true
@@ -314,6 +490,14 @@ else
     print_info "Using default HuggingFace path: $HF_PATH"
 fi
 
+if ! select_cuda_for_env; then
+    if [ "$BEING_SOURCED" = false ]; then
+        exit 1
+    else
+        return 1
+    fi
+fi
+
 # Check prerequisites
 print_info "Checking prerequisites..."
 
@@ -407,6 +591,8 @@ if [ ! -d "$ENV_PATH" ]; then
     fi
 fi
 
+write_cuda_env_config
+
 # Install baseline Hugging Face Hub tooling into the selected environment.
 if ! install_huggingface_hub; then
     fail_script "Failed to install Hugging Face Hub"
@@ -494,72 +680,7 @@ echo ""
 # Create activation script with environment variables
 print_info "Creating activation script with ML environment variables..."
 
-CUDA_13_ACTIVATE_SNIPPET=""
-case "$ENV_TYPE" in
-    deepseek-sglang)
-        CUDA_13_ACTIVATE_SNIPPET=$(cat <<'CUDA_13_SNIPPET'
-
-find_system_cuda_13_home() {
-    local candidates=()
-
-    if [ -n "${CUDA_HOME:-}" ]; then
-        candidates+=("$CUDA_HOME")
-    fi
-    if [ -n "${CUDA_PATH:-}" ]; then
-        candidates+=("$CUDA_PATH")
-    fi
-
-    candidates+=(
-        /usr/local/cuda-13.0
-        /usr/local/cuda-13
-        /usr/local/cuda
-    )
-
-    local candidate release
-    local seen=":"
-    for candidate in "${candidates[@]}"; do
-        [ -n "$candidate" ] || continue
-        candidate="${candidate%/}"
-        if [ -n "${VIRTUAL_ENV:-}" ] && [[ "$candidate" == "$VIRTUAL_ENV"* ]]; then
-            continue
-        fi
-        case "$seen" in
-            *":$candidate:"*) continue ;;
-        esac
-        seen+="$candidate:"
-
-        [ -x "$candidate/bin/nvcc" ] || continue
-        release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
-        case "$release" in
-            13.*) ;;
-            *) continue ;;
-        esac
-        [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
-        [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
-        [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
-        [ -e "$candidate/include/cuda/std/utility" ] || [ -e "$candidate/include/cccl/cuda/std/utility" ] || continue
-
-        echo "$candidate"
-        return 0
-    done
-
-    return 1
-}
-
-find_venv_cuda_13_home() {
-    python - <<'PY'
-import pathlib
-import site
-import sys
-
-for site_dir in site.getsitepackages():
-    candidate = pathlib.Path(site_dir) / "nvidia" / "cu13"
-    if (candidate / "bin" / "nvcc").is_file():
-        print(candidate)
-        sys.exit(0)
-sys.exit(1)
-PY
-}
+CUDA_ACTIVATE_SNIPPET=$(cat <<'CUDA_ACTIVATE_SNIPPET'
 
 prepend_env_path_once() {
     local var_name="$1"
@@ -567,6 +688,7 @@ prepend_env_path_once() {
     local current="${!var_name:-}"
 
     [ -n "$dir" ] || return 0
+    [ -d "$dir" ] || return 0
     case ":$current:" in
         *":$dir:"*) return 0 ;;
     esac
@@ -578,30 +700,118 @@ prepend_env_path_once() {
     fi
 }
 
-CUDA_13_HOME=""
-CUDA_13_SOURCE=""
-if CUDA_13_HOME=$(find_system_cuda_13_home); then
-    CUDA_13_SOURCE="system"
-elif CUDA_13_HOME=$(find_venv_cuda_13_home); then
-    CUDA_13_SOURCE="virtualenv"
-fi
+cuda_home_is_valid() {
+    local cuda_home="$1"
 
-if [ -n "$CUDA_13_HOME" ]; then
-    export CUDA_HOME="$CUDA_13_HOME"
-    export CUDA_PATH="$CUDA_13_HOME"
-    prepend_env_path_once PATH "$CUDA_13_HOME/bin"
-    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib64"
-    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_13_HOME/lib"
-    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib64"
-    prepend_env_path_once LIBRARY_PATH "$CUDA_13_HOME/lib"
-    if [ -d "$CUDA_13_HOME/include/cccl" ]; then
-        prepend_env_path_once CPATH "$CUDA_13_HOME/include/cccl"
+    [ -n "$cuda_home" ] || return 1
+    cuda_home="${cuda_home%/}"
+    [ -d "$cuda_home" ] || return 1
+    [ -x "$cuda_home/bin/nvcc" ] || return 1
+}
+
+cuda_version_for_home() {
+    local cuda_home="$1"
+
+    cuda_home="${cuda_home%/}"
+    if ! cuda_home_is_valid "$cuda_home"; then
+        echo ""
+        return 1
     fi
-fi
-CUDA_13_SNIPPET
+
+    "$cuda_home/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -1
+}
+
+detect_default_cuda_home() {
+    local candidates=()
+    local nvcc_path=""
+
+    candidates+=("/usr/local/cuda")
+    if [ -n "${CUDA_HOME:-}" ]; then
+        candidates+=("$CUDA_HOME")
+    fi
+    if [ -n "${CUDA_PATH:-}" ]; then
+        candidates+=("$CUDA_PATH")
+    fi
+    if nvcc_path=$(command -v nvcc 2>/dev/null); then
+        candidates+=("$(cd -- "$(dirname -- "$nvcc_path")/.." && pwd)")
+    fi
+
+    local candidate
+    local seen=":"
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="${candidate%/}"
+        case "$seen" in
+            *":$candidate:"*) continue ;;
+        esac
+        seen+="$candidate:"
+
+        if cuda_home_is_valid "$candidate"; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+apply_env_cuda_selection() {
+    local cuda_config="${VIRTUAL_ENV:-}/.cuda_env"
+    CUDA_ENV_MODE="bashrc"
+    CUDA_ENV_HOME=""
+    CUDA_ENV_VERSION=""
+
+    if [ -f "$cuda_config" ]; then
+        # shellcheck source=/dev/null
+        source "$cuda_config"
+    fi
+
+    case "${CUDA_ENV_MODE:-bashrc}" in
+        explicit)
+            if ! cuda_home_is_valid "$CUDA_ENV_HOME"; then
+                echo "[ERROR] Selected CUDA toolkit is not available: $CUDA_ENV_HOME"
+                echo "[ERROR] Install CUDA first with ./03_install_cuda.sh or rerun 05_setup_env.sh to select another CUDA version."
+                return 1
+            fi
+            export CUDA_HOME="${CUDA_ENV_HOME%/}"
+            export CUDA_PATH="$CUDA_HOME"
+            export ML_ENV_CUDA_SOURCE="environment selection"
+            ;;
+        bashrc|"")
+            local default_cuda_home
+            if ! default_cuda_home=$(detect_default_cuda_home); then
+                echo "[ERROR] No CUDA toolkit detected. Install CUDA first with ./03_install_cuda.sh."
+                return 1
+            fi
+            export CUDA_HOME="${default_cuda_home%/}"
+            export CUDA_PATH="$CUDA_HOME"
+            export CUDA_ENV_MODE="bashrc"
+            export ML_ENV_CUDA_SOURCE="bashrc default"
+            ;;
+        *)
+            echo "[ERROR] Invalid CUDA_ENV_MODE in $cuda_config: $CUDA_ENV_MODE"
+            return 1
+            ;;
+    esac
+
+    prepend_env_path_once PATH "$CUDA_HOME/bin"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_HOME/lib64"
+    prepend_env_path_once LD_LIBRARY_PATH "$CUDA_HOME/lib"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_HOME/lib64"
+    prepend_env_path_once LIBRARY_PATH "$CUDA_HOME/lib"
+    if [ -d "$CUDA_HOME/include/cccl" ]; then
+        prepend_env_path_once CPATH "$CUDA_HOME/include/cccl"
+    fi
+
+    export ML_ENV_CUDA_APPLIED=1
+    export ML_ENV_CUDA_HOME="$CUDA_HOME"
+    export ML_ENV_CUDA_VERSION
+    ML_ENV_CUDA_VERSION=$(cuda_version_for_home "$CUDA_HOME")
+}
+
+apply_env_cuda_selection || return 1 2>/dev/null || exit 1
+CUDA_ACTIVATE_SNIPPET
 )
-        ;;
-esac
 
 cat > "$ENV_PATH/activate_ml" << EOF
 #!/bin/bash
@@ -622,7 +832,7 @@ export XDG_CACHE_HOME="\${VIRTUAL_ENV:-$ENV_PATH}/.cache"
 # Set ML environment variables
 export HF_HOME="$HF_PATH"
 export HF_HUB_CACHE="$HF_PATH/hub"
-${CUDA_13_ACTIVATE_SNIPPET}
+${CUDA_ACTIVATE_SNIPPET}
 
 # GPU architecture for PyTorch
 ${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
@@ -631,8 +841,8 @@ echo "ML environment activated with:"
 echo "  - Virtual env: $ENV_PATH"
 echo "  - HF_HOME: $HF_PATH"
 echo "  - HF_HUB_CACHE: $HF_PATH/hub"
-if [ -n "\${CUDA_13_HOME:-}" ]; then
-    echo "  - CUDA 13 toolkit: \${CUDA_HOME} (\${CUDA_13_SOURCE})"
+if [ -n "\${ML_ENV_CUDA_HOME:-}" ]; then
+    echo "  - CUDA toolkit: \${ML_ENV_CUDA_HOME} (\${ML_ENV_CUDA_VERSION:-unknown}, \${ML_ENV_CUDA_SOURCE:-configured})"
 fi
 ${TORCH_CUDA_ARCH_LIST:+echo "  - TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"}
 echo "  - Python: \$(python --version)"
@@ -691,33 +901,10 @@ echo ""
 if [ "$BEING_SOURCED" = true ]; then
     print_info "Activating ML environment..."
     # shellcheck source=/dev/null
-    source "$ENV_PATH/bin/activate"
-    export DG_JIT_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
-    export FLASHINFER_WORKSPACE_BASE="${VIRTUAL_ENV:-$ENV_PATH}"
-    export SGLANG_DG_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/deep_gemm"
-    export TORCH_EXTENSIONS_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch_extensions"
-    export TORCH_HOME="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torch"
-    export TORCHINDUCTOR_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/torchinductor"
-    export TRITON_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/triton"
-    export TRITON_HOME="${VIRTUAL_ENV:-$ENV_PATH}"
-    export TVM_FFI_CACHE_DIR="${VIRTUAL_ENV:-$ENV_PATH}/.cache/tvm-ffi"
-    export VLLM_CACHE_ROOT="${VIRTUAL_ENV:-$ENV_PATH}/.cache/vllm"
-    export XDG_CACHE_HOME="${VIRTUAL_ENV:-$ENV_PATH}/.cache"
-    
-    # Set environment variables
-    export HF_HOME="$HF_PATH"
-    export HF_HUB_CACHE="$HF_PATH/hub"
-    
-    # Set GPU architecture if detected
-    if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then
-        export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"
-        print_info "  TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"
+    if ! source "$ENV_PATH/activate_ml"; then
+        fail_script "Failed to activate ML environment"
+        return 1
     fi
-    
-    echo ""
-    print_info "✓ Environment activated!"
-    print_info "  Python: $(which python)"
-    print_info "  Version: $(python --version)"
 else
     # Show activation instructions when run as script
     print_info "To activate the environment:"
