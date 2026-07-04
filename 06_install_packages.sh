@@ -869,7 +869,6 @@ install_qwen3_ktransformers() {
 install_qwen3_sglang() {
     print_info "Installing SGLang for Qwen3..."
     run_uv_install "git+https://github.com/sgl-project/sglang.git#subdirectory=python&egg=sglang[all]"
-    run_uv_install nvidia-cudnn-cu12==9.16.0.29
 }
 
 install_qwen3_transformers() {
