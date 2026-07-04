@@ -321,6 +321,111 @@ run_pip_install() {
     return 1
 }
 
+cuda_version_from_home() {
+    local cuda_home="$1"
+    [ -n "$cuda_home" ] || return 1
+    cuda_home="${cuda_home%/}"
+    [ -x "$cuda_home/bin/nvcc" ] || return 1
+
+    "$cuda_home/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -1
+}
+
+detect_active_cuda_version() {
+    if [ -n "${ML_ENV_CUDA_VERSION:-}" ]; then
+        echo "$ML_ENV_CUDA_VERSION"
+        return 0
+    fi
+
+    local cuda_version=""
+    if cuda_version=$(cuda_version_from_home "${CUDA_HOME:-}"); then
+        echo "$cuda_version"
+        return 0
+    fi
+
+    if cuda_version=$(cuda_version_from_home "${CUDA_PATH:-}"); then
+        echo "$cuda_version"
+        return 0
+    fi
+
+    if command -v nvcc >/dev/null 2>&1; then
+        nvcc --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -1
+        return 0
+    fi
+
+    python - <<'PY' 2>/dev/null
+import sys
+try:
+    import torch
+except Exception:
+    sys.exit(1)
+if torch.version.cuda:
+    print(torch.version.cuda)
+    sys.exit(0)
+sys.exit(1)
+PY
+}
+
+install_sglang_cuda_129_wheels() {
+    print_info "CUDA 12.9 detected; installing CUDA 12.9 PyTorch and SGLang kernel wheels..."
+
+    run_uv_install --force-reinstall \
+        torch==2.11.0 \
+        torchaudio==2.11.0 \
+        torchvision \
+        --index-url https://download.pytorch.org/whl/cu129 || return 1
+
+    run_uv_install --force-reinstall \
+        sglang-kernel \
+        --index-url https://docs.sglang.ai/whl/cu129/ || return 1
+
+    run_uv_install --force-reinstall \
+        sgl-deep-gemm \
+        --index-url https://docs.sglang.ai/whl/cu129/ \
+        --no-deps || return 1
+}
+
+install_bleeding_edge_sglang() {
+    local expected_env="$1"
+    ensure_active_environment_matches "$expected_env" || return 1
+
+    local target_dir=""
+    if [ -n "${SGLANG_DIR:-}" ]; then
+        target_dir="$SGLANG_DIR"
+    else
+        target_dir="$VIRTUAL_ENV/sglang"
+    fi
+
+    if [ -e "$target_dir" ] && [ ! -d "$target_dir/.git" ]; then
+        print_error "SGLang target exists but is not a git checkout: $target_dir"
+        return 1
+    fi
+
+    if [ ! -d "$target_dir/.git" ]; then
+        local parent_dir
+        parent_dir=$(dirname "$target_dir")
+        if [ ! -d "$parent_dir" ]; then
+            run_command mkdir -p "$parent_dir" || return 1
+        fi
+        run_command git clone https://github.com/sgl-project/sglang.git "$target_dir" || return 1
+    fi
+
+    run_command git -C "$target_dir" fetch origin main --tags || return 1
+    run_command git -C "$target_dir" checkout main || return 1
+    run_command git -C "$target_dir" pull --ff-only origin main || return 1
+
+    run_uv_install -U --reinstall --prerelease=allow -e "$target_dir/python[all]" || return 1
+
+    local cuda_version=""
+    cuda_version=$(detect_active_cuda_version || true)
+    if [ "$cuda_version" = "12.9" ]; then
+        install_sglang_cuda_129_wheels || return 1
+    elif [ -n "$cuda_version" ]; then
+        print_info "CUDA $cuda_version detected; no extra CUDA 12.9 wheel reinstall needed."
+    else
+        print_warning "Could not detect active CUDA version; skipping CUDA 12.9-specific wheel reinstall."
+    fi
+}
+
 check_kt_kernel_build_dependencies() {
     local missing=()
 
@@ -356,72 +461,10 @@ install_kt_kernel() {
     run_command bash -c "cd \"$kt_kernel_dir\" && ./install.sh build"
 }
 
-find_system_cuda_13_home() {
-    local candidates=()
-
-    if [ -n "${CUDA_HOME:-}" ]; then
-        candidates+=("$CUDA_HOME")
-    fi
-    if [ -n "${CUDA_PATH:-}" ]; then
-        candidates+=("$CUDA_PATH")
-    fi
-
-    candidates+=(
-        /usr/local/cuda-13.0
-        /usr/local/cuda-13
-        /usr/local/cuda
-    )
-
-    local candidate release
-    local seen=":"
-    for candidate in "${candidates[@]}"; do
-        [ -n "$candidate" ] || continue
-        candidate="${candidate%/}"
-        if [ -n "${VIRTUAL_ENV:-}" ] && [[ "$candidate" == "$VIRTUAL_ENV"* ]]; then
-            continue
-        fi
-        case "$seen" in
-            *":$candidate:"*) continue ;;
-        esac
-        seen+="$candidate:"
-
-        [ -x "$candidate/bin/nvcc" ] || continue
-        release=$("$candidate/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]\).*/\1/p' | head -1)
-        case "$release" in
-            13.*) ;;
-            *) continue ;;
-        esac
-        [ -f "$candidate/include/cuda_runtime_api.h" ] || continue
-        [ -e "$candidate/lib64/libcudart.so" ] || [ -e "$candidate/lib/libcudart.so" ] || continue
-        [ -e "$candidate/include/nv/target" ] || [ -e "$candidate/include/cccl/nv/target" ] || continue
-        [ -e "$candidate/include/cuda/std/utility" ] || [ -e "$candidate/include/cccl/cuda/std/utility" ] || continue
-
-        echo "$candidate"
-        return 0
-    done
-
-    return 1
-}
-
-find_venv_cuda_13_home() {
-    python - <<'PY'
-import pathlib
-import site
-import sys
-
-for site_dir in site.getsitepackages():
-    candidate = pathlib.Path(site_dir) / "nvidia" / "cu13"
-    if (candidate / "bin" / "nvcc").is_file():
-        print(candidate)
-        sys.exit(0)
-sys.exit(1)
-PY
-}
-
 install_gemma_sglang() {
     print_info "Installing packages for Gemma-4 (SGLang)..."
 
-    run_uv_install "git+https://github.com/sgl-project/sglang.git#subdirectory=python" || return 1
+    install_bleeding_edge_sglang gemma-sglang || return 1
     run_uv_install "git+https://github.com/huggingface/transformers.git@91b1ab1fdfa81a552644a92fbe3e8d88de40e167"
 }
 
@@ -433,9 +476,8 @@ install_gemma_vllm() {
 install_glm_sglang() {
     print_info "Installing packages for GLM-4/5 (SGLang)..."
     
-    run_uv_install -U --prerelease=allow \
-        "sglang[all] @ git+https://github.com/sgl-project/sglang.git@1c2857b0646f12a58a04072f0f3d6bd649f064f2#subdirectory=python" \
-        "kernels==0.14.1"
+    install_bleeding_edge_sglang glm-sglang || return 1
+    run_uv_install "kernels==0.14.1"
 }
 
 install_glm_transformers() {
@@ -535,18 +577,22 @@ install_deepseek_ktransformers() {
         cuda_home=$(cd -- "$(dirname -- "$(command -v nvcc)")/.." && pwd)
     fi
 
-    if [ -n "$cuda_home" ]; then
-        flash_mla_env+=(
-            "CUDA_HOME=$cuda_home"
-            "CUDA_PATH=$cuda_home"
-            "PATH=$cuda_home/bin:$PATH"
-            "LD_LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
-            "LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
-        )
+    if [ -z "$cuda_home" ] || [ ! -x "$cuda_home/bin/nvcc" ]; then
+        print_error "No active CUDA toolkit with nvcc detected for FlashMLA."
+        print_info "Activate an environment configured by 05_setup_env.sh/launch_env.sh with a CUDA toolkit selected."
+        return 1
+    fi
 
-        if [ -d "$cuda_home/include/cccl" ]; then
-            flash_mla_env+=("CPATH=$cuda_home/include/cccl:${CPATH:-}")
-        fi
+    flash_mla_env+=(
+        "CUDA_HOME=$cuda_home"
+        "CUDA_PATH=$cuda_home"
+        "PATH=$cuda_home/bin:$PATH"
+        "LD_LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LD_LIBRARY_PATH:-}"
+        "LIBRARY_PATH=$cuda_home/lib:$cuda_home/lib64:${LIBRARY_PATH:-}"
+    )
+
+    if [ -d "$cuda_home/include/cccl" ]; then
+        flash_mla_env+=("CPATH=$cuda_home/include/cccl:${CPATH:-}")
     fi
 
     local gpu_name=""
@@ -568,36 +614,17 @@ install_deepseek_ktransformers() {
 install_deepseek_sglang() {
     print_info "Installing SGLang for DeepSeek..."
 
-    run_uv_install --upgrade --prerelease=allow \
-        'sglang==0.5.13' || return 1
+    install_bleeding_edge_sglang deepseek-sglang || return 1
 
-    local cuda_home=""
-    if cuda_home=$(find_system_cuda_13_home); then
-        print_info "Using system CUDA 13 toolkit at $cuda_home"
-    else
-        print_info "No complete system CUDA 13 toolkit found; installing CUDA 13 compiler packages into the virtual environment."
-        run_uv_install \
-            nvidia-cuda-nvcc==13.0.88 \
-            nvidia-cuda-crt==13.0.88 \
-            nvidia-nvvm==13.0.88 \
-            nvidia-cuda-cccl==13.0.85 || return 1
+    local cuda_home="${CUDA_HOME:-${CUDA_PATH:-}}"
+    if [ -z "$cuda_home" ] && command -v nvcc >/dev/null 2>&1; then
+        cuda_home=$(cd -- "$(dirname -- "$(command -v nvcc)")/.." && pwd)
+    fi
 
-        cuda_home=$(find_venv_cuda_13_home) || {
-            print_error "CUDA 13 nvcc was not found inside the active virtual environment."
-            print_info "Expected it under: $VIRTUAL_ENV/lib/python*/site-packages/nvidia/cu13/bin/nvcc"
-            return 1
-        }
-        print_info "Using virtualenv CUDA 13 toolkit at $cuda_home"
-
-        if [ ! -e "$cuda_home/lib/libcudart.so" ] && [ -e "$cuda_home/lib/libcudart.so.13" ]; then
-            run_command ln -s libcudart.so.13 "$cuda_home/lib/libcudart.so" || return 1
-        fi
-        if [ ! -e "$cuda_home/lib/libnvrtc.so" ] && [ -e "$cuda_home/lib/libnvrtc.so.13" ]; then
-            run_command ln -s libnvrtc.so.13 "$cuda_home/lib/libnvrtc.so" || return 1
-        fi
-        if [ ! -e "$cuda_home/lib/libnvrtc-builtins.so" ] && [ -e "$cuda_home/lib/libnvrtc-builtins.so.13.0" ]; then
-            run_command ln -s libnvrtc-builtins.so.13.0 "$cuda_home/lib/libnvrtc-builtins.so" || return 1
-        fi
+    if [ -z "$cuda_home" ] || [ ! -x "$cuda_home/bin/nvcc" ]; then
+        print_error "No active CUDA toolkit with nvcc detected for FlashMLA."
+        print_info "Activate an environment configured by 05_setup_env.sh/launch_env.sh with a CUDA toolkit selected."
+        return 1
     fi
 
     export CUDA_HOME="$cuda_home"
@@ -719,7 +746,7 @@ install_kimi_ktransformers() {
 }
 install_kimi_sglang() {
     print_info "Installing SGLang for Kimi K2.X..."
-    run_uv_install "sglang @ git+https://github.com/sgl-project/sglang.git#subdirectory=python"
+    install_bleeding_edge_sglang kimi-sglang || return 1
     run_uv_install remote_pdb
     run_uv_install imageio
     run_uv_install diffusers
@@ -736,32 +763,7 @@ install_kimi_vllm() {
 install_ling_sglang() {
     print_info "Installing SGLang for Ling-2.6..."
 
-    local target_dir=""
-    if [ -n "${SGLANG_DIR:-}" ]; then
-        target_dir="$SGLANG_DIR"
-    elif [ -n "${VIRTUAL_ENV:-}" ]; then
-        target_dir="$VIRTUAL_ENV/sglang"
-    else
-        print_error "No active virtual environment detected for Ling-2.6 SGLang clone."
-        return 1
-    fi
-
-    if [ -d "$target_dir/.git" ]; then
-        print_info "Updating existing repository at $target_dir"
-        run_command git -C "$target_dir" fetch origin || return 1
-        run_command git -C "$target_dir" checkout ling_2_6 || return 1
-        run_command git -C "$target_dir" pull --ff-only || return 1
-    else
-        local parent_dir
-        parent_dir=$(dirname "$target_dir")
-        if [ ! -d "$parent_dir" ]; then
-            run_command mkdir -p "$parent_dir" || return 1
-        fi
-        run_command git clone -b ling_2_6 git@github.com:antgroup/sglang.git "$target_dir" || return 1
-    fi
-
-    run_uv_install --upgrade pip || return 1
-    run_uv_install -e "$target_dir/python" || return 1
+    install_bleeding_edge_sglang ling-sglang || return 1
 }
 
 install_ling_transformers() {
@@ -801,29 +803,7 @@ install_ling_vllm() {
 install_minimax_sglang() {
     print_info "Installing SGLang for MiniMax-M2.X..."
 
-    local target_dir=""
-    if [ -n "${SGLANG_DIR:-}" ]; then
-        target_dir="$SGLANG_DIR"
-    elif [ -n "${VIRTUAL_ENV:-}" ]; then
-        target_dir="$VIRTUAL_ENV/sglang"
-    else
-        target_dir="$HOME/sglang"
-    fi
-
-    if [ -d "$target_dir/.git" ]; then
-        print_info "Updating existing repository at $target_dir"
-        run_command git -C "$target_dir" fetch origin || return 1
-        run_command git -C "$target_dir" pull --ff-only || return 1
-    else
-        local parent_dir
-        parent_dir=$(dirname "$target_dir")
-        if [ ! -d "$parent_dir" ]; then
-            run_command mkdir -p "$parent_dir" || return 1
-        fi
-        run_command git clone https://github.com/sgl-project/sglang "$target_dir" || return 1
-    fi
-
-    run_uv_install -e "$target_dir/python" --prerelease=allow
+    install_bleeding_edge_sglang minimax-sglang || return 1
 }
 
 install_minimax_transformers() {
@@ -838,7 +818,7 @@ install_minimax_vllm() {
 
 install_nemotron_sglang() {
     print_info "Installing SGLang for Nemotron-3..."
-    run_uv_install sglang==0.5.9 torch==2.9.1
+    install_bleeding_edge_sglang nemotron-sglang || return 1
 }
 
 install_nemotron_trtllm() {
@@ -868,7 +848,7 @@ install_qwen3_ktransformers() {
 
 install_qwen3_sglang() {
     print_info "Installing SGLang for Qwen3..."
-    run_uv_install "git+https://github.com/sgl-project/sglang.git#subdirectory=python&egg=sglang[all]"
+    install_bleeding_edge_sglang qwen3-sglang || return 1
 }
 
 install_qwen3_transformers() {
