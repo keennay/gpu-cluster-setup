@@ -16,12 +16,17 @@ is_valid_cuda_version_arg() {
     [[ "$1" =~ ^[0-9]+$ || "$1" =~ ^[0-9]+\.[0-9]+$ || "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CUDA_CACHE_DIR="/tmp/cuda-cache"
-if ! mkdir -p "$CUDA_CACHE_DIR" 2>/dev/null; then
-    print_warning "Could not create $CUDA_CACHE_DIR; falling back to /tmp"
-    CUDA_CACHE_DIR="/tmp"
+CUDA_CACHE_DIR="$(mktemp -d /tmp/cuda-cache.XXXXXX)"
+if [ -z "$CUDA_CACHE_DIR" ] || [ ! -d "$CUDA_CACHE_DIR" ]; then
+    print_error "Could not create temporary CUDA download directory under /tmp"
+    exit 1
 fi
+cleanup_cuda_cache() {
+    if [[ "$CUDA_CACHE_DIR" == /tmp/cuda-cache.* ]] && [ -d "$CUDA_CACHE_DIR" ]; then
+        rm -rf "$CUDA_CACHE_DIR"
+    fi
+}
+trap cleanup_cuda_cache EXIT
 CUDA_PACKAGE_DOWNLOADS=()
 INSTALLED_CUDA_VERSIONS=()
 INSTALLED_CUDA_VERSIONS_DISPLAY="None"
@@ -136,7 +141,7 @@ setup_ubuntu_cuda_repo() {
             return 1
         fi
     else
-        print_info "Using cached CUDA repository keyring: $keyring_file"
+        print_info "Using temporary CUDA repository keyring: $keyring_file"
     fi
 
     print_info "Configuring NVIDIA CUDA APT repository for $repo..."
@@ -314,7 +319,7 @@ resolve_rhel_driver_package() {
                 continue
             fi
         else
-            print_info "Using cached NVIDIA driver package: $driver_rpm_file"
+            print_info "Using temporary NVIDIA driver package: $driver_rpm_file"
         fi
 
         echo "$driver_rpm_file"
@@ -1346,7 +1351,7 @@ echo ""
                                 continue
                             fi
                         else
-                            print_info "Using cached CUDA toolkit package: $CUDA_RPM_FILE"
+                            print_info "Using temporary CUDA toolkit package: $CUDA_RPM_FILE"
                         fi
 
                         if [ "$DNF_REFRESHED" = false ]; then
@@ -1461,20 +1466,9 @@ echo ""
         if [ "$INSTALL_SUCCESS" = true ]; then
             if [ ${#CUDA_PACKAGE_DOWNLOADS[@]} -gt 0 ]; then
                 echo ""
-                print_info "CUDA support package(s) downloaded: ${CUDA_PACKAGE_DOWNLOADS[*]}"
-                if [ "$AUTO_YES" = true ]; then
-                    DELETE_CUDA_PKG="y"
-                else
-                    read -p "Delete downloaded package(s)? (y/n): " DELETE_CUDA_PKG
-                fi
-                if [[ "$DELETE_CUDA_PKG" =~ ^[Yy]$ ]]; then
-                    for pkg_file in "${CUDA_PACKAGE_DOWNLOADS[@]}"; do
-                        rm -f "$pkg_file"
-                    done
-                    print_info "Deleted cached CUDA package(s) from $CUDA_CACHE_DIR"
-                else
-                    print_info "Retained cached CUDA package(s) at $CUDA_CACHE_DIR"
-                fi
+                print_info "CUDA support package(s) downloaded temporarily: ${CUDA_PACKAGE_DOWNLOADS[*]}"
+                cleanup_cuda_cache
+                print_info "Deleted temporary CUDA download directory: $CUDA_CACHE_DIR"
             fi
             print_info "✅ Installation complete!"
         else

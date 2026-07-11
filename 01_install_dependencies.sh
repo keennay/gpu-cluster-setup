@@ -710,6 +710,165 @@ fi
 
 echo ""
 
+# Install Go
+if ! command -v go &> /dev/null && [ -x /usr/local/go/bin/go ]; then
+    export PATH="/usr/local/go/bin:$PATH"
+fi
+
+GO_ALREADY_AVAILABLE=false
+if command -v go &> /dev/null; then
+    GO_ALREADY_AVAILABLE=true
+fi
+
+if [ "$AUTO_YES" = true ]; then
+    INSTALL_GO="y"
+elif [ "$GO_ALREADY_AVAILABLE" = true ]; then
+    read -r -p "Update Go to the latest stable version? (y/n): " INSTALL_GO
+else
+    read -r -p "Install Go latest stable version? (y/n): " INSTALL_GO
+fi
+
+GO_PATHS_READY=false
+if [[ "$INSTALL_GO" =~ ^[Yy]$ ]]; then
+    if ! command -v curl &> /dev/null; then
+        print_error "curl not found - install basic Linux essentials before installing Go"
+        exit 1
+    fi
+
+    if ! command -v tar &> /dev/null; then
+        print_error "tar not found - install basic Linux essentials before installing Go"
+        exit 1
+    fi
+
+    if ! command -v sha256sum &> /dev/null; then
+        print_error "sha256sum not found - install coreutils before installing Go"
+        exit 1
+    fi
+
+    GO_UNAME_ARCH="$(uname -m)"
+    case "$GO_UNAME_ARCH" in
+        x86_64|amd64) GO_ARCH="amd64" ;;
+        aarch64|arm64) GO_ARCH="arm64" ;;
+        *) print_error "Unsupported Go architecture: $GO_UNAME_ARCH"; exit 1 ;;
+    esac
+
+    print_info "Resolving latest stable Go release..."
+    GO_RELEASE_JSON="$(curl -fsSL 'https://go.dev/dl/?mode=json')"
+    GO_VERSION="$(printf '%s\n' "$GO_RELEASE_JSON" | sed -n 's/^[[:space:]]*"version": "\(go[^"]*\)",/\1/p' | head -n1)"
+
+    if [ -z "$GO_VERSION" ]; then
+        print_error "Failed to resolve latest Go version"
+        exit 1
+    fi
+
+    CURRENT_GO_VERSION="$(go version 2>/dev/null | awk '{print $3}')"
+    if [ "$CURRENT_GO_VERSION" = "$GO_VERSION" ]; then
+        print_info "Go is already at latest stable version: $GO_VERSION"
+        GO_PATHS_READY=true
+    else
+        GO_TARBALL="${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+        GO_SHA256="$(printf '%s\n' "$GO_RELEASE_JSON" | awk -v filename="$GO_TARBALL" '
+            index($0, "\"filename\": \"" filename "\"") { found=1; next }
+            found && /"sha256":/ {
+                sub(/^.*"sha256": "/, "")
+                sub(/".*$/, "")
+                print
+                exit
+            }
+        ')"
+
+        if [ -z "$GO_SHA256" ]; then
+            print_error "Failed to find SHA256 for $GO_TARBALL"
+            exit 1
+        fi
+
+        TMP_DIR="$(mktemp -d /tmp/go-install.XXXXXX)"
+        print_info "Downloading $GO_TARBALL..."
+        if curl -fL "https://go.dev/dl/$GO_TARBALL" -o "$TMP_DIR/$GO_TARBALL"; then
+            print_info "Verifying $GO_TARBALL..."
+            if (cd "$TMP_DIR" && printf '%s  %s\n' "$GO_SHA256" "$GO_TARBALL" | sha256sum -c -); then
+                print_info "Installing Go to /usr/local/go..."
+                sudo rm -rf /usr/local/go
+                if sudo tar -C /usr/local -xzf "$TMP_DIR/$GO_TARBALL"; then
+                    export PATH="/usr/local/go/bin:$PATH"
+                    export GOPATH="${GOPATH:-$CONFIG_HOME/go}"
+                    export PATH="$PATH:$GOPATH/bin"
+                    print_info "✓ Go installed"
+                    GO_VERSION_OUTPUT="$(go version 2>/dev/null)"
+                    [ -n "$GO_VERSION_OUTPUT" ] && print_info "$GO_VERSION_OUTPUT"
+                    GO_PATHS_READY=true
+                else
+                    print_error "Failed to extract Go archive"
+                    rm -rf "$TMP_DIR"
+                    exit 1
+                fi
+            else
+                print_error "Go archive checksum verification failed"
+                rm -rf "$TMP_DIR"
+                exit 1
+            fi
+        else
+            print_error "Failed to download Go"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        rm -rf "$TMP_DIR"
+    fi
+else
+    print_info "Skipped Go installation/update"
+fi
+
+if [ "$GO_PATHS_READY" = true ]; then
+    BASHRC_PATH="$CONFIG_HOME/.bashrc"
+    if [ ! -f "$BASHRC_PATH" ]; then
+        if ! touch "$BASHRC_PATH" 2>/dev/null; then
+            sudo touch "$BASHRC_PATH"
+            sudo chown "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$BASHRC_PATH"
+        fi
+    fi
+
+    if ! sed -i '/# Go paths (added by 01_install_dependencies.sh)/,/^# End Go paths/d' "$BASHRC_PATH" 2>/dev/null; then
+        sudo sed -i '/# Go paths (added by 01_install_dependencies.sh)/,/^# End Go paths/d' "$BASHRC_PATH"
+        sudo chown "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$BASHRC_PATH"
+    fi
+
+    if [ -w "$BASHRC_PATH" ]; then
+        cat <<'EOF' >> "$BASHRC_PATH"
+# Go paths (added by 01_install_dependencies.sh)
+case ":$PATH:" in
+    *":/usr/local/go/bin:"*) ;;
+    *) export PATH="/usr/local/go/bin:$PATH" ;;
+esac
+export GOPATH="${GOPATH:-$HOME/go}"
+case ":$PATH:" in
+    *":$GOPATH/bin:"*) ;;
+    *) export PATH="$PATH:$GOPATH/bin" ;;
+esac
+# End Go paths
+EOF
+    else
+        cat <<'EOF' | sudo tee -a "$BASHRC_PATH" > /dev/null
+# Go paths (added by 01_install_dependencies.sh)
+case ":$PATH:" in
+    *":/usr/local/go/bin:"*) ;;
+    *) export PATH="/usr/local/go/bin:$PATH" ;;
+esac
+export GOPATH="${GOPATH:-$HOME/go}"
+case ":$PATH:" in
+    *":$GOPATH/bin:"*) ;;
+    *) export PATH="$PATH:$GOPATH/bin" ;;
+esac
+# End Go paths
+EOF
+        sudo chown "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$BASHRC_PATH"
+    fi
+
+    print_info "✓ Go paths updated in $BASHRC_PATH"
+fi
+
+echo ""
+
 # Install Rustup
 if ! command -v rustup &> /dev/null && [ -f "$HOME/.cargo/env" ]; then
     # shellcheck disable=SC1091
@@ -825,7 +984,7 @@ if [[ "$INSTALL_NVIM_LATEST" =~ ^[Yy]$ ]]; then
         if [ ${#NVIM_ASSETS[@]} -eq 0 ]; then
             print_warning "Unsupported architecture for Neovim installer: $NVIM_ARCH"
         else
-            TMP_DIR="$(mktemp -d)"
+            TMP_DIR="$(mktemp -d /tmp/nvim-install.XXXXXX)"
             NVIM_TARBALL=""
             for asset in "${NVIM_ASSETS[@]}"; do
                 URL="https://github.com/neovim/neovim/releases/latest/download/$asset"
