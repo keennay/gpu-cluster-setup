@@ -167,6 +167,18 @@ resolve_ubuntu_driver_package() {
         return 1
     fi
 
+    local latest_driver_package
+    for latest_driver_package in "nvidia-open" "nvidia-driver-open" "cuda-drivers" "nvidia-driver"; do
+        local latest_driver_candidate
+        latest_driver_candidate=$(apt-cache policy "$latest_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+        if [ -n "$latest_driver_candidate" ] && [ "$latest_driver_candidate" != "(none)" ]; then
+            echo "$latest_driver_package"
+            return 0
+        fi
+    done
+
+    print_warning "Generic latest NVIDIA driver packages were not found in APT metadata; trying CUDA stream-specific packages."
+
     local driver_branch=""
     if [ -n "$cuda_stream" ]; then
         local runtime_package="cuda-runtime-$(echo "$cuda_stream" | sed 's/\./-/g')"
@@ -185,55 +197,17 @@ resolve_ubuntu_driver_package() {
         ')
     fi
 
-    local open_package
-    for open_package in "nvidia-open" "nvidia-driver-open"; do
-        local open_candidate
-        open_candidate=$(apt-cache policy "$open_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
-        if [ -n "$open_candidate" ] && [ "$open_candidate" != "(none)" ]; then
-            echo "$open_package"
-            return 0
-        fi
-    done
-
     if [ -n "$driver_branch" ] && [ "$driver_branch" != "generic" ]; then
-        local versioned_open_driver_package="nvidia-driver-${driver_branch}-open"
-        local versioned_open_driver_candidate
-        versioned_open_driver_candidate=$(apt-cache policy "$versioned_open_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
-        if [ -n "$versioned_open_driver_candidate" ] && [ "$versioned_open_driver_candidate" != "(none)" ]; then
-            echo "$versioned_open_driver_package"
-            return 0
-        fi
+        local versioned_driver_package
+        for versioned_driver_package in "nvidia-driver-${driver_branch}-open" "cuda-drivers-${driver_branch}" "nvidia-driver-${driver_branch}"; do
+            local versioned_driver_candidate
+            versioned_driver_candidate=$(apt-cache policy "$versioned_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+            if [ -n "$versioned_driver_candidate" ] && [ "$versioned_driver_candidate" != "(none)" ]; then
+                echo "$versioned_driver_package"
+                return 0
+            fi
+        done
     fi
-
-    print_warning "Open NVIDIA driver packages were not found in APT metadata; falling back to proprietary packages."
-
-    if [ -n "$driver_branch" ] && [ "$driver_branch" != "generic" ]; then
-        local versioned_cuda_driver_package="cuda-drivers-${driver_branch}"
-        local versioned_cuda_driver_candidate
-        versioned_cuda_driver_candidate=$(apt-cache policy "$versioned_cuda_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
-        if [ -n "$versioned_cuda_driver_candidate" ] && [ "$versioned_cuda_driver_candidate" != "(none)" ]; then
-            echo "$versioned_cuda_driver_package"
-            return 0
-        fi
-
-        local versioned_nvidia_driver_package="nvidia-driver-${driver_branch}"
-        local versioned_nvidia_driver_candidate
-        versioned_nvidia_driver_candidate=$(apt-cache policy "$versioned_nvidia_driver_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
-        if [ -n "$versioned_nvidia_driver_candidate" ] && [ "$versioned_nvidia_driver_candidate" != "(none)" ]; then
-            echo "$versioned_nvidia_driver_package"
-            return 0
-        fi
-    fi
-
-    local fallback_package
-    for fallback_package in "cuda-drivers" "nvidia-driver"; do
-        local fallback_candidate
-        fallback_candidate=$(apt-cache policy "$fallback_package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
-        if [ -n "$fallback_candidate" ] && [ "$fallback_candidate" != "(none)" ]; then
-            echo "$fallback_package"
-            return 0
-        fi
-    done
 
     echo ""
     return 1
@@ -537,7 +511,7 @@ install_nvidia_driver_for_gpu_support() {
         if [ "$AUTO_YES" = true ]; then
             print_info "Automatic mode enabled (-y): installing/upgrading $driver_package_display"
         else
-            read -p "Install or upgrade $driver_package_display ($driver_install_reason)? (y/n): " install_driver
+            read -p "Install or upgrade latest NVIDIA driver package $driver_package_display ($driver_install_reason)? (y/n): " install_driver
         fi
 
         if [[ ! "$install_driver" =~ ^[Yy]$ ]]; then
@@ -1108,31 +1082,50 @@ echo ""
                 fi
                 print_info "CUDA version argument provided; selecting custom CUDA $TARGET_CUDA_VERSION."
             else
+                CUDA_CHOICE_ACTION=""
                 echo "Choose CUDA installation option:"
-                echo "  1) Keep current version"
-                echo "  2) Install latest version ($LATEST_CUDA_VERSION)"
-                echo "  3) Install custom version"
-                echo "  4) Skip CUDA installation"
-                read -p "Enter choice (1/2/3/4): " CUDA_CHOICE
-                while [[ ! "$CUDA_CHOICE" =~ ^[1234]$ ]]; do
-                    read -p "Please enter 1, 2, 3, or 4: " CUDA_CHOICE
-                done
-                case $CUDA_CHOICE in
-                    1)
+                if [ "$CURRENT_CUDA_DISPLAY" = "None" ]; then
+                    echo "  1) Install latest version ($LATEST_CUDA_VERSION)"
+                    echo "  2) Install custom version"
+                    echo "  3) Skip CUDA installation"
+                    read -p "Enter choice (1/2/3): " CUDA_CHOICE
+                    while [[ ! "$CUDA_CHOICE" =~ ^[123]$ ]]; do
+                        read -p "Please enter 1, 2, or 3: " CUDA_CHOICE
+                    done
+                    case $CUDA_CHOICE in
+                        1) CUDA_CHOICE_ACTION="latest" ;;
+                        2) CUDA_CHOICE_ACTION="custom" ;;
+                        3) CUDA_CHOICE_ACTION="skip" ;;
+                    esac
+                else
+                    echo "  1) Keep current version"
+                    echo "  2) Install latest version ($LATEST_CUDA_VERSION)"
+                    echo "  3) Install custom version"
+                    echo "  4) Skip CUDA installation"
+                    read -p "Enter choice (1/2/3/4): " CUDA_CHOICE
+                    while [[ ! "$CUDA_CHOICE" =~ ^[1234]$ ]]; do
+                        read -p "Please enter 1, 2, 3, or 4: " CUDA_CHOICE
+                    done
+                    case $CUDA_CHOICE in
+                        1) CUDA_CHOICE_ACTION="keep" ;;
+                        2) CUDA_CHOICE_ACTION="latest" ;;
+                        3) CUDA_CHOICE_ACTION="custom" ;;
+                        4) CUDA_CHOICE_ACTION="skip" ;;
+                    esac
+                fi
+
+                case $CUDA_CHOICE_ACTION in
+                    keep)
                         CUDA_SELECTION="keep"
                         CUDA_INSTALL_REQUESTED=false
-                        if [ "$CURRENT_CUDA_DISPLAY" = "None" ]; then
-                            print_warning "CUDA toolkit remains uninstalled. GPU-accelerated workflows will not be available."
-                        else
-                            print_info "Keeping existing CUDA toolkit ($CURRENT_CUDA_DISPLAY)."
-                        fi
+                        print_info "Keeping existing CUDA toolkit ($CURRENT_CUDA_DISPLAY)."
                         ;;
-                    2)
+                    latest)
                         CUDA_SELECTION="latest"
                         CUDA_INSTALL_REQUESTED=true
                         TARGET_CUDA_VERSION="$LATEST_CUDA_VERSION"
                         ;;
-                    3)
+                    custom)
                         CUDA_SELECTION="custom"
                         while true; do
                             read -p "Enter desired CUDA version (e.g. 13, 13.0, 13.0.1, or 13.0.2-1): " CUSTOM_VERSION
@@ -1148,11 +1141,11 @@ echo ""
                             fi
                         done
                         ;;
-                    4)
+                    skip)
                         CUDA_SELECTION="skip"
                         CUDA_INSTALL_REQUESTED=false
                         CUDA_SKIP_REASON="user_skip"
-                        print_info "Skipping CUDA toolkit installation per user selection (option 4)."
+                        print_info "Skipping CUDA toolkit installation per user selection."
                         ;;
                 esac
             fi
@@ -1445,21 +1438,7 @@ echo ""
                     DRIVER_CUDA_STREAM="$TARGET_CUDA_VERSION_NORMALIZED"
                 fi
 
-                RUN_DRIVER_INSTALL=false
-                case "$CUDA_SELECTION" in
-                    latest|custom)
-                        RUN_DRIVER_INSTALL=true
-                        ;;
-                    keep)
-                        if [ -n "$CURRENT_CUDA_VERSION_NORMALIZED" ]; then
-                            RUN_DRIVER_INSTALL=true
-                        fi
-                        ;;
-                esac
-
-                if [ "$RUN_DRIVER_INSTALL" = true ]; then
-                    install_nvidia_driver_for_gpu_support "$DRIVER_CUDA_STREAM"
-                fi
+                install_nvidia_driver_for_gpu_support "$DRIVER_CUDA_STREAM"
             fi
         
         echo ""

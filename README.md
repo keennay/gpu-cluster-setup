@@ -2,7 +2,7 @@
 
 The fastest way to stage an Ubuntu 24 / RHEL Linux based GPU node
 
-This repo provides a series of bash script installers for: updating & upgrading installed linux packages, essential & core/build Linux packages, Tmux, Node.js, Bun, Go, Rust, Neovim, CUDA, Python, UV, as well as Python environment setups for your inference engines of choice (KTransformers, SGLang, vLLM, etc). Any of the prior packages can be skipped during the installation stage. Detailed info with each installation package can be found within the installation guide below.
+This repo provides a series of bash script installers for: updating & upgrading installed linux packages, essential & core/build Linux packages (Tmux, Node.js, Bun, Go, Rust, Neovim, CUDA, Python, UV), Coding CLIs (Claude Code, Gemini CLI, Grok Build, OMP Coding Agent, OpenAI Code, & OpenCode), as well as Python environment setups for your inference engines of choice (KTransformers, SGLang, vLLM, etc). Any of the prior packages can be skipped during the installation stage. Detailed info with each installation package can be found within the installation guide below.
 
 #### Staging Files:
 `01_install_dependencies.sh`<br>
@@ -61,7 +61,7 @@ cd scripts
 ```
 ./02_install_coding_clis.sh
 ```
-This installs the following coding CLIs: Claude Code, Claude Code Router, Gemini CLI, Grok Build, OMP, OpenAI Codex, & OpenCode
+This installs the following coding CLIs: Claude Code, Gemini CLI, Grok Build, OMP, OpenAI Codex, & OpenCode
 #### 5: Install one or multiple versions of CUDA
 ```
 ./03_install_cuda.sh

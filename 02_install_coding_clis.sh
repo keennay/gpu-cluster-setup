@@ -20,26 +20,19 @@ CONFIG_OWNER_GROUP="$(id -gn "$CONFIG_OWNER_USER" 2>/dev/null || echo "$CONFIG_O
 CONFIG_HOME="$(eval echo "~$CONFIG_OWNER_USER")"
 CONFIG_ROOT="$CONFIG_HOME/.config"
 
-run_as_root() {
-    if [ "$(id -u)" -eq 0 ]; then
-        "$@"
-    elif command -v sudo &> /dev/null; then
-        sudo "$@"
-    else
-        return 1
-    fi
-}
-
 ensure_config_ownership() {
     local config_root="$1"
 
     if [ -z "$config_root" ]; then
-        print_warning "Config root not set; skipping ownership check"
+        print_warning "Config root not set; skipping config setup"
         return 1
     fi
 
     if [ ! -d "$config_root" ]; then
-        mkdir -p "$config_root" 2>/dev/null || run_as_root mkdir -p "$config_root"
+        if ! mkdir -p "$config_root"; then
+            print_warning "Failed to create $config_root without sudo; skipping config setup"
+            return 1
+        fi
     fi
 
     local owner group
@@ -47,23 +40,29 @@ ensure_config_ownership() {
     group=$(stat -c '%G' "$config_root" 2>/dev/null)
 
     if [ "$owner" != "$CONFIG_OWNER_USER" ] || [ "$group" != "$CONFIG_OWNER_GROUP" ]; then
-        print_warning "$config_root is owned by $owner:$group; fixing ownership for $CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP"
-        if run_as_root chown -R "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$config_root"; then
-            print_info "Ownership updated for $config_root"
-        else
-            print_warning "Failed to update ownership for $config_root"
-            return 1
-        fi
+        print_warning "$config_root is owned by $owner:$group; skipping config setup to avoid sudo"
+        return 1
+    fi
+
+    if [ ! -w "$config_root" ]; then
+        print_warning "$config_root is not writable; skipping config setup"
+        return 1
     fi
 
     return 0
 }
 
-set_target_ownership() {
+warn_on_ownership_mismatch() {
     local target="$1"
 
     if [ -e "$target" ]; then
-        run_as_root chown -R "$CONFIG_OWNER_USER:$CONFIG_OWNER_GROUP" "$target" 2>/dev/null || true
+        local owner group
+        owner=$(stat -c '%U' "$target" 2>/dev/null)
+        group=$(stat -c '%G' "$target" 2>/dev/null)
+
+        if [ "$owner" != "$CONFIG_OWNER_USER" ] || [ "$group" != "$CONFIG_OWNER_GROUP" ]; then
+            print_warning "$target is owned by $owner:$group; leaving ownership unchanged to avoid sudo"
+        fi
     fi
 }
 
@@ -123,10 +122,11 @@ fi
 
 print_info "Available coding CLIs to install:"
 print_info "  1. Claude Code (@anthropic-ai/claude-code)"
-print_info "  2. Claude Code Router (@musistudio/claude-code-router)"
-print_info "  3. Gemini CLI (@google/gemini-cli)"
-print_info "  4. OpenAI Codex (@openai/codex)"
-print_info "  5. OpenCode AI (opencode-ai)"
+print_info "  2. Gemini CLI (@google/gemini-cli)"
+print_info "  3. Grok Build (grok)"
+print_info "  4. OMP Coding Agent (omp)"
+print_info "  5. OpenAI Codex (@openai/codex)"
+print_info "  6. OpenCode AI (opencode-ai)"
 echo ""
 
 prompt_yes_no INSTALL_CLIS "Install coding CLIs? (y/n): "
@@ -143,40 +143,34 @@ if [[ "$INSTALL_CLIS" =~ ^[Yy]$ ]]; then
         fi
     fi
 
-    # Claude Code Router
-    prompt_yes_no INSTALL_CCR "  Install Claude Code Router? (y/n): "
-    if [[ "$INSTALL_CCR" =~ ^[Yy]$ ]]; then
-        print_info "Installing Claude Code Router..."
-        if npm install -g @musistudio/claude-code-router; then
-            print_info "Claude Code Router installed"
-
-            CONFIG_SOURCE="$SCRIPT_DIR/configs/.claude-code-router/config.json"
-            CONFIG_DIR="$CONFIG_HOME/.claude-code-router"
-            CONFIG_TARGET="$CONFIG_DIR/config.json"
-
-            if [ -f "$CONFIG_SOURCE" ]; then
-                print_info "Setting up Claude Code Router config..."
-                mkdir -p "$CONFIG_DIR"
-                if cp "$CONFIG_SOURCE" "$CONFIG_TARGET"; then
-                    set_target_ownership "$CONFIG_DIR"
-                    print_info "Config file copied to $CONFIG_TARGET"
-                else
-                    print_warning "Failed to copy config file"
-                fi
-            else
-                print_warning "Config file not found at $CONFIG_SOURCE"
-            fi
-        else
-            print_warning "Failed to install Claude Code Router"
-        fi
-    fi
-
     # Gemini CLI
     prompt_yes_no INSTALL_GEMINI "  Install Gemini CLI? (y/n): "
     if [[ "$INSTALL_GEMINI" =~ ^[Yy]$ ]]; then
         print_info "Installing Gemini CLI..."
         npm install -g @google/gemini-cli
         [ $? -eq 0 ] && print_info "Gemini CLI installed" || print_warning "Failed to install Gemini CLI"
+    fi
+
+    # Grok Build
+    prompt_yes_no INSTALL_GROK "  Install Grok Build? (y/n): "
+    if [[ "$INSTALL_GROK" =~ ^[Yy]$ ]]; then
+        print_info "Installing Grok Build..."
+        if curl -fsSL https://x.ai/cli/install.sh | bash; then
+            print_info "Grok Build installed"
+        else
+            print_warning "Failed to install Grok Build"
+        fi
+    fi
+
+    # OMP Coding Agent
+    prompt_yes_no INSTALL_OMP "  Install OMP Coding Agent? (y/n): "
+    if [[ "$INSTALL_OMP" =~ ^[Yy]$ ]]; then
+        print_info "Installing OMP Coding Agent..."
+        if curl -fsSL https://omp.sh/install | sh; then
+            print_info "OMP Coding Agent installed"
+        else
+            print_warning "Failed to install OMP Coding Agent"
+        fi
     fi
 
     # OpenAI Codex
@@ -203,7 +197,7 @@ if [[ "$INSTALL_CLIS" =~ ^[Yy]$ ]]; then
                     OPENCODE_CONFIG_TARGET="$OPENCODE_CONFIG_DIR/opencode.json"
                     mkdir -p "$OPENCODE_CONFIG_DIR"
                     if cp "$OPENCODE_CONFIG_SOURCE" "$OPENCODE_CONFIG_TARGET"; then
-                        set_target_ownership "$OPENCODE_CONFIG_DIR"
+                        warn_on_ownership_mismatch "$OPENCODE_CONFIG_DIR"
                         print_info "OpenCode config copied to $OPENCODE_CONFIG_TARGET"
                     else
                         print_warning "Failed to copy OpenCode config"
