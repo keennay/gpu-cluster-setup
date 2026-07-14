@@ -13,6 +13,10 @@ DEFAULT_MODEL="PrimeIntellect/INTELLECT-2"
 DEFAULT_REPO_TYPE="auto"
 DEFAULT_HF_DOWNLOAD_MAX_WORKERS=32
 DEFAULT_HF_XET_NUM_CONCURRENT_RANGE_GETS=32
+DEFAULT_HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS=600
+DEFAULT_HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS=120
+DEFAULT_HF_DOWNLOAD_RETRY_DELAY_SECONDS=10
+DEFAULT_HF_DOWNLOAD_MAX_RETRIES=0
 
 # Function to print colored output
 print_info() {
@@ -129,6 +133,10 @@ while [[ $# -gt 0 ]]; do
             echo "  HF_DOWNLOAD_MAX_WORKERS             Parallel hf download workers (default: $DEFAULT_HF_DOWNLOAD_MAX_WORKERS)"
             echo "  HF_XET_NUM_CONCURRENT_RANGE_GETS    Per-file Xet range concurrency (default: $DEFAULT_HF_XET_NUM_CONCURRENT_RANGE_GETS)"
             echo "  HF_XET_HIGH_PERFORMANCE             Enable Xet high-performance mode (default: 1)"
+            echo "  HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS  Recreate download connections periodically (default: $DEFAULT_HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS; 0 disables)"
+            echo "  HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS  Per-instance refresh jitter (default: $DEFAULT_HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS)"
+            echo "  HF_DOWNLOAD_RETRY_DELAY_SECONDS     Delay after a transient hf failure (default: $DEFAULT_HF_DOWNLOAD_RETRY_DELAY_SECONDS)"
+            echo "  HF_DOWNLOAD_MAX_RETRIES             Transient hf retries (default: $DEFAULT_HF_DOWNLOAD_MAX_RETRIES; 0 is unlimited)"
             echo ""
             echo "Examples:"
             echo "  $0"
@@ -416,6 +424,10 @@ export REPO_TYPE
 export HF_DOWNLOAD_MAX_WORKERS="${HF_DOWNLOAD_MAX_WORKERS:-$DEFAULT_HF_DOWNLOAD_MAX_WORKERS}"
 export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 export HF_XET_NUM_CONCURRENT_RANGE_GETS="${HF_XET_NUM_CONCURRENT_RANGE_GETS:-$DEFAULT_HF_XET_NUM_CONCURRENT_RANGE_GETS}"
+export HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS="${HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS:-$DEFAULT_HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS}"
+export HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS="${HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS:-$DEFAULT_HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS}"
+export HF_DOWNLOAD_RETRY_DELAY_SECONDS="${HF_DOWNLOAD_RETRY_DELAY_SECONDS:-$DEFAULT_HF_DOWNLOAD_RETRY_DELAY_SECONDS}"
+export HF_DOWNLOAD_MAX_RETRIES="${HF_DOWNLOAD_MAX_RETRIES:-$DEFAULT_HF_DOWNLOAD_MAX_RETRIES}"
 
 if ! [[ "$HF_DOWNLOAD_MAX_WORKERS" =~ ^[1-9][0-9]*$ ]]; then
     print_error "HF_DOWNLOAD_MAX_WORKERS must be a positive integer"
@@ -426,6 +438,17 @@ if ! [[ "$HF_XET_NUM_CONCURRENT_RANGE_GETS" =~ ^[1-9][0-9]*$ ]]; then
     print_error "HF_XET_NUM_CONCURRENT_RANGE_GETS must be a positive integer"
     exit 1
 fi
+
+for integer_setting in \
+    HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS \
+    HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS \
+    HF_DOWNLOAD_RETRY_DELAY_SECONDS \
+    HF_DOWNLOAD_MAX_RETRIES; do
+    if ! [[ "${!integer_setting}" =~ ^[0-9]+$ ]]; then
+        print_error "$integer_setting must be a non-negative integer"
+        exit 1
+    fi
+done
 
 case "${HF_HUB_DISABLE_XET:-}" in
     1|ON|On|on|YES|Yes|yes|TRUE|True|true)
@@ -440,6 +463,10 @@ print_info "  REPO_TYPE=$REPO_TYPE"
 print_info "  HF_XET_HIGH_PERFORMANCE=$HF_XET_HIGH_PERFORMANCE"
 print_info "  HF_XET_NUM_CONCURRENT_RANGE_GETS=$HF_XET_NUM_CONCURRENT_RANGE_GETS"
 print_info "  HF_DOWNLOAD_MAX_WORKERS=$HF_DOWNLOAD_MAX_WORKERS"
+print_info "  HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS=$HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS"
+print_info "  HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS=$HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS"
+print_info "  HF_DOWNLOAD_RETRY_DELAY_SECONDS=$HF_DOWNLOAD_RETRY_DELAY_SECONDS"
+print_info "  HF_DOWNLOAD_MAX_RETRIES=$HF_DOWNLOAD_MAX_RETRIES"
 
 # Create Python download script
 PYTHON_SCRIPT=$(mktemp /tmp/download_hf_repo_XXXXXX.py)
@@ -448,8 +475,11 @@ cat > "$PYTHON_SCRIPT" << 'PY'
 import os
 import sys
 import json
+import random
 import shlex
+import signal
 import subprocess
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -464,6 +494,10 @@ except ImportError as e:
 repo_id = os.environ["MODEL_NAME"]
 requested_repo_type = os.environ.get("REPO_TYPE", "auto")
 download_max_workers = int(os.environ.get("HF_DOWNLOAD_MAX_WORKERS", "32"))
+connection_refresh_seconds = int(os.environ.get("HF_DOWNLOAD_CONNECTION_REFRESH_SECONDS", "600"))
+connection_refresh_jitter_seconds = int(os.environ.get("HF_DOWNLOAD_CONNECTION_REFRESH_JITTER_SECONDS", "120"))
+retry_delay_seconds = int(os.environ.get("HF_DOWNLOAD_RETRY_DELAY_SECONDS", "10"))
+max_download_retries = int(os.environ.get("HF_DOWNLOAD_MAX_RETRIES", "0"))
 cache_dir = Path(os.environ["HF_HUB_CACHE"])
 
 def get_remote_info(api, repo_id, repo_type):
@@ -513,7 +547,120 @@ print(f"Repository cache directory: {cache_repo_dir}")
 print(f"hf download workers: {download_max_workers}")
 print(f"HF_XET_HIGH_PERFORMANCE: {os.environ.get('HF_XET_HIGH_PERFORMANCE', '')}")
 print(f"HF_XET_NUM_CONCURRENT_RANGE_GETS: {os.environ.get('HF_XET_NUM_CONCURRENT_RANGE_GETS', '')}")
+if connection_refresh_seconds:
+    print(
+        "Connection refresh watchdog: "
+        f"{connection_refresh_seconds}s + up to {connection_refresh_jitter_seconds}s jitter"
+    )
+else:
+    print("Connection refresh watchdog: disabled")
 print(f"{'='*60}\n")
+
+class DownloadTermination(Exception):
+    def __init__(self, signum):
+        self.signum = signum
+        super().__init__(f"received signal {signum}")
+
+def stop_download_process(process, fast=False):
+    """Stop the whole hf process group while allowing it to flush resumable state."""
+    if process.poll() is not None:
+        return
+
+    stop_sequence = (
+        ((signal.SIGINT, 2), (signal.SIGTERM, 2))
+        if fast
+        else ((signal.SIGINT, 20), (signal.SIGTERM, 10))
+    )
+
+    try:
+        for stop_signal, wait_seconds in stop_sequence:
+            try:
+                os.killpg(process.pid, stop_signal)
+            except ProcessLookupError:
+                return
+
+            try:
+                process.wait(timeout=wait_seconds)
+                return
+            except subprocess.TimeoutExpired:
+                pass
+
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        process.wait()
+    except BaseException:
+        # A second Ctrl+C must not leave the detached hf process running.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        raise
+
+def run_resumable_download(command):
+    """Run hf with periodic connection recreation and transient-failure retries."""
+    launch_number = 0
+    failed_attempts = 0
+
+    while True:
+        launch_number += 1
+        refresh_after = 0
+        if connection_refresh_seconds:
+            refresh_after = connection_refresh_seconds + random.randint(
+                0, connection_refresh_jitter_seconds
+            )
+
+        if launch_number > 1:
+            print(f"\nResuming download (connection attempt {launch_number})...")
+
+        process = subprocess.Popen(command, start_new_session=True)
+        try:
+            if refresh_after:
+                return_code = process.wait(timeout=refresh_after)
+            else:
+                return_code = process.wait()
+        except subprocess.TimeoutExpired:
+            print(
+                "\nRefreshing download connections so recovered bandwidth is used "
+                f"(next resume is automatic; cached data is preserved)..."
+            )
+            stop_download_process(process)
+            continue
+        except BaseException:
+            stop_download_process(process, fast=True)
+            raise
+
+        if return_code == 0:
+            return
+
+        if return_code in (-signal.SIGINT, 128 + signal.SIGINT):
+            raise KeyboardInterrupt
+
+        for termination_signal in (signal.SIGTERM, signal.SIGHUP):
+            if return_code in (-termination_signal, 128 + termination_signal):
+                raise DownloadTermination(termination_signal)
+
+        failed_attempts += 1
+        if max_download_retries and failed_attempts > max_download_retries:
+            raise subprocess.CalledProcessError(return_code, command)
+
+        retry_number = failed_attempts
+        retry_limit = str(max_download_retries) if max_download_retries else "unlimited"
+        retry_jitter = random.randint(0, min(connection_refresh_jitter_seconds, 30))
+        retry_wait = retry_delay_seconds + retry_jitter
+        print(
+            f"\nhf download exited with status {return_code}; transient retry "
+            f"{retry_number}/{retry_limit} in {retry_wait}s..."
+        )
+        time.sleep(retry_wait)
+
+def handle_termination_signal(signum, _frame):
+    raise DownloadTermination(signum)
+
+signal.signal(signal.SIGINT, signal.default_int_handler)
+for termination_signal in (signal.SIGTERM, signal.SIGHUP):
+    signal.signal(termination_signal, handle_termination_signal)
 
 def local_snapshot(repo_id, repo_type, cache_dir):
     return snapshot_download(
@@ -701,7 +848,8 @@ try:
     print(f"\nDownloading {repo_type} {repo_id}...")
     print("Note: Download will resume automatically if interrupted")
 
-    # Download with resume capability through the current Hugging Face CLI.
+    # Periodically recreate the CLI process. This resets Xet's connections and
+    # retry/concurrency state while the Hub cache preserves completed data.
     hf_command = [
         "hf",
         "download",
@@ -715,7 +863,7 @@ try:
         hf_command.extend(["--repo-type", repo_type])
 
     print("$ " + " ".join(shlex.quote(part) for part in hf_command))
-    subprocess.run(hf_command, check=True)
+    run_resumable_download(hf_command)
 
     local_path = snapshot_download(
         repo_id=repo_id,
@@ -767,6 +915,16 @@ except KeyboardInterrupt:
         with open(progress_file, "w") as f:
             json.dump(progress_data, f, indent=2)
     sys.exit(130)
+
+except DownloadTermination as e:
+    print(f"\n⚠️  Download interrupted by signal {e.signum}")
+    print("Run this script again to resume the download")
+    if progress_file.exists():
+        progress_data["status"] = "interrupted"
+        progress_data["interrupted_at"] = datetime.now().isoformat()
+        with open(progress_file, "w") as f:
+            json.dump(progress_data, f, indent=2)
+    sys.exit(128 + e.signum)
 
 except Exception as e:
     print(f"\n❌ Error downloading {repo_type}: {e}")
