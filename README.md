@@ -97,11 +97,14 @@ This installs the Python packages corresponding with the currently active Python
 
 ### Additional Tools:
 
-#### Template for Running Inference for Models (Also Downloads if model doesn't exist in HuggingFace PATH):
-`./recipes/***.sh`
-
-#### Install any selection of open-weights models or input your desired repo:
-`./install_model.sh`
-
 #### Change Between Python Environments
 `source ./launch_env.sh`
+
+#### Install any selection of open-weights models or input your desired repo:
+`./model_install.sh` or example with repo: `./model_install.sh Qwen/Qwen3.6-27B`
+
+#### Check for updates for any of your local HuggingFace repo of open-weights models:
+`./check_model_updates.sh`
+
+#### Template for Running Inference for Models (Also Downloads if model doesn't exist in HuggingFace PATH):
+`./recipes/***.sh`
