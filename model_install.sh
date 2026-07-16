@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script: install_models.sh
+# Script: model_install.sh
 # Purpose: Download Hugging Face models or datasets to a custom location with easy replication
 # Colors for output
 RED='\033[0;31m'
@@ -92,6 +92,7 @@ HF_PATH=""
 HF_CACHE_PATH=""
 QUANTIZATION=""
 AUTO_MODE=false
+AUTO_YES=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -m|--model)
@@ -114,8 +115,13 @@ while [[ $# -gt 0 ]]; do
             QUANTIZATION="$2"
             shift 2
             ;;
+        -y|--yes)
+            AUTO_YES=true
+            shift
+            ;;
         --auto)
             AUTO_MODE=true
+            AUTO_YES=true
             shift
             ;;
         -h|--help)
@@ -126,7 +132,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --dataset                  Optional shortcut for --repo-type dataset"
             echo "  -p, --path PATH           Custom path for Hugging Face cache (default: $DEFAULT_HF_PATH or \$HF_HOME)"
             echo "  -q, --quantization TYPE   Download quantized version (e.g., 'GGUF', 'GPTQ')"
-            echo "  --auto                    Use default settings without prompting"
+            echo "  -y, --yes                Automatically accept snapshot download prompts"
+            echo "  --auto                    Use default settings and accept prompts"
             echo "  -h, --help               Show this help message"
             echo ""
             echo "Environment overrides:"
@@ -145,6 +152,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 -m 'AlienKevin/SWE-ZERO-12M-trajectories'"
             echo "  $0 -m 'Qwen/Qwen3-30B-A3B-Instruct-2507' -q GGUF"
             echo "  $0 -m 'deepseek-ai/DeepSeek-V3' -p /mnt/storage/models"
+            echo "  $0 -y 'google/gemma-4-31B-it'"
             exit 0
             ;;
         *)
@@ -418,6 +426,7 @@ export HF_HOME="$HF_PATH"
 export HF_HUB_CACHE="$HF_CACHE_PATH"
 export MODEL_NAME
 export REPO_TYPE
+export AUTO_YES
 
 # Enable Hugging Face's current high-performance download path. These are read
 # by huggingface_hub at import time, so they must be exported before Python runs.
@@ -499,6 +508,7 @@ connection_refresh_jitter_seconds = int(os.environ.get("HF_DOWNLOAD_CONNECTION_R
 retry_delay_seconds = int(os.environ.get("HF_DOWNLOAD_RETRY_DELAY_SECONDS", "10"))
 max_download_retries = int(os.environ.get("HF_DOWNLOAD_MAX_RETRIES", "0"))
 cache_dir = Path(os.environ["HF_HUB_CACHE"])
+auto_yes = os.environ.get("AUTO_YES", "false").lower() == "true"
 
 def get_remote_info(api, repo_id, repo_type):
     kwargs = {"repo_id": repo_id, "files_metadata": True}
@@ -536,6 +546,9 @@ api = HfApi()
 repo_type, initial_remote_info = resolve_repo_type(api, repo_id, requested_repo_type)
 cache_repo_dir = cache_dir / f"{repo_type}s--{repo_id.replace('/', '--')}"
 repo_label = repo_type.capitalize()
+download_revision = initial_remote_info.sha
+if not download_revision:
+    raise RuntimeError("The Hub response did not include a snapshot commit")
 
 print(f"\n{'='*60}")
 print(f"{repo_label}: {repo_id}")
@@ -544,6 +557,7 @@ if requested_repo_type == "auto":
     print("Repo type detection: auto")
 print(f"Download location: {cache_dir}")
 print(f"Repository cache directory: {cache_repo_dir}")
+print(f"Latest Hub snapshot: {download_revision}")
 print(f"hf download workers: {download_max_workers}")
 print(f"HF_XET_HIGH_PERFORMANCE: {os.environ.get('HF_XET_HIGH_PERFORMANCE', '')}")
 print(f"HF_XET_NUM_CONCURRENT_RANGE_GETS: {os.environ.get('HF_XET_NUM_CONCURRENT_RANGE_GETS', '')}")
@@ -662,10 +676,11 @@ signal.signal(signal.SIGINT, signal.default_int_handler)
 for termination_signal in (signal.SIGTERM, signal.SIGHUP):
     signal.signal(termination_signal, handle_termination_signal)
 
-def local_snapshot(repo_id, repo_type, cache_dir):
+def local_snapshot(repo_id, repo_type, cache_dir, revision):
     return snapshot_download(
         repo_id=repo_id,
         repo_type=repo_type,
+        revision=revision,
         cache_dir=str(cache_dir),
         local_files_only=True,
     )
@@ -708,7 +723,7 @@ def save_repo_info(local_path, local_size, timestamp_key):
 
     return info_file
 
-def write_download_result(local_path):
+def write_download_result(local_path, status="downloaded"):
     result_file = os.environ.get("DOWNLOAD_RESULT_FILE")
     if not result_file:
         return
@@ -718,16 +733,26 @@ def write_download_result(local_path):
         f.write(f"DOWNLOAD_REPO_TYPE={shlex.quote(repo_type)}\n")
         f.write(f"DOWNLOAD_CACHE_REPO_DIR={shlex.quote(str(cache_repo_dir))}\n")
         f.write(f"DOWNLOAD_LOCAL_PATH={shlex.quote(str(local_path) if local_path else '')}\n")
+        f.write(f"DOWNLOAD_RESULT_STATUS={shlex.quote(status)}\n")
 
-def check_repo_completeness(repo_id, repo_type, cache_dir):
+def update_main_ref(snapshot_sha):
+    refs_dir = cache_repo_dir / "refs"
+    refs_dir.mkdir(parents=True, exist_ok=True)
+    (refs_dir / "main").write_text(snapshot_sha)
+
+def check_repo_completeness(repo_id, repo_type, cache_dir, remote_info=None):
     """
-    Check if a Hugging Face Hub repo is already fully downloaded and verify file sizes.
+    Check whether the exact latest Hub snapshot is cached and verify every file size.
     """
     try:
-        api = HfApi()
-
         print("Checking remote repository...")
-        remote_info = get_remote_info(api, repo_id, repo_type)
+        if remote_info is None:
+            remote_info = get_remote_info(HfApi(), repo_id, repo_type)
+
+        remote_sha = remote_info.sha
+        if not remote_sha:
+            raise RuntimeError("The Hub response did not include a snapshot commit")
+
         expected_files = {}
         total_size = 0
 
@@ -740,6 +765,7 @@ def check_repo_completeness(repo_id, repo_type, cache_dir):
                 if sibling.size:
                     total_size += sibling.size
 
+        print(f"Latest snapshot: {remote_sha}")
         print(f"Expected {repo_type} size: {total_size / 1e9:.1f} GB")
         print(f"Number of files expected: {len(expected_files)}")
 
@@ -750,9 +776,9 @@ def check_repo_completeness(repo_id, repo_type, cache_dir):
             return False, expected_files, 0
 
         try:
-            local_path = Path(local_snapshot(repo_id, repo_type, cache_dir))
+            local_path = Path(local_snapshot(repo_id, repo_type, cache_dir, remote_sha))
         except LocalEntryNotFoundError:
-            print(f"{repo_label} snapshot is not fully available in local cache")
+            print(f"{repo_label} snapshot {remote_sha} is not fully available in local cache")
             return False, expected_files, 0
 
         missing_files = []
@@ -768,7 +794,7 @@ def check_repo_completeness(repo_id, repo_type, cache_dir):
 
             file_size = file_path.stat().st_size
             local_size += file_size
-            if file_info["size"] and file_size != file_info["size"]:
+            if file_info["size"] is not None and file_size != file_info["size"]:
                 corrupted_files.append(filename)
                 print(f"  ❌ Size mismatch: {filename}")
                 print(f"     Expected: {file_info['size']}, Got: {file_size}")
@@ -803,8 +829,110 @@ def check_repo_completeness(repo_id, repo_type, cache_dir):
         print(f"Error checking {repo_type} completeness: {e}")
         return False, {}, 0
 
-# Check if repo is already downloaded
-result = check_repo_completeness(repo_id, repo_type, cache_dir)
+def cached_snapshot_shas():
+    snapshots_dir = cache_repo_dir / "snapshots"
+    if not snapshots_dir.is_dir():
+        return []
+    return sorted(path.name for path in snapshots_dir.iterdir() if path.is_dir())
+
+def preferred_previous_snapshot(snapshot_shas):
+    refs_main = cache_repo_dir / "refs" / "main"
+    if refs_main.is_file():
+        referenced_sha = refs_main.read_text().strip()
+        if referenced_sha in snapshot_shas:
+            return referenced_sha
+
+    return max(
+        snapshot_shas,
+        key=lambda sha: (cache_repo_dir / "snapshots" / sha).stat().st_mtime,
+    )
+
+def print_old_snapshot_reminder(current_snapshot_sha):
+    old_snapshot_shas = [
+        sha for sha in cached_snapshot_shas() if sha != current_snapshot_sha
+    ]
+    if not old_snapshot_shas:
+        return
+
+    print("\n" + "="*60)
+    print("OLD SNAPSHOT CLEANUP REMINDER")
+    print("="*60)
+    print(f"Current snapshot: {current_snapshot_sha}")
+    print("Older or alternate snapshots are still cached:")
+    for old_sha in old_snapshot_shas:
+        old_path = (cache_repo_dir / "snapshots" / old_sha).resolve()
+        print(f"  - {old_path}")
+
+    print("\nDelete only revisions you no longer need for rollback.")
+    print("To reclaim unreferenced blobs safely, use:")
+    for old_sha in old_snapshot_shas:
+        cleanup_command = [
+            "hf",
+            "cache",
+            "rm",
+            old_sha,
+            "--cache-dir",
+            str(cache_dir.resolve()),
+        ]
+        print("  " + " ".join(shlex.quote(part) for part in cleanup_command))
+    print(
+        "Removing only the snapshots/<sha> directory may not reclaim the "
+        "underlying blob files."
+    )
+
+def confirm_download(prompt):
+    if auto_yes:
+        print(f"{prompt}y (automatic)")
+        return True
+
+    while True:
+        try:
+            answer = input(prompt).strip().lower()
+        except EOFError as exc:
+            raise RuntimeError(
+                "Cannot read a y/n response. Rerun with -y or --auto to accept automatically."
+            ) from exc
+
+        if answer in ("y", "yes"):
+            return True
+        if answer in ("n", "no"):
+            return False
+        print("Please answer y or n.")
+
+def offer_new_snapshot(previous_snapshot):
+    print("\n" + "="*60)
+    print("NEW SNAPSHOT AVAILABLE")
+    print("="*60)
+    print(f"Cached snapshot: {previous_snapshot}")
+    print(f"New snapshot:    {download_revision}")
+    print(
+        "Hugging Face will reuse unchanged cached blobs, so the transfer can be "
+        "much smaller than the snapshot's total size."
+    )
+    if confirm_download("A new snapshot exists. Do you want to download it? (y/n): "):
+        return
+
+    print("Snapshot update declined; keeping the existing cached snapshot.")
+    write_download_result("", "skipped")
+    sys.exit(0)
+
+cached_shas = cached_snapshot_shas()
+previous_snapshot_shas = [sha for sha in cached_shas if sha != download_revision]
+previous_snapshot = (
+    preferred_previous_snapshot(previous_snapshot_shas)
+    if previous_snapshot_shas
+    else None
+)
+update_accepted = False
+
+# If the exact remote commit has no snapshot directory, it is unambiguously a
+# new snapshot. Ask before doing the detailed local verification.
+if previous_snapshot and download_revision not in cached_shas:
+    offer_new_snapshot(previous_snapshot)
+    update_accepted = True
+
+# Check whether the exact Hub commit is already fully downloaded.
+result = check_repo_completeness(repo_id, repo_type, cache_dir, initial_remote_info)
 
 if len(result) == 4 and result[0]:  # Repo is complete
     is_complete, expected_files, local_size, local_path = result
@@ -818,9 +946,16 @@ if len(result) == 4 and result[0]:  # Repo is complete
     print(f"Size: {local_size / 1e9:.1f} GB")
     print(f"\nNo download needed - {repo_type} is ready to use!")
 
+    update_main_ref(download_revision)
+    print_old_snapshot_reminder(download_revision)
     save_repo_info(local_path, local_size, "verified_at")
-    write_download_result(local_path)
+    write_download_result(local_path, "current")
     sys.exit(0)
+
+if previous_snapshot and not update_accepted:
+    # The new commit directory exists but failed completeness verification.
+    # Keep treating it as an available update and offer to finish it.
+    offer_new_snapshot(previous_snapshot)
 
 # Repo is not complete, proceed with download
 print("\n" + "="*60)
@@ -841,12 +976,15 @@ try:
         "started_at": datetime.now().isoformat(),
         "status": "downloading",
         "cache_repo_dir": str(cache_repo_dir),
+        "snapshot_sha": download_revision,
     }
     with open(progress_file, "w") as f:
         json.dump(progress_data, f, indent=2)
 
     print(f"\nDownloading {repo_type} {repo_id}...")
+    print(f"Snapshot: {download_revision}")
     print("Note: Download will resume automatically if interrupted")
+    print("Note: Unchanged files are reused from the local Hugging Face blob cache")
 
     # Periodically recreate the CLI process. This resets Xet's connections and
     # retry/concurrency state while the Hub cache preserves completed data.
@@ -854,6 +992,8 @@ try:
         "hf",
         "download",
         repo_id,
+        "--revision",
+        download_revision,
         "--cache-dir",
         str(cache_dir),
         "--max-workers",
@@ -868,6 +1008,7 @@ try:
     local_path = snapshot_download(
         repo_id=repo_id,
         repo_type=repo_type,
+        revision=download_revision,
         cache_dir=str(cache_dir),
         local_files_only=True,
     )
@@ -880,10 +1021,23 @@ try:
 
     # Verify completeness after download
     print("\nVerifying download...")
-    final_check = check_repo_completeness(repo_id, repo_type, cache_dir)
+    final_remote_info = get_remote_info(HfApi(), repo_id, repo_type)
+    final_check = check_repo_completeness(
+        repo_id,
+        repo_type,
+        cache_dir,
+        final_remote_info,
+    )
 
     if final_check[0]:
         print("\n✅ Download completed and verified successfully!")
+
+        verified_revision = final_remote_info.sha
+        if not verified_revision:
+            raise RuntimeError("The Hub response did not include a snapshot commit")
+        update_main_ref(verified_revision)
+        local_path = final_check[3]
+        print_old_snapshot_reminder(verified_revision)
 
         # Update progress file
         progress_data["status"] = "completed"
@@ -895,7 +1049,7 @@ try:
         local_size = final_check[2] if len(final_check) >= 3 else 0
         info_file = save_repo_info(local_path, local_size, "downloaded_at")
         print(f"\n✓ Repository info saved to: {info_file}")
-        write_download_result(local_path)
+        write_download_result(local_path, "downloaded")
 
         # Clean up progress file
         if progress_file.exists():
@@ -905,6 +1059,7 @@ try:
         progress_data["status"] = "incomplete"
         with open(progress_file, "w") as f:
             json.dump(progress_data, f, indent=2)
+        sys.exit(1)
 
 except KeyboardInterrupt:
     print("\n⚠️  Download interrupted by user")
@@ -961,8 +1116,18 @@ if [ $RESULT -eq 0 ]; then
     DOWNLOAD_REPO_TYPE="${DOWNLOAD_REPO_TYPE:-$REPO_TYPE}"
     DOWNLOAD_REPO_ID="${DOWNLOAD_REPO_ID:-$MODEL_NAME}"
     DOWNLOAD_CACHE_REPO_DIR="${DOWNLOAD_CACHE_REPO_DIR:-$HF_CACHE_PATH/${DOWNLOAD_REPO_TYPE}s--${MODEL_NAME//\//--}}"
+    DOWNLOAD_RESULT_STATUS="${DOWNLOAD_RESULT_STATUS:-downloaded}"
 
-    print_info "Hugging Face $DOWNLOAD_REPO_TYPE downloaded successfully!"
+    if [ "$DOWNLOAD_RESULT_STATUS" = "skipped" ]; then
+        print_warning "Snapshot update skipped for $DOWNLOAD_REPO_ID"
+        exit 0
+    fi
+
+    if [ "$DOWNLOAD_RESULT_STATUS" = "current" ]; then
+        print_info "Hugging Face $DOWNLOAD_REPO_TYPE already has the latest complete snapshot."
+    else
+        print_info "Hugging Face $DOWNLOAD_REPO_TYPE downloaded successfully!"
+    fi
     
     if [ "$DOWNLOAD_REPO_TYPE" = "model" ]; then
         # Create a reference script for this model
