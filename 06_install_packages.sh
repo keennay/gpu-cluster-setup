@@ -38,6 +38,9 @@ ENV_TYPES=(
   "kimi-ktransformers"
   "kimi-sglang"
   "kimi-vllm"
+  "laguna-sglang"
+  "laguna-trtllm"
+  "laguna-vllm"
   "ling-sglang"
   "ling-transformers"
   "ling-vllm"
@@ -70,6 +73,9 @@ declare -A ENV_DESCRIPTIONS=(
   ["kimi-ktransformers"]="Kimi K2.X (KTransformers)"
   ["kimi-sglang"]="Kimi K2.X (SGLang)"
   ["kimi-vllm"]="Kimi K2.X (vLLM)"
+  ["laguna-sglang"]="Laguna (SGLang)"
+  ["laguna-trtllm"]="Laguna (TRT-LLM)"
+  ["laguna-vllm"]="Laguna (vLLM)"
   ["ling-sglang"]="Ling-2.6 (SGLang)"
   ["ling-transformers"]="Ling-2.6 (Transformers)"
   ["ling-vllm"]="Ling-2.6 (vLLM)"
@@ -135,52 +141,61 @@ resolve_env_type() {
         15|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        16|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+        16|laguna_sglang|laguna-sglang)
+            echo "laguna-sglang"
+            ;;
+        17|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
+            echo "laguna-trtllm"
+            ;;
+        18|laguna_vllm|laguna-vllm)
+            echo "laguna-vllm"
+            ;;
+        19|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
             echo "ling-sglang"
             ;;
-        17|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+        20|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
             echo "ling-transformers"
             ;;
-        18|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+        21|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
             echo "ling-vllm"
             ;;
-        19|minimax_ktransformers|minimax-ktransformers)
+        22|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        20|minimax_sglang|minimax-sglang)
+        23|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        21|minimax_transformers|minimax-transformers)
+        24|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        22|minimax_vllm|minimax-vllm)
+        25|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        23|nemotron_sglang|nemotron-sglang)
+        26|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        24|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        27|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        25|nemotron_vllm|nemotron-vllm)
+        28|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        26|qwen3_ktransformers|qwen3-ktransformers)
+        29|qwen3_ktransformers|qwen3-ktransformers)
             echo "qwen3-ktransformers"
             ;;
-        27|qwen3_sglang|qwen3-sglang)
+        30|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        28|qwen3_transformers|qwen3-transformers)
+        31|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        29|qwen3_vllm|qwen3-vllm)
+        32|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        30|custom|custom_uv|custom-uv|env_custom_uv)
+        33|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        31|custom_pip|custom-pip|env_custom_pip)
+        34|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -666,7 +681,7 @@ install_deepseek_sglang() {
 
 install_deepseek_vllm() {
     print_info "Installing vLLM for DeepSeek..."
-    run_uv_install -U vllm --torch-backend auto || return 1
+    run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly || return 1
 
     if [ -z "${VIRTUAL_ENV:-}" ]; then
         print_error "No active virtual environment detected for DeepGEMM install."
@@ -760,6 +775,19 @@ install_kimi_vllm() {
     run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
+install_laguna_sglang() {
+    print_info "No package install configured for Laguna (SGLang) yet."
+}
+
+install_laguna_trtllm() {
+    print_info "No package install configured for Laguna (TRT-LLM) yet."
+}
+
+install_laguna_vllm() {
+    print_info "Installing vLLM for Laguna..."
+    run_uv_install -U vllm --torch-backend=auto
+}
+
 install_ling_sglang() {
     print_info "Installing SGLang for Ling-2.6..."
 
@@ -772,32 +800,7 @@ install_ling_transformers() {
 
 install_ling_vllm() {
     print_info "Installing vLLM for Ling-2.6..."
-
-    local target_dir=""
-    if [ -n "${VLLM_DIR:-}" ]; then
-        target_dir="$VLLM_DIR"
-    elif [ -n "${VIRTUAL_ENV:-}" ]; then
-        target_dir="$VIRTUAL_ENV/vllm"
-    else
-        print_error "No active virtual environment detected for Ling-2.6 vLLM clone."
-        return 1
-    fi
-
-    if [ -d "$target_dir/.git" ]; then
-        print_info "Updating existing repository at $target_dir"
-        run_command git -C "$target_dir" fetch origin || return 1
-        run_command git -C "$target_dir" pull --ff-only || return 1
-    else
-        local parent_dir
-        parent_dir=$(dirname "$target_dir")
-        if [ ! -d "$parent_dir" ]; then
-            run_command mkdir -p "$parent_dir" || return 1
-        fi
-        run_command git clone https://github.com/vllm-project/vllm.git "$target_dir" || return 1
-    fi
-
-    # shellcheck disable=SC2016
-    run_command env VLLM_USE_PRECOMPILED=1 bash -c 'cd "$1" && uv pip install --editable . --torch-backend=auto' _ "$target_dir" || return 1
+    run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
 }
 
 install_minimax_sglang() {
@@ -919,6 +922,18 @@ perform_environment_action() {
             ;;
         kimi-vllm)
             install_kimi_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        laguna-sglang)
+            install_laguna_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        laguna-trtllm)
+            install_laguna_trtllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        laguna-vllm)
+            install_laguna_vllm || return 1
             ACTION_TAKEN=true
             ;;
         ling-sglang)

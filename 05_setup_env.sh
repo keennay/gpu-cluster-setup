@@ -131,52 +131,61 @@ resolve_env_type() {
         15|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        16|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+        16|laguna_sglang|laguna-sglang)
+            echo "laguna-sglang"
+            ;;
+        17|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
+            echo "laguna-trtllm"
+            ;;
+        18|laguna_vllm|laguna-vllm)
+            echo "laguna-vllm"
+            ;;
+        19|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
             echo "ling-sglang"
             ;;
-        17|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+        20|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
             echo "ling-transformers"
             ;;
-        18|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+        21|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
             echo "ling-vllm"
             ;;
-        19|minimax_ktransformers|minimax-ktransformers)
+        22|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        20|minimax_sglang|minimax-sglang)
+        23|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        21|minimax_transformers|minimax-transformers)
+        24|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        22|minimax_vllm|minimax-vllm)
+        25|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        23|nemotron_sglang|nemotron-sglang)
+        26|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        24|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        27|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        25|nemotron_vllm|nemotron-vllm)
+        28|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        26|qwen3_ktransformers|qwen3-ktransformers)
+        29|qwen3_ktransformers|qwen3-ktransformers)
             echo "qwen3-ktransformers"
             ;;
-        27|qwen3_sglang|qwen3-sglang)
+        30|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        28|qwen3_transformers|qwen3-transformers)
+        31|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        29|qwen3_vllm|qwen3-vllm)
+        32|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        30|custom|custom_uv|custom-uv|env_custom_uv)
+        33|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        31|custom_pip|custom-pip|env_custom_pip)
+        34|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -418,29 +427,32 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "13) Kimi K2.X (KTransformers)"
     echo "14) Kimi K2.X (SGLang)"
     echo "15) Kimi K2.X (vLLM)"
-    echo "16) Ling-2.6 (SGLang)"
-    echo "17) Ling-2.6 (Transformers)"
-    echo "18) Ling-2.6 (vLLM)"
-    echo "19) MiniMax-M2.X (KTransformers)"
-    echo "20) MiniMax-M2.X (SGLang)"
-    echo "21) MiniMax-M2.X (Transformers)"
-    echo "22) MiniMax-M2.X (vLLM)"
-    echo "23) Nemotron-3 (SGLang)"
-    echo "24) Nemotron-3 (TRT-LLM)"
-    echo "25) Nemotron-3 (vLLM)"
-    echo "26) Qwen3 (KTransformers)"
-    echo "27) Qwen3 (SGLang)"
-    echo "28) Qwen3 (Transformers)"
-    echo "29) Qwen3 (vLLM)"
-    echo "30) Custom (uv)"
-    echo "31) Custom (pip)"
+    echo "16) Laguna (SGLang)"
+    echo "17) Laguna (TRT-LLM)"
+    echo "18) Laguna (vLLM)"
+    echo "19) Ling-2.6 (SGLang)"
+    echo "20) Ling-2.6 (Transformers)"
+    echo "21) Ling-2.6 (vLLM)"
+    echo "22) MiniMax-M2.X (KTransformers)"
+    echo "23) MiniMax-M2.X (SGLang)"
+    echo "24) MiniMax-M2.X (Transformers)"
+    echo "25) MiniMax-M2.X (vLLM)"
+    echo "26) Nemotron-3 (SGLang)"
+    echo "27) Nemotron-3 (TRT-LLM)"
+    echo "28) Nemotron-3 (vLLM)"
+    echo "29) Qwen3 (KTransformers)"
+    echo "30) Qwen3 (SGLang)"
+    echo "31) Qwen3 (Transformers)"
+    echo "32) Qwen3 (vLLM)"
+    echo "33) Custom (uv)"
+    echo "34) Custom (pip)"
     echo ""
     while true; do
-        read -r -p "Enter your choice (1-31): " choice
+        read -r -p "Enter your choice (1-34): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 31."
+            print_error "Invalid choice. Please enter a number between 1 and 34."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
