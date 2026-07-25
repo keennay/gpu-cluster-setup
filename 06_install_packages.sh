@@ -674,14 +674,14 @@ install_deepseek_sglang() {
     fi
 
     run_command "${flash_mla_env[@]}" uv pip install --no-build-isolation \
-        'flash-mla @ git+https://github.com/deepseek-ai/FlashMLA.git@9241ae3ef9bac614dd25e45e507e089f888280e0' || return 1
+        'flash-mla @ git+https://github.com/deepseek-ai/FlashMLA.git@main' || return 1
 
     run_command python -c "import flash_mla; from flash_mla.flash_mla_interface import FlashMLASchedMeta; print('flash_mla import OK')" || return 1
 }
 
 install_deepseek_vllm() {
     print_info "Installing vLLM for DeepSeek..."
-    run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --torch-backend=auto || return 1
 
     if [ -z "${VIRTUAL_ENV:-}" ]; then
         print_error "No active virtual environment detected for DeepGEMM install."
@@ -695,7 +695,7 @@ install_deepseek_vllm() {
     run_command curl -fsSL "$deepgemm_installer_url" -o "$deepgemm_installer" || return 1
     run_command chmod +x "$deepgemm_installer" || return 1
 
-    print_info "Installing DeepGEMM for DeepSeek vLLM..."
+    print_info "Installing vLLM's pinned DeepGEMM build for DeepSeek..."
     # shellcheck disable=SC2016
     run_command env VIRTUAL_ENV="$VIRTUAL_ENV" PATH="$VIRTUAL_ENV/bin:$PATH" \
         bash -c 'cd "$1" && bash "$2"' _ "$VIRTUAL_ENV" "$deepgemm_installer" || return 1
