@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script: install_deepgemm.sh
+# Script: deepgemm_deepseek_install.sh
 # Purpose: Install DeepGEMM into the currently active ML virtual environment.
-# Usage: source ./launch_env.sh, then ./install_deepgemm.sh
+# Usage: source ./launch_env.sh, then ./deepgemm_deepseek_install.sh
 
 if [ -f ~/.bashrc ]; then
     source ~/.bashrc

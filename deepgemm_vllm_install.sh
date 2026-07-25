@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script: install_deepgemm_vllm.sh
+# Script: deepgemm_vllm_install.sh
 # Purpose: Install vLLM's pinned DeepGEMM build into the currently active ML virtual environment.
-# Usage: source ./launch_env.sh deepseek-vllm, then ./install_deepgemm_vllm.sh [-y|--yes|--auto]
+# Usage: source ./launch_env.sh deepseek-vllm, then ./deepgemm_vllm_install.sh [-y|--yes|--auto]
 
 if [ -f ~/.bashrc ]; then
     source ~/.bashrc
@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ "$SHOW_HELP" = true ]; then
-    echo "Usage: ./install_deepgemm_vllm.sh [-y|--yes|--auto]"
+    echo "Usage: ./deepgemm_vllm_install.sh [-y|--yes|--auto]"
     echo "  -y, --yes, --auto    Install without prompting"
     exit 0
 fi

@@ -54,14 +54,178 @@ else
     VLLM_LAUNCH_LOG="$LAUNCH_LOG"
     export VLLM_LAUNCH_LOG
 fi
-exec > >(tee -a "$LAUNCH_LOG") 2>&1
+exec > >(trap '' INT TERM HUP QUIT; exec tee -a "$LAUNCH_LOG") 2>&1
 echo "$INFERENCE_PROVIDER log: $LAUNCH_LOG_REL"
 echo "Full log path: $LAUNCH_LOG"
 
 echo ""
 echo "$MODEL_REPO $INFERENCE_PROVIDER Launcher"
 
-trap 'echo -e "\n\nServer stopped by user."; exit 0' INT
+SERVER_PID=""
+SERVER_MONITOR_PID=""
+SERVER_PID_FILE=""
+SERVER_SHUTDOWN_STARTED=0
+SERVER_INTERRUPT_GRACE_SECONDS="${SERVER_INTERRUPT_GRACE_SECONDS:-10}"
+SERVER_TERMINATE_GRACE_SECONDS="${SERVER_TERMINATE_GRACE_SECONDS:-5}"
+
+server_process_group_is_alive() {
+    [ -n "$SERVER_PID" ] && kill -0 -- "-$SERVER_PID" 2>/dev/null
+}
+
+wait_for_server_process_group() {
+    local timeout_seconds="$1"
+    local deadline=$((SECONDS + timeout_seconds))
+
+    while server_process_group_is_alive; do
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            return 1
+        fi
+        sleep 0.2
+    done
+}
+
+signal_server_process_group() {
+    local signal_name="$1"
+
+    if server_process_group_is_alive; then
+        kill "-$signal_name" -- "-$SERVER_PID" 2>/dev/null || true
+    fi
+}
+
+shutdown_inference_server() {
+    local reason="${1:-script exit}"
+
+    if [ "$SERVER_SHUTDOWN_STARTED" -eq 1 ]; then
+        return
+    fi
+    SERVER_SHUTDOWN_STARTED=1
+
+    if server_process_group_is_alive; then
+        echo "Stopping inference server process group $SERVER_PID ($reason)..."
+        signal_server_process_group INT
+        if ! wait_for_server_process_group "$SERVER_INTERRUPT_GRACE_SECONDS"; then
+            echo "Server did not stop after SIGINT; sending SIGTERM..."
+            signal_server_process_group TERM
+            if ! wait_for_server_process_group "$SERVER_TERMINATE_GRACE_SECONDS"; then
+                echo "Server did not stop after SIGTERM; sending SIGKILL..."
+                signal_server_process_group KILL
+                wait_for_server_process_group 1 || true
+            fi
+        fi
+    fi
+
+    if [ -n "$SERVER_MONITOR_PID" ]; then
+        wait "$SERVER_MONITOR_PID" 2>/dev/null || true
+    fi
+    if [ -n "$SERVER_PID_FILE" ]; then
+        rm -f "$SERVER_PID_FILE"
+    fi
+
+    SERVER_PID=""
+    SERVER_MONITOR_PID=""
+    SERVER_PID_FILE=""
+    SERVER_SHUTDOWN_STARTED=0
+}
+
+handle_inference_signal() {
+    local signal_name="$1"
+    local exit_status="$2"
+
+    trap '' INT TERM HUP QUIT
+    trap - EXIT
+    echo ""
+    if server_process_group_is_alive; then
+        shutdown_inference_server "received SIG$signal_name"
+        echo "Inference server stopped."
+    else
+        shutdown_inference_server "received SIG$signal_name"
+        echo "Inference launch interrupted."
+    fi
+    exit "$exit_status"
+}
+
+handle_inference_exit() {
+    local exit_status="$1"
+
+    trap - EXIT
+    if server_process_group_is_alive; then
+        shutdown_inference_server "launcher exited"
+    elif [ -n "$SERVER_PID_FILE" ]; then
+        rm -f "$SERVER_PID_FILE"
+    fi
+    exit "$exit_status"
+}
+
+launch_inference_server() {
+    if ! command -v setsid >/dev/null 2>&1; then
+        echo "Error: setsid is required to supervise the inference server process group." >&2
+        return 1
+    fi
+
+    SERVER_PID_FILE="$(mktemp "${TMPDIR:-/tmp}/inference-recipe.XXXXXX")" || {
+        echo "Error: unable to create inference server PID file." >&2
+        return 1
+    }
+    SERVER_SHUTDOWN_STARTED=0
+
+    setsid --fork --wait bash -c "
+        pid_file=\$1
+        shift
+        printf '%s\n' \"\$\$\" > \"\$pid_file\" || exit 125
+        exec \"\$@\"
+    " inference-server "$SERVER_PID_FILE" "$@" &
+    SERVER_MONITOR_PID=$!
+
+    local attempt
+    for ((attempt = 0; attempt < 200; attempt++)); do
+        if [ -s "$SERVER_PID_FILE" ]; then
+            break
+        fi
+        if ! kill -0 "$SERVER_MONITOR_PID" 2>/dev/null; then
+            break
+        fi
+        sleep 0.01
+    done
+
+    if [ ! -s "$SERVER_PID_FILE" ]; then
+        local monitor_status=1
+        wait "$SERVER_MONITOR_PID" 2>/dev/null || monitor_status=$?
+        rm -f "$SERVER_PID_FILE"
+        SERVER_MONITOR_PID=""
+        SERVER_PID_FILE=""
+        echo "Error: inference server failed before process supervision was established." >&2
+        return "$monitor_status"
+    fi
+
+    IFS= read -r SERVER_PID < "$SERVER_PID_FILE"
+    rm -f "$SERVER_PID_FILE"
+    SERVER_PID_FILE=""
+    if ! [[ "$SERVER_PID" =~ ^[1-9][0-9]*$ ]]; then
+        echo "Error: inference server returned an invalid process ID: $SERVER_PID" >&2
+        shutdown_inference_server "invalid process ID"
+        return 1
+    fi
+
+    local server_status=0
+    wait "$SERVER_MONITOR_PID" || server_status=$?
+    SERVER_MONITOR_PID=""
+
+    if server_process_group_is_alive; then
+        echo "Inference launcher exited while worker processes remained."
+        shutdown_inference_server "launcher exited with active workers"
+    else
+        SERVER_PID=""
+        SERVER_SHUTDOWN_STARTED=0
+    fi
+
+    return "$server_status"
+}
+
+trap 'handle_inference_signal INT 130' INT
+trap 'handle_inference_signal TERM 143' TERM
+trap 'handle_inference_signal HUP 129' HUP
+trap 'handle_inference_signal QUIT 131' QUIT
+trap 'handle_inference_exit "$?"' EXIT
 
 get_cuda_sm_version() {
     local visible_devices="${CUDA_VISIBLE_DEVICES:-}"
@@ -138,6 +302,97 @@ count_gpus() {
     local gpu_array=()
     read -ra gpu_array <<< "$list"
     echo "${#gpu_array[@]}"
+}
+
+collect_selected_gpu_ids() {
+    local requested_count="$TENSOR_PARALLEL_SIZE_VALUE"
+    local visible_devices=""
+    local candidate
+    local index
+    local -a candidates=()
+    SELECTED_GPU_IDS=()
+
+    if [ "$GPU_SELECTION_MODE" = "custom" ]; then
+        visible_devices="$CUDA_VISIBLE_DEVICES_VALUE"
+    elif [ "${CUDA_VISIBLE_DEVICES+x}" = "x" ]; then
+        visible_devices="$CUDA_VISIBLE_DEVICES"
+    else
+        for ((index = 0; index < requested_count; index++)); do
+            SELECTED_GPU_IDS+=("$index")
+        done
+        return
+    fi
+
+    IFS=',' read -r -a candidates <<< "$visible_devices"
+    for candidate in "${candidates[@]}"; do
+        candidate="${candidate//[[:space:]]/}"
+        if [ -n "$candidate" ]; then
+            SELECTED_GPU_IDS+=("$candidate")
+        fi
+        if [ "${#SELECTED_GPU_IDS[@]}" -eq "$requested_count" ]; then
+            break
+        fi
+    done
+
+    if [ "${#SELECTED_GPU_IDS[@]}" -ne "$requested_count" ]; then
+        echo "Error: tensor parallel size $requested_count requires $requested_count visible GPUs, but CUDA_VISIBLE_DEVICES provides ${#SELECTED_GPU_IDS[@]}." >&2
+        return 1
+    fi
+}
+
+check_selected_gpu_processes() {
+    if ! command -v nvidia-smi >/dev/null 2>&1; then
+        echo "Error: nvidia-smi is required for the GPU occupancy check." >&2
+        return 1
+    fi
+    if ! collect_selected_gpu_ids; then
+        return 1
+    fi
+
+    local gpu_id
+    local processes
+    local pid
+    local process_name
+    local command_line
+    local busy=0
+    local selected_gpu_list
+    selected_gpu_list="$(IFS=,; printf '%s' "${SELECTED_GPU_IDS[*]}")"
+
+    for gpu_id in "${SELECTED_GPU_IDS[@]}"; do
+        if ! processes="$(nvidia-smi --id="$gpu_id" --query-compute-apps=pid,process_name --format=csv,noheader,nounits 2>/dev/null)"; then
+            echo "Error: unable to query active compute processes for GPU $gpu_id." >&2
+            return 1
+        fi
+        if [ -z "$processes" ]; then
+            continue
+        fi
+
+        if [ "$busy" -eq 0 ]; then
+            echo "Error: selected GPUs already have active compute processes:" >&2
+        fi
+        busy=1
+        while IFS=',' read -r pid process_name; do
+            pid="${pid//[[:space:]]/}"
+            process_name="${process_name#"${process_name%%[![:space:]]*}"}"
+            process_name="${process_name%"${process_name##*[![:space:]]}"}"
+            command_line=""
+            if [ -r "/proc/$pid/cmdline" ]; then
+                command_line="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)"
+            fi
+            if [ -n "$command_line" ]; then
+                printf '  GPU %s: PID %s (%s): %s\n' "$gpu_id" "$pid" "$process_name" "$command_line" >&2
+            else
+                printf '  GPU %s: PID %s (%s)\n' "$gpu_id" "$pid" "$process_name" >&2
+            fi
+        done <<< "$processes"
+    done
+
+    if [ "$busy" -eq 1 ]; then
+        echo "Refusing to launch on GPU(s) $selected_gpu_list. Stop the existing processes or select different GPUs." >&2
+        return 1
+    fi
+
+    echo "GPU preflight passed: no active compute processes on GPU(s) $selected_gpu_list."
 }
 
 is_valid_port() {
@@ -326,6 +581,9 @@ get_port() {
 run_inference_recipe() {
     parse_arguments "$@"
     get_tensor_parallel_size "${POSITIONAL_ARGS[0]}"
+    if ! check_selected_gpu_processes; then
+        return 1
+    fi
     get_port "${POSITIONAL_ARGS[1]}"
     build_extra_args
 
@@ -369,6 +627,9 @@ run_inference_recipe() {
     base_command+=" $API_KEY"
     base_command+=" ${EXTRA_ARGS}"
 
+    local -a base_command_args=()
+    read -r -a base_command_args <<< "$base_command"
+
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
     else
@@ -380,10 +641,9 @@ run_inference_recipe() {
     echo ""
 
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
-        CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_VALUE" \
-            $base_command
+        launch_inference_server env "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE" "${base_command_args[@]}"
     else
-        $base_command
+        launch_inference_server "${base_command_args[@]}"
     fi
 }
 
