@@ -1,23 +1,63 @@
 #!/usr/bin/env bash
 
+# Mandatory inference configuration
 INFERENCE_PROVIDER="SGLang"
+INFERENCE_ENV=""
 MODEL_REPO="deepseek-ai/DeepSeek-V4-Flash"
 MODEL_NAME="deepseek_v4"
 SERVED_MODEL_NAME="deepseek"
-MAX_MODEL_LEN=1048576
+CONTEXT_LEN_VALUE=1048576
 DEFAULT_TENSOR_PARALLEL_SIZE=2
+TRUST_REMOTE_CODE="--trust-remote-code"
+REASONING_PARSER="--reasoning-parser deepseek-v4"
+ENABLE_AUTO_TOOL_CHOICE=""
+TOOL_CALL_PARSER="--tool-call-parser deepseekv4"
+GPU_MEM_UTIL_VALUE=0.90
+METRICS_FLAG="--enable-metrics --collect-tokens-histogram"
+HOST="0.0.0.0"
 DEFAULT_PORT=8000
-GPU_MEM_UTIL=0.90
+API_KEY="--api-key YOUR_API_KEY"
 
+BACKEND_MOE_RUNNER_SM90="marlin"
+BACKEND_MOE_RUNNER_SM100="flashinfer_mxfp4"
+BACKEND_MOE_RUNNER_SM103="flashinfer_mxfp4"
+BACKEND_MOE_RUNNER_SM120=""
+BACKEND_MOE_RUNNER_SM121=""
+
+ENABLE_CACHE_FLAG=0
+ENABLE_SPECULATIVE=0
+ENABLE_REASONING_PARSER=0
 SPECULATIVE='--speculative-algo EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4'
 QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache --disable-chunked-prefix-cache"
+SCRIPT_DIR=""
+REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
 EXTRA_ARGS=""
-ENABLE_SPECULATIVE=0
-DEFAULT_ENABLE_SPECULATIVE="$ENABLE_SPECULATIVE"
-ENABLE_CACHE_FLAG=0
-POSITIONAL_ARGS=()
 
+case "${INFERENCE_PROVIDER,,}" in
+    sglang)
+        INFERENCE_LAUNCH="sglang serve"
+        MODEL_PATH="--model-path $MODEL_REPO"
+        TENSOR_PARALLEL_SIZE_FLAG="--tp"
+        CONTEXT_LEN_FLAG="--context-length $CONTEXT_LEN_VALUE"
+        GPU_MEM_UTIL_FLAG="--mem-fraction-static $GPU_MEM_UTIL_VALUE"
+        ;;
+    vllm)
+        INFERENCE_LAUNCH="vllm serve"
+        MODEL_PATH="$MODEL_REPO"
+        TENSOR_PARALLEL_SIZE_FLAG="--tensor-parallel-size"
+        CONTEXT_LEN_FLAG="--max-model-len $CONTEXT_LEN_VALUE"
+        GPU_MEM_UTIL_FLAG="--gpu-memory-utilization $GPU_MEM_UTIL_VALUE"
+        ;;
+    *)
+        echo "INFERENCE_LAUNCH needs a value" >&2
+        exit 1
+        ;;
+esac
+
+# Runtime argument state
+DEFAULT_ENABLE_SPECULATIVE="$ENABLE_SPECULATIVE"
+POSITIONAL_ARGS=()
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 LOG_SUFFIX="${INFERENCE_PROVIDER,,}"
 case "$LOG_SUFFIX" in
@@ -83,15 +123,31 @@ PY
 }
 
 configure_moe_runner_backend() {
-    local sm_version
-    sm_version="$(get_cuda_sm_version || true)"
+    local sm_version=""
+
+    if [ -n "$BACKEND_MOE_RUNNER_SM90" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM100" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM103" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM120" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM121" ]; then
+        sm_version="$(get_cuda_sm_version || true)"
+    fi
 
     case "$sm_version" in
         sm_90)
-            BACKEND_MOE_RUNNER="marlin"
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM90"
             ;;
-        sm_100|sm_103)
-            BACKEND_MOE_RUNNER="flashinfer_mxfp4"
+        sm_100)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM100"
+            ;;
+        sm_103)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM103"
+            ;;
+        sm_120)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM120"
+            ;;
+        sm_121)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM121"
             ;;
         *)
             BACKEND_MOE_RUNNER="${BACKEND_MOE_RUNNER:-}"
@@ -146,11 +202,15 @@ set_custom_gpus() {
     local gpu_list="$1"
     GPU_SELECTION_MODE="custom"
     CUDA_VISIBLE_DEVICES_VALUE="$gpu_list"
-    TENSOR_PARALLEL_SIZE="$(count_gpus "$gpu_list")"
+    TENSOR_PARALLEL_SIZE_VALUE="$(count_gpus "$gpu_list")"
 }
 
 build_extra_args() {
+    local configured_extra_args="$EXTRA_ARGS"
     EXTRA_ARGS=""
+    if [ -n "$configured_extra_args" ]; then
+        EXTRA_ARGS+="$configured_extra_args "
+    fi
     configure_moe_runner_backend
 
     if [ "$ENABLE_SPECULATIVE" -eq 1 ]; then
@@ -200,7 +260,7 @@ get_tensor_parallel_size() {
 
     if [ -n "$arg_value" ]; then
         if is_valid_tensor_parallel_size "$arg_value"; then
-            TENSOR_PARALLEL_SIZE="$arg_value"
+            TENSOR_PARALLEL_SIZE_VALUE="$arg_value"
             return
         elif [[ "$arg_value" =~ ^gpus?=(.*)$ ]]; then
             local gpu_list="${BASH_REMATCH[1]}"
@@ -240,10 +300,10 @@ get_tensor_parallel_size() {
         size="${size,,}"
 
         if [ -z "$size" ]; then
-            TENSOR_PARALLEL_SIZE="$DEFAULT_TENSOR_PARALLEL_SIZE"
+            TENSOR_PARALLEL_SIZE_VALUE="$DEFAULT_TENSOR_PARALLEL_SIZE"
             break
         elif is_valid_tensor_parallel_size "$size"; then
-            TENSOR_PARALLEL_SIZE="$size"
+            TENSOR_PARALLEL_SIZE_VALUE="$size"
             break
         elif [[ "$size" == "custom" || "$size" == "c" ]]; then
             read -r -p "Enter GPU IDs to use (comma-separated, e.g., 0,2,3): " custom_list
@@ -307,8 +367,9 @@ main() {
     echo "Starting $INFERENCE_PROVIDER Server"
     echo "============================================================"
     echo "Model: $MODEL_REPO"
+    echo "Model name: $MODEL_NAME"
     echo "Served as: $SERVED_MODEL_NAME"
-    echo "Tensor parallel size: $TENSOR_PARALLEL_SIZE"
+    echo "Tensor parallel size: $TENSOR_PARALLEL_SIZE_VALUE"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "GPU selection: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE"
     fi
@@ -319,20 +380,27 @@ main() {
     fi
     echo ""
 
-    local base_command+=" sglang serve"
-    base_command+=" --model-path $MODEL_REPO"
+    if [ "$ENABLE_REASONING_PARSER" -eq 1 ] && [ ! -f "$REASONING_PARSER_PLUGIN" ]; then
+        echo "Missing reasoning parser plugin: $REASONING_PARSER_PLUGIN"
+        exit 1
+    fi
+
+    local base_command="$INFERENCE_ENV"
+    base_command+=" $INFERENCE_LAUNCH"
+    base_command+=" $MODEL_PATH"
     base_command+=" --served-model-name $SERVED_MODEL_NAME"
-    base_command+=" --trust-remote-code"
-    base_command+=" --tp $TENSOR_PARALLEL_SIZE"
-    base_command+=" --reasoning-parser deepseek-v4"
-    base_command+=" --tool-call-parser deepseekv4"
-    base_command+=" --context-length $MAX_MODEL_LEN"
-    base_command+=" --mem-fraction-static ${GPU_MEM_UTIL}"
-    base_command+=" --enable-metrics"
-    base_command+=" --collect-tokens-histogram"
-    base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
+    base_command+=" $TRUST_REMOTE_CODE"
+    base_command+=" $TENSOR_PARALLEL_SIZE_FLAG $TENSOR_PARALLEL_SIZE_VALUE"
+    base_command+=" $REASONING_PARSER"
+    base_command+=" $ENABLE_AUTO_TOOL_CHOICE"
+    base_command+=" $TOOL_CALL_PARSER"
+    base_command+=" $CONTEXT_LEN_FLAG"
+    base_command+=" $GPU_MEM_UTIL_FLAG"
+    base_command+=" $METRICS_FLAG"
+    base_command+=" --host $HOST"
     base_command+=" --port $INFERENCE_PORT"
-    base_command+=" --api-key YOUR_API_KEY"
+    base_command+=" $API_KEY"
+    base_command+=" ${EXTRA_ARGS}"
 
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"

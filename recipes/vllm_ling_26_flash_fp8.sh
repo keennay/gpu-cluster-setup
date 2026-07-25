@@ -1,23 +1,63 @@
 #!/usr/bin/env bash
 
+# Mandatory inference configuration
 INFERENCE_PROVIDER="vLLM"
+INFERENCE_ENV=""
 MODEL_REPO="inclusionAI/Ling-2.6-flash-fp8"
 MODEL_NAME="ling"
 SERVED_MODEL_NAME="ling"
-MAX_MODEL_LEN=131072
+CONTEXT_LEN_VALUE=131072
 DEFAULT_TENSOR_PARALLEL_SIZE=2
+TRUST_REMOTE_CODE="--trust-remote-code"
+REASONING_PARSER=""
+ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
+TOOL_CALL_PARSER="--tool-call-parser hermes"
+GPU_MEM_UTIL_VALUE=0.95
+METRICS_FLAG=""
+HOST="0.0.0.0"
 DEFAULT_PORT=8000
-GPU_MEM_UTIL=0.95
+API_KEY="--api-key YOUR_API_KEY"
 
+BACKEND_MOE_RUNNER_SM90=""
+BACKEND_MOE_RUNNER_SM100=""
+BACKEND_MOE_RUNNER_SM103=""
+BACKEND_MOE_RUNNER_SM120=""
+BACKEND_MOE_RUNNER_SM121=""
+
+ENABLE_CACHE_FLAG=0
+ENABLE_SPECULATIVE=0
+ENABLE_REASONING_PARSER=0
 SPECULATIVE=''
 QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
+SCRIPT_DIR=""
+REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
 EXTRA_ARGS=""
-ENABLE_SPECULATIVE=0
-DEFAULT_ENABLE_SPECULATIVE="$ENABLE_SPECULATIVE"
-ENABLE_CACHE_FLAG=0
-POSITIONAL_ARGS=()
 
+case "${INFERENCE_PROVIDER,,}" in
+    sglang)
+        INFERENCE_LAUNCH="sglang serve"
+        MODEL_PATH="--model-path $MODEL_REPO"
+        TENSOR_PARALLEL_SIZE_FLAG="--tp"
+        CONTEXT_LEN_FLAG="--context-length $CONTEXT_LEN_VALUE"
+        GPU_MEM_UTIL_FLAG="--mem-fraction-static $GPU_MEM_UTIL_VALUE"
+        ;;
+    vllm)
+        INFERENCE_LAUNCH="vllm serve"
+        MODEL_PATH="$MODEL_REPO"
+        TENSOR_PARALLEL_SIZE_FLAG="--tensor-parallel-size"
+        CONTEXT_LEN_FLAG="--max-model-len $CONTEXT_LEN_VALUE"
+        GPU_MEM_UTIL_FLAG="--gpu-memory-utilization $GPU_MEM_UTIL_VALUE"
+        ;;
+    *)
+        echo "INFERENCE_LAUNCH needs a value" >&2
+        exit 1
+        ;;
+esac
+
+# Runtime argument state
+DEFAULT_ENABLE_SPECULATIVE="$ENABLE_SPECULATIVE"
+POSITIONAL_ARGS=()
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 LOG_SUFFIX="${INFERENCE_PROVIDER,,}"
 case "$LOG_SUFFIX" in
@@ -55,6 +95,67 @@ echo ""
 echo "$MODEL_REPO $INFERENCE_PROVIDER Launcher"
 
 trap 'echo -e "\n\nServer stopped by user."; exit 0' INT
+
+get_cuda_sm_version() {
+    local visible_devices="${CUDA_VISIBLE_DEVICES:-}"
+
+    if [ "${GPU_SELECTION_MODE:-}" = "custom" ]; then
+        visible_devices="$CUDA_VISIBLE_DEVICES_VALUE"
+    fi
+
+    if [ -n "$visible_devices" ]; then
+        CUDA_VISIBLE_DEVICES="$visible_devices" python3 - <<'PY' 2>/dev/null
+import torch
+
+if torch.cuda.is_available():
+    major, minor = torch.cuda.get_device_capability(0)
+    print(f"sm_{major}{minor}")
+PY
+    else
+        python3 - <<'PY' 2>/dev/null
+import torch
+
+if torch.cuda.is_available():
+    major, minor = torch.cuda.get_device_capability(0)
+    print(f"sm_{major}{minor}")
+PY
+    fi
+}
+
+configure_moe_runner_backend() {
+    local sm_version=""
+
+    if [ -n "$BACKEND_MOE_RUNNER_SM90" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM100" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM103" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM120" ] ||
+        [ -n "$BACKEND_MOE_RUNNER_SM121" ]; then
+        sm_version="$(get_cuda_sm_version || true)"
+    fi
+
+    case "$sm_version" in
+        sm_90)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM90"
+            ;;
+        sm_100)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM100"
+            ;;
+        sm_103)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM103"
+            ;;
+        sm_120)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM120"
+            ;;
+        sm_121)
+            BACKEND_MOE_RUNNER="$BACKEND_MOE_RUNNER_SM121"
+            ;;
+        *)
+            BACKEND_MOE_RUNNER="${BACKEND_MOE_RUNNER:-}"
+            ;;
+    esac
+
+    export BACKEND_MOE_RUNNER
+}
 
 is_valid_tensor_parallel_size() {
     [[ "$1" =~ ^(1|2|4|8)$ ]]
@@ -101,11 +202,16 @@ set_custom_gpus() {
     local gpu_list="$1"
     GPU_SELECTION_MODE="custom"
     CUDA_VISIBLE_DEVICES_VALUE="$gpu_list"
-    TENSOR_PARALLEL_SIZE="$(count_gpus "$gpu_list")"
+    TENSOR_PARALLEL_SIZE_VALUE="$(count_gpus "$gpu_list")"
 }
 
 build_extra_args() {
+    local configured_extra_args="$EXTRA_ARGS"
     EXTRA_ARGS=""
+    if [ -n "$configured_extra_args" ]; then
+        EXTRA_ARGS+="$configured_extra_args "
+    fi
+    configure_moe_runner_backend
 
     if [ "$ENABLE_SPECULATIVE" -eq 1 ]; then
         EXTRA_ARGS+="$SPECULATIVE "
@@ -113,6 +219,9 @@ build_extra_args() {
     EXTRA_ARGS+="$QUANTIZATION "
     if [ "$ENABLE_CACHE_FLAG" -eq 1 ]; then
         EXTRA_ARGS+="$NO_PREFIX_CACHE "
+    fi
+    if [ -n "$BACKEND_MOE_RUNNER" ]; then
+        EXTRA_ARGS+="--moe-runner-backend ${BACKEND_MOE_RUNNER} "
     fi
 }
 
@@ -151,7 +260,7 @@ get_tensor_parallel_size() {
 
     if [ -n "$arg_value" ]; then
         if is_valid_tensor_parallel_size "$arg_value"; then
-            TENSOR_PARALLEL_SIZE="$arg_value"
+            TENSOR_PARALLEL_SIZE_VALUE="$arg_value"
             return
         elif [[ "$arg_value" =~ ^gpus?=(.*)$ ]]; then
             local gpu_list="${BASH_REMATCH[1]}"
@@ -191,10 +300,10 @@ get_tensor_parallel_size() {
         size="${size,,}"
 
         if [ -z "$size" ]; then
-            TENSOR_PARALLEL_SIZE="$DEFAULT_TENSOR_PARALLEL_SIZE"
+            TENSOR_PARALLEL_SIZE_VALUE="$DEFAULT_TENSOR_PARALLEL_SIZE"
             break
         elif is_valid_tensor_parallel_size "$size"; then
-            TENSOR_PARALLEL_SIZE="$size"
+            TENSOR_PARALLEL_SIZE_VALUE="$size"
             break
         elif [[ "$size" == "custom" || "$size" == "c" ]]; then
             read -r -p "Enter GPU IDs to use (comma-separated, e.g., 0,2,3): " custom_list
@@ -258,26 +367,40 @@ main() {
     echo "Starting $INFERENCE_PROVIDER Server"
     echo "============================================================"
     echo "Model: $MODEL_REPO"
+    echo "Model name: $MODEL_NAME"
     echo "Served as: $SERVED_MODEL_NAME"
-    echo "Tensor parallel size: $TENSOR_PARALLEL_SIZE"
+    echo "Tensor parallel size: $TENSOR_PARALLEL_SIZE_VALUE"
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "GPU selection: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE"
     fi
     echo "Port: $INFERENCE_PORT"
     print_speculative_config
+    if [ -n "$BACKEND_MOE_RUNNER" ]; then
+        echo "MoE runner backend: $BACKEND_MOE_RUNNER"
+    fi
     echo ""
 
-    local base_command+=" vllm serve $MODEL_REPO"
+    if [ "$ENABLE_REASONING_PARSER" -eq 1 ] && [ ! -f "$REASONING_PARSER_PLUGIN" ]; then
+        echo "Missing reasoning parser plugin: $REASONING_PARSER_PLUGIN"
+        exit 1
+    fi
+
+    local base_command="$INFERENCE_ENV"
+    base_command+=" $INFERENCE_LAUNCH"
+    base_command+=" $MODEL_PATH"
     base_command+=" --served-model-name $SERVED_MODEL_NAME"
-    base_command+=" --trust-remote-code"
-    base_command+=" --enable-auto-tool-choice"
-    base_command+=" --tool-call-parser hermes"
-    base_command+=" --tensor-parallel-size $TENSOR_PARALLEL_SIZE"
-    base_command+=" --max-model-len $MAX_MODEL_LEN"
-    base_command+=" --gpu-memory-utilization ${GPU_MEM_UTIL}"
-    base_command+=" ${EXTRA_ARGS}--host 0.0.0.0"
+    base_command+=" $TRUST_REMOTE_CODE"
+    base_command+=" $TENSOR_PARALLEL_SIZE_FLAG $TENSOR_PARALLEL_SIZE_VALUE"
+    base_command+=" $REASONING_PARSER"
+    base_command+=" $ENABLE_AUTO_TOOL_CHOICE"
+    base_command+=" $TOOL_CALL_PARSER"
+    base_command+=" $CONTEXT_LEN_FLAG"
+    base_command+=" $GPU_MEM_UTIL_FLAG"
+    base_command+=" $METRICS_FLAG"
+    base_command+=" --host $HOST"
     base_command+=" --port $INFERENCE_PORT"
-    base_command+=" --api-key YOUR_API_KEY"
+    base_command+=" $API_KEY"
+    base_command+=" ${EXTRA_ARGS}"
 
     if [ "$GPU_SELECTION_MODE" = "custom" ]; then
         echo "Command: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES_VALUE $base_command"
