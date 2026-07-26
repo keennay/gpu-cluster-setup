@@ -485,7 +485,8 @@ install_gemma_sglang() {
 
 install_gemma_vllm() {
     print_info "Installing vLLM for Gemma-4..."
-    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_glm_sglang() {
@@ -681,7 +682,8 @@ install_deepseek_sglang() {
 
 install_deepseek_vllm() {
     print_info "Installing vLLM for DeepSeek..."
-    run_uv_install -U vllm --torch-backend=auto || return 1
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 
     if [ -z "${VIRTUAL_ENV:-}" ]; then
         print_error "No active virtual environment detected for DeepGEMM install."
@@ -708,7 +710,8 @@ install_gptoss_transformers() {
 
 install_gptoss_vllm() {
     print_info "Installing vLLM for gpt-oss..."
-    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_kimi_ktransformers() {
@@ -772,7 +775,8 @@ install_kimi_sglang() {
 
 install_kimi_vllm() {
     print_info "Installing vLLM for Kimi K2.X..."
-    run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_laguna_sglang() {
@@ -785,7 +789,8 @@ install_laguna_trtllm() {
 
 install_laguna_vllm() {
     print_info "Installing vLLM for Laguna..."
-    run_uv_install -U vllm --torch-backend=auto
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_ling_sglang() {
@@ -800,7 +805,8 @@ install_ling_transformers() {
 
 install_ling_vllm() {
     print_info "Installing vLLM for Ling-2.6..."
-    run_uv_install -U vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_minimax_sglang() {
@@ -816,7 +822,8 @@ install_minimax_transformers() {
 
 install_minimax_vllm() {
     print_info "Installing vLLM for MiniMax-M2.X..."
-    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_nemotron_sglang() {
@@ -831,7 +838,8 @@ install_nemotron_trtllm() {
 
 install_nemotron_vllm() {
     print_info "Installing vLLM for Nemotron-3..."
-    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_qwen3_ktransformers() {
@@ -861,7 +869,8 @@ install_qwen3_transformers() {
 
 install_qwen3_vllm() {
     print_info "Installing vLLM for Qwen3..."
-    run_uv_install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 perform_environment_action() {
