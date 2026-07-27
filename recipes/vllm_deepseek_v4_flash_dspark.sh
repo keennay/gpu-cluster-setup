@@ -3,7 +3,7 @@
 # Mandatory inference configuration
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
-MODEL_REPO="deepseek-ai/DeepSeek-V4-Flash"
+MODEL_REPO="deepseek-ai/DeepSeek-V4-Flash-DSpark"
 MODEL_NAME="deepseek_v4"
 SERVED_MODEL_NAME="deepseek"
 CONTEXT_LEN_VALUE=1048576
@@ -12,7 +12,7 @@ TRUST_REMOTE_CODE="--trust-remote-code"
 REASONING_PARSER="--reasoning-parser $MODEL_NAME"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
 TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
-GPU_MEM_UTIL_VALUE=0.846159
+GPU_MEM_UTIL_VALUE=0.783094
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
@@ -25,9 +25,9 @@ BACKEND_MOE_RUNNER_SM120=""
 BACKEND_MOE_RUNNER_SM121=""
 
 ENABLE_CACHE_FLAG=0
-ENABLE_SPECULATIVE=0
+ENABLE_SPECULATIVE=1
 ENABLE_REASONING_PARSER=0
-SPECULATIVE='--speculative_config {"method":"mtp","num_speculative_tokens":1}'
+SPECULATIVE='--speculative-config {"method":"dspark","num_speculative_tokens":7,"draft_sample_method":"greedy"}'
 QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
