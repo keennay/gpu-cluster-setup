@@ -24,6 +24,7 @@ esac
 
 # Runtime argument state
 DEFAULT_ENABLE_SPECULATIVE="$ENABLE_SPECULATIVE"
+INTERACTIVE_MODE=0
 POSITIONAL_ARGS=()
 : "${RECIPE_DIR:?RECIPE_DIR must be set by the calling recipe}"
 LOG_SUFFIX="${INFERENCE_PROVIDER,,}"
@@ -402,11 +403,15 @@ is_valid_port() {
 parse_arguments() {
     ENABLE_SPECULATIVE="$DEFAULT_ENABLE_SPECULATIVE"
     ENABLE_CACHE_FLAG=0
+    INTERACTIVE_MODE=0
     POSITIONAL_ARGS=()
 
     local arg
     for arg in "$@"; do
         case "$arg" in
+            --interactive)
+                INTERACTIVE_MODE=1
+                ;;
             --speculative)
                 ENABLE_SPECULATIVE=1
                 ;;
@@ -580,11 +585,18 @@ get_port() {
 
 run_inference_recipe() {
     parse_arguments "$@"
-    get_tensor_parallel_size "${POSITIONAL_ARGS[0]}"
+    local tensor_parallel_arg="${POSITIONAL_ARGS[0]:-}"
+    local port_arg="${POSITIONAL_ARGS[1]:-}"
+
+    if [ "$INTERACTIVE_MODE" -eq 0 ]; then
+        tensor_parallel_arg="${tensor_parallel_arg:-$DEFAULT_TENSOR_PARALLEL_SIZE}"
+        port_arg="${port_arg:-$DEFAULT_PORT}"
+    fi
+    get_tensor_parallel_size "$tensor_parallel_arg"
     if ! check_selected_gpu_processes; then
         return 1
     fi
-    get_port "${POSITIONAL_ARGS[1]}"
+    get_port "$port_arg"
     build_extra_args
 
     echo ""
