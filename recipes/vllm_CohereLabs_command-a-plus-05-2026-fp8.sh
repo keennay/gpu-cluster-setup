@@ -3,16 +3,16 @@
 # Mandatory inference configuration
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
-MODEL_REPO="Li101/Qwen3.5-35B-A3B-Uncensored-Aggressive-safetensors"
-MODEL_NAME="qwen3"
-SERVED_MODEL_NAME="qwen"
-CONTEXT_LEN_VALUE=262144
-DEFAULT_TENSOR_PARALLEL_SIZE=1
-TRUST_REMOTE_CODE="--trust-remote-code"
+MODEL_REPO="CohereLabs/command-a-plus-05-2026-fp8"
+MODEL_NAME="cohere_command4"
+SERVED_MODEL_NAME="command-a-plus"
+CONTEXT_LEN_VALUE=131072
+DEFAULT_TENSOR_PARALLEL_SIZE=2
+TRUST_REMOTE_CODE=""
 REASONING_PARSER="--reasoning-parser $MODEL_NAME"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
-TOOL_CALL_PARSER="--tool-call-parser qwen3_coder"
-GPU_MEM_UTIL_VALUE=0.880811
+TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
+GPU_MEM_UTIL_VALUE=0.861582
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
@@ -32,7 +32,7 @@ QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--kv-cache-dtype fp8"
+EXTRA_ARGS="--revision dbf38b416406a07ab42b5c901de2cff06bb6b263"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

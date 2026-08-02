@@ -23,6 +23,10 @@ print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 ACTION_TAKEN=false
 
 ENV_TYPES=(
+  "arcee-transformers"
+  "arcee-vllm"
+  "cohere-transformers"
+  "cohere-vllm"
   "deepseek-ktransformers"
   "deepseek-lmdeploy"
   "deepseek-sglang"
@@ -48,6 +52,9 @@ ENV_TYPES=(
   "minimax-sglang"
   "minimax-transformers"
   "minimax-vllm"
+  "nanbeige-sglang"
+  "nanbeige-transformers"
+  "nanbeige-vllm"
   "nemotron-sglang"
   "nemotron-trtllm"
   "nemotron-vllm"
@@ -55,9 +62,18 @@ ENV_TYPES=(
   "qwen3-sglang"
   "qwen3-transformers"
   "qwen3-vllm"
+  "redhat-vllm"
+  "z-lab-sglang"
+  "z-lab-vllm"
+  "zyphra-transformers"
+  "zyphra-vllm"
 )
 
 declare -A ENV_DESCRIPTIONS=(
+  ["arcee-transformers"]="Arcee (Transformers)"
+  ["arcee-vllm"]="Arcee (vLLM)"
+  ["cohere-transformers"]="Cohere (Transformers)"
+  ["cohere-vllm"]="Cohere (vLLM)"
   ["deepseek-ktransformers"]="DeepSeek-V3/V4/R1/OCR (KTransformers)"
   ["deepseek-lmdeploy"]="DeepSeek-V3/V4/R1/OCR (LMDeploy)"
   ["deepseek-sglang"]="DeepSeek-V3/V4/R1/OCR (SGLang)"
@@ -83,6 +99,9 @@ declare -A ENV_DESCRIPTIONS=(
   ["minimax-sglang"]="MiniMax-M2.X (SGLang)"
   ["minimax-transformers"]="MiniMax-M2.X (Transformers)"
   ["minimax-vllm"]="MiniMax-M2.X (vLLM)"
+  ["nanbeige-sglang"]="Nanbeige (SGLang)"
+  ["nanbeige-transformers"]="Nanbeige (Transformers)"
+  ["nanbeige-vllm"]="Nanbeige (vLLM)"
   ["nemotron-sglang"]="Nemotron-3 (SGLang)"
   ["nemotron-trtllm"]="Nemotron-3 (TRT-LLM)"
   ["nemotron-vllm"]="Nemotron-3 (vLLM)"
@@ -90,112 +109,153 @@ declare -A ENV_DESCRIPTIONS=(
   ["qwen3-sglang"]="Qwen3 (SGLang)"
   ["qwen3-transformers"]="Qwen3 (Transformers)"
   ["qwen3-vllm"]="Qwen3 (vLLM)"
+  ["redhat-vllm"]="RedHat (vLLM)"
+  ["z-lab-sglang"]="z-lab (SGLang)"
+  ["z-lab-vllm"]="z-lab (vLLM)"
+  ["zyphra-transformers"]="Zyphra (Transformers)"
+  ["zyphra-vllm"]="Zyphra (vLLM)"
 )
 
 resolve_env_type() {
     local input="${1#env_}"
 
     case "$input" in
-        1|deepseek_ktransformers|deepseek-ktransformers)
+        1|arcee_transformers|arcee-transformers)
+            echo "arcee-transformers"
+            ;;
+        2|arcee_vllm|arcee-vllm)
+            echo "arcee-vllm"
+            ;;
+        3|cohere_transformers|cohere-transformers)
+            echo "cohere-transformers"
+            ;;
+        4|cohere_vllm|cohere-vllm)
+            echo "cohere-vllm"
+            ;;
+        5|deepseek_ktransformers|deepseek-ktransformers)
             echo "deepseek-ktransformers"
             ;;
-        2|deepseek_lmdeploy|deepseek-lmdeploy)
+        6|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
-        3|deepseek_sglang|deepseek-sglang)
+        7|deepseek_sglang|deepseek-sglang)
             echo "deepseek-sglang"
             ;;
-        4|deepseek_vllm|deepseek-vllm)
+        8|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        5|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+        9|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
             echo "gemma-sglang"
             ;;
-        6|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+        10|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
             echo "gemma-vllm"
             ;;
-        7|glm_ktransformers|glm-ktransformers|glm45-ktransformers|glm_4_5_ktransformers|glm-4.5-ktransformers)
+        11|glm_ktransformers|glm-ktransformers|glm45-ktransformers|glm_4_5_ktransformers|glm-4.5-ktransformers)
             echo "glm-ktransformers"
             ;;
-        8|glm_sglang|glm-sglang|glm45-sglang)
+        12|glm_sglang|glm-sglang|glm45-sglang)
             echo "glm-sglang"
             ;;
-        9|glm_transformers|glm-transformers)
+        13|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        10|glm_vllm|glm-vllm)
+        14|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        11|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        15|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        12|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        16|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        13|kimi_ktransformers|kimi-ktransformers)
+        17|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        14|kimi_sglang|kimi-sglang)
+        18|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        15|kimi_vllm|kimi-vllm)
+        19|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        16|laguna_sglang|laguna-sglang)
+        20|laguna_sglang|laguna-sglang)
             echo "laguna-sglang"
             ;;
-        17|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
+        21|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
             echo "laguna-trtllm"
             ;;
-        18|laguna_vllm|laguna-vllm)
+        22|laguna_vllm|laguna-vllm)
             echo "laguna-vllm"
             ;;
-        19|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+        23|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
             echo "ling-sglang"
             ;;
-        20|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+        24|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
             echo "ling-transformers"
             ;;
-        21|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+        25|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
             echo "ling-vllm"
             ;;
-        22|minimax_ktransformers|minimax-ktransformers)
+        26|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        23|minimax_sglang|minimax-sglang)
+        27|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        24|minimax_transformers|minimax-transformers)
+        28|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        25|minimax_vllm|minimax-vllm)
+        29|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        26|nemotron_sglang|nemotron-sglang)
+        30|nanbeige_sglang|nanbeige-sglang)
+            echo "nanbeige-sglang"
+            ;;
+        31|nanbeige_transformers|nanbeige-transformers)
+            echo "nanbeige-transformers"
+            ;;
+        32|nanbeige_vllm|nanbeige-vllm)
+            echo "nanbeige-vllm"
+            ;;
+        33|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        27|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        34|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        28|nemotron_vllm|nemotron-vllm)
+        35|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        29|qwen3_ktransformers|qwen3-ktransformers)
+        36|qwen3_ktransformers|qwen3-ktransformers)
             echo "qwen3-ktransformers"
             ;;
-        30|qwen3_sglang|qwen3-sglang)
+        37|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        31|qwen3_transformers|qwen3-transformers)
+        38|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        32|qwen3_vllm|qwen3-vllm)
+        39|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        33|custom|custom_uv|custom-uv|env_custom_uv)
+        40|redhat_vllm|redhat-vllm)
+            echo "redhat-vllm"
+            ;;
+        41|zlab_sglang|z_lab_sglang|z-lab_sglang|zlab-sglang|z-lab-sglang)
+            echo "z-lab-sglang"
+            ;;
+        42|zlab_vllm|z_lab_vllm|z-lab_vllm|zlab-vllm|z-lab-vllm)
+            echo "z-lab-vllm"
+            ;;
+        43|zyphra_transformers|zyphra-transformers)
+            echo "zyphra-transformers"
+            ;;
+        44|zyphra_vllm|zyphra-vllm)
+            echo "zyphra-vllm"
+            ;;
+        45|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        34|custom_pip|custom-pip|env_custom_pip)
+        46|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -474,6 +534,18 @@ install_kt_kernel() {
 
     check_kt_kernel_build_dependencies || return 1
     run_command bash -c "cd \"$kt_kernel_dir\" && ./install.sh build"
+}
+
+install_arcee_vllm() {
+    print_info "Installing vLLM 0.18.0 for Arcee..."
+    run_uv_install "vllm==0.18.0" || return 1
+}
+
+install_cohere_vllm() {
+    print_info "Installing vLLM 0.21.0 and Cohere Melody for Cohere..."
+    run_uv_install "vllm==0.21.0" || return 1
+    run_uv_install "transformers>=5,<6" || return 1
+    run_uv_install "cohere_melody>=0.9.0" || return 1
 }
 
 install_gemma_sglang() {
@@ -826,6 +898,29 @@ install_minimax_vllm() {
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
+install_nanbeige_vllm() {
+    print_info "Installing Nanbeige vLLM from the nanbeige42 branch..."
+    ensure_active_environment_matches nanbeige-vllm || return 1
+
+    local target_dir="$VIRTUAL_ENV/vllm"
+
+    if [ -e "$target_dir" ] && [ ! -d "$target_dir/.git" ]; then
+        print_error "vLLM target exists but is not a git checkout: $target_dir"
+        return 1
+    fi
+
+    if [ ! -d "$target_dir/.git" ]; then
+        run_command git clone -b nanbeige42 \
+            https://github.com/Nanbeige/vllm.git "$target_dir" || return 1
+    fi
+
+    run_command git -C "$target_dir" fetch origin nanbeige42 --tags || return 1
+    run_command git -C "$target_dir" checkout nanbeige42 || return 1
+    run_command git -C "$target_dir" pull --ff-only origin nanbeige42 || return 1
+
+    run_pip_install -e "$target_dir" || return 1
+}
+
 install_nemotron_sglang() {
     print_info "Installing SGLang for Nemotron-3..."
     install_bleeding_edge_sglang nemotron-sglang || return 1
@@ -873,10 +968,37 @@ install_qwen3_vllm() {
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
+install_redhat_vllm() {
+    print_info "Installing vLLM and timm for RedHat..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install timm || return 1
+}
+
+install_z_lab_vllm() {
+    print_info "Installing vLLM for z-lab..."
+    run_uv_install -U --torch-backend=auto \
+        "vllm @ git+https://github.com/vllm-project/vllm.git@refs/pull/41703/head" || return 1
+}
+
+install_zyphra_vllm() {
+    print_info "Installing Zyphra vLLM from the zaya1-pr branch..."
+    ensure_active_environment_matches zyphra-vllm || return 1
+    run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" || return 1
+}
+
 perform_environment_action() {
     ACTION_TAKEN=false
 
     case "$1" in
+        arcee-vllm)
+            install_arcee_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        cohere-vllm)
+            install_cohere_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
         deepseek-ktransformers)
             install_deepseek_ktransformers || return 1
             ACTION_TAKEN=true
@@ -969,6 +1091,10 @@ perform_environment_action() {
             install_minimax_vllm || return 1
             ACTION_TAKEN=true
             ;;
+        nanbeige-vllm)
+            install_nanbeige_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
         nemotron-sglang)
             install_nemotron_sglang || return 1
             ACTION_TAKEN=true
@@ -995,6 +1121,18 @@ perform_environment_action() {
             ;;
         qwen3-vllm)
             install_qwen3_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        redhat-vllm)
+            install_redhat_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        z-lab-vllm)
+            install_z_lab_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        zyphra-vllm)
+            install_zyphra_vllm || return 1
             ACTION_TAKEN=true
             ;;
         *)

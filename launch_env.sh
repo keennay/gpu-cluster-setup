@@ -150,106 +150,142 @@ resolve_env_type() {
     local input="${1#env_}"
 
     case "$input" in
-        1|deepseek_ktransformers|deepseek-ktransformers)
+        1|arcee_transformers|arcee-transformers)
+            echo "arcee-transformers"
+            ;;
+        2|arcee_vllm|arcee-vllm)
+            echo "arcee-vllm"
+            ;;
+        3|cohere_transformers|cohere-transformers)
+            echo "cohere-transformers"
+            ;;
+        4|cohere_vllm|cohere-vllm)
+            echo "cohere-vllm"
+            ;;
+        5|deepseek_ktransformers|deepseek-ktransformers)
             echo "deepseek-ktransformers"
             ;;
-        2|deepseek_lmdeploy|deepseek-lmdeploy)
+        6|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
-        3|deepseek_sglang|deepseek-sglang)
+        7|deepseek_sglang|deepseek-sglang)
             echo "deepseek-sglang"
             ;;
-        4|deepseek_vllm|deepseek-vllm)
+        8|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        5|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+        9|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
             echo "gemma-sglang"
             ;;
-        6|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+        10|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
             echo "gemma-vllm"
             ;;
-        7|glm_ktransformers|glm-ktransformers|glm45-ktransformers|glm_4_5_ktransformers|glm-4.5-ktransformers)
+        11|glm_ktransformers|glm-ktransformers|glm45-ktransformers|glm_4_5_ktransformers|glm-4.5-ktransformers)
             echo "glm-ktransformers"
             ;;
-        8|glm_sglang|glm-sglang|glm45-sglang)
+        12|glm_sglang|glm-sglang|glm45-sglang)
             echo "glm-sglang"
             ;;
-        9|glm_transformers|glm-transformers)
+        13|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        10|glm_vllm|glm-vllm)
+        14|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        11|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        15|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        12|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        16|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        13|kimi_ktransformers|kimi-ktransformers)
+        17|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        14|kimi_sglang|kimi-sglang)
+        18|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        15|kimi_vllm|kimi-vllm)
+        19|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        16|laguna_sglang|laguna-sglang)
+        20|laguna_sglang|laguna-sglang)
             echo "laguna-sglang"
             ;;
-        17|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
+        21|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
             echo "laguna-trtllm"
             ;;
-        18|laguna_vllm|laguna-vllm)
+        22|laguna_vllm|laguna-vllm)
             echo "laguna-vllm"
             ;;
-        19|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
+        23|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
             echo "ling-sglang"
             ;;
-        20|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
+        24|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
             echo "ling-transformers"
             ;;
-        21|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
+        25|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
             echo "ling-vllm"
             ;;
-        22|minimax_ktransformers|minimax-ktransformers)
+        26|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        23|minimax_sglang|minimax-sglang)
+        27|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        24|minimax_transformers|minimax-transformers)
+        28|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        25|minimax_vllm|minimax-vllm)
+        29|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        26|nemotron_sglang|nemotron-sglang)
+        30|nanbeige_sglang|nanbeige-sglang)
+            echo "nanbeige-sglang"
+            ;;
+        31|nanbeige_transformers|nanbeige-transformers)
+            echo "nanbeige-transformers"
+            ;;
+        32|nanbeige_vllm|nanbeige-vllm)
+            echo "nanbeige-vllm"
+            ;;
+        33|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        27|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        34|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        28|nemotron_vllm|nemotron-vllm)
+        35|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        29|qwen3_ktransformers|qwen3-ktransformers)
+        36|qwen3_ktransformers|qwen3-ktransformers)
             echo "qwen3-ktransformers"
             ;;
-        30|qwen3_sglang|qwen3-sglang)
+        37|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        31|qwen3_transformers|qwen3-transformers)
+        38|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        32|qwen3_vllm|qwen3-vllm)
+        39|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        33|custom|custom_uv|custom-uv|env_custom_uv)
+        40|redhat_vllm|redhat-vllm)
+            echo "redhat-vllm"
+            ;;
+        41|zlab_sglang|z_lab_sglang|z-lab_sglang|zlab-sglang|z-lab-sglang)
+            echo "z-lab-sglang"
+            ;;
+        42|zlab_vllm|z_lab_vllm|z-lab_vllm|zlab-vllm|z-lab-vllm)
+            echo "z-lab-vllm"
+            ;;
+        43|zyphra_transformers|zyphra-transformers)
+            echo "zyphra-transformers"
+            ;;
+        44|zyphra_vllm|zyphra-vllm)
+            echo "zyphra-vllm"
+            ;;
+        45|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        34|custom_pip|custom-pip|env_custom_pip)
+        46|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -303,47 +339,59 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) DeepSeek-V3/V4/R1/OCR (KTransformers)"
-    echo "2) DeepSeek-V3/V4/R1/OCR (LMDeploy)"
-    echo "3) DeepSeek-V3/V4/R1/OCR (SGLang)"
-    echo "4) DeepSeek-V3/V4/R1/OCR (vLLM)"
-    echo "5) Gemma-4 (SGLang)"
-    echo "6) Gemma-4 (vLLM)"
-    echo "7) GLM-4/5 (KTransformers)"
-    echo "8) GLM-4/5 (SGLang)"
-    echo "9) GLM-4/5 (Transformers)"
-    echo "10) GLM-4/5 (vLLM)"
-    echo "11) gpt-oss (Transformers)"
-    echo "12) gpt-oss (vLLM)"
-    echo "13) Kimi K2.X (KTransformers)"
-    echo "14) Kimi K2.X (SGLang)"
-    echo "15) Kimi K2.X (vLLM)"
-    echo "16) Laguna (SGLang)"
-    echo "17) Laguna (TRT-LLM)"
-    echo "18) Laguna (vLLM)"
-    echo "19) Ling-2.6 (SGLang)"
-    echo "20) Ling-2.6 (Transformers)"
-    echo "21) Ling-2.6 (vLLM)"
-    echo "22) MiniMax-M2.X (KTransformers)"
-    echo "23) MiniMax-M2.X (SGLang)"
-    echo "24) MiniMax-M2.X (Transformers)"
-    echo "25) MiniMax-M2.X (vLLM)"
-    echo "26) Nemotron-3 (SGLang)"
-    echo "27) Nemotron-3 (TRT-LLM)"
-    echo "28) Nemotron-3 (vLLM)"
-    echo "29) Qwen3 (KTransformers)"
-    echo "30) Qwen3 (SGLang)"
-    echo "31) Qwen3 (Transformers)"
-    echo "32) Qwen3 (vLLM)"
-    echo "33) Custom (uv)"
-    echo "34) Custom (pip)"
+    echo "1) Arcee (Transformers)"
+    echo "2) Arcee (vLLM)"
+    echo "3) Cohere (Transformers)"
+    echo "4) Cohere (vLLM)"
+    echo "5) DeepSeek-V3/V4/R1/OCR (KTransformers)"
+    echo "6) DeepSeek-V3/V4/R1/OCR (LMDeploy)"
+    echo "7) DeepSeek-V3/V4/R1/OCR (SGLang)"
+    echo "8) DeepSeek-V3/V4/R1/OCR (vLLM)"
+    echo "9) Gemma-4 (SGLang)"
+    echo "10) Gemma-4 (vLLM)"
+    echo "11) GLM-4/5 (KTransformers)"
+    echo "12) GLM-4/5 (SGLang)"
+    echo "13) GLM-4/5 (Transformers)"
+    echo "14) GLM-4/5 (vLLM)"
+    echo "15) gpt-oss (Transformers)"
+    echo "16) gpt-oss (vLLM)"
+    echo "17) Kimi K2.X (KTransformers)"
+    echo "18) Kimi K2.X (SGLang)"
+    echo "19) Kimi K2.X (vLLM)"
+    echo "20) Laguna (SGLang)"
+    echo "21) Laguna (TRT-LLM)"
+    echo "22) Laguna (vLLM)"
+    echo "23) Ling-2.6 (SGLang)"
+    echo "24) Ling-2.6 (Transformers)"
+    echo "25) Ling-2.6 (vLLM)"
+    echo "26) MiniMax-M2.X (KTransformers)"
+    echo "27) MiniMax-M2.X (SGLang)"
+    echo "28) MiniMax-M2.X (Transformers)"
+    echo "29) MiniMax-M2.X (vLLM)"
+    echo "30) Nanbeige (SGLang)"
+    echo "31) Nanbeige (Transformers)"
+    echo "32) Nanbeige (vLLM)"
+    echo "33) Nemotron-3 (SGLang)"
+    echo "34) Nemotron-3 (TRT-LLM)"
+    echo "35) Nemotron-3 (vLLM)"
+    echo "36) Qwen3 (KTransformers)"
+    echo "37) Qwen3 (SGLang)"
+    echo "38) Qwen3 (Transformers)"
+    echo "39) Qwen3 (vLLM)"
+    echo "40) RedHat (vLLM)"
+    echo "41) z-lab (SGLang)"
+    echo "42) z-lab (vLLM)"
+    echo "43) Zyphra (Transformers)"
+    echo "44) Zyphra (vLLM)"
+    echo "45) Custom (uv)"
+    echo "46) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-34): " choice
+        read -p "Enter your choice (1-46): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 34."
+            print_error "Invalid choice. Please enter a number between 1 and 46."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
