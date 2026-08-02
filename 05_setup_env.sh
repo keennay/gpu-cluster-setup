@@ -59,6 +59,16 @@ uses_pip_venv() {
     esac
 }
 
+environment_is_usable() {
+    [ -f "$ENV_PATH/pyvenv.cfg" ] || return 1
+    [ -x "$ENV_PATH/bin/python" ] || return 1
+    "$ENV_PATH/bin/python" -c 'import sys' >/dev/null 2>&1 || return 1
+
+    if ! uses_pip_venv; then
+        [ -x "$ENV_PATH/bin/python3" ] || return 1
+    fi
+}
+
 install_huggingface_hub() {
     print_info "Installing Hugging Face Hub Python library into $ENV_NAME..."
     if uses_pip_venv; then
@@ -240,14 +250,13 @@ resolve_env_type() {
 }
 
 resolve_env_name() {
-    local env_type="$1"
+    local env_type="${1#env_}"
 
     if [ -z "$env_type" ]; then
-        echo "custom_uv"
-        return 0
+        env_type="custom_uv"
     fi
 
-    echo "$env_type"
+    echo "env_$env_type"
 }
 
 CUDA_CANDIDATE_VERSIONS=()
@@ -535,7 +544,7 @@ fi
 # Set environment name based on type
 ENV_NAME=$(resolve_env_name "$ENV_TYPE")
 
-ENV_PATH="$HOME/env_${ENV_NAME}"
+ENV_PATH="$HOME/${ENV_NAME}"
 
 # Ask for HuggingFace model storage location
 DEFAULT_HF_PATH="/workspace/models/huggingface"
@@ -594,7 +603,13 @@ fi
 # Check if environment exists and handle rebuild
 if [ -d "$ENV_PATH" ]; then
     print_warning "⚠️  Environment $ENV_NAME already exists at $ENV_PATH"
-    
+
+    ENVIRONMENT_USABLE=true
+    if ! environment_is_usable; then
+        ENVIRONMENT_USABLE=false
+        print_warning "Environment $ENV_NAME does not contain a working virtual-environment interpreter."
+    fi
+
     if [ "$AUTO_MODE" = false ]; then
         echo ""
         print_info "Do you want to rebuild it? This will:"
@@ -602,19 +617,14 @@ if [ -d "$ENV_PATH" ]; then
         print_info "  • Remove all installed packages"
         print_info "  • Create a fresh environment"
         echo ""
-        
+
         while true; do
             read -r -p "Rebuild environment? (y/n): " RECREATE
             case ${RECREATE,,} in
                 y|yes)
-                    print_info "Destroying existing environment..."
-                    print_command "rm -rf $ENV_PATH"
-                    rm -rf "$ENV_PATH"
-                    print_info "✓ Environment destroyed"
                     break
                     ;;
                 n|no)
-                    print_info "Keeping existing environment"
                     break
                     ;;
                 *)
@@ -622,9 +632,32 @@ if [ -d "$ENV_PATH" ]; then
                     ;;
             esac
         done
+    elif [ "$ENVIRONMENT_USABLE" = false ]; then
+        RECREATE="y"
+        print_warning "Auto mode: rebuilding the unusable environment."
     else
         RECREATE="n"
+    fi
+
+    if [[ "$RECREATE" =~ ^([Yy]|[Yy][Ee][Ss])$ ]]; then
+        print_info "Destroying existing environment..."
+        print_command "rm -rf $ENV_PATH"
+        if ! rm -rf "$ENV_PATH"; then
+            fail_script "Failed to remove unusable environment at $ENV_PATH"
+            if [ "$BEING_SOURCED" = true ]; then
+                return 1
+            fi
+        fi
+        print_info "✓ Environment destroyed"
+    elif [ "$ENVIRONMENT_USABLE" = false ]; then
+        fail_script "Environment $ENV_NAME cannot be used without rebuilding it."
+        if [ "$BEING_SOURCED" = true ]; then
+            return 1
+        fi
+    elif [ "$AUTO_MODE" = true ]; then
         print_info "Using existing environment (use without --auto to be prompted)"
+    else
+        print_info "Keeping existing environment"
     fi
 fi
 

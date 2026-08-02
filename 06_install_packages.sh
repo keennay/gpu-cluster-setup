@@ -2,7 +2,7 @@
 
 # Script: 06_install_packages.sh
 # Purpose: Provide environment placeholders without installing packages.
-# Usage: ./06_install_packages.sh [--env ENV_NAME]
+# Usage: ./06_install_packages.sh [ENV_NAME | --env ENV_NAME]
 
 if [ -f "$HOME/.bashrc" ]; then
     # shellcheck source=/dev/null
@@ -292,6 +292,46 @@ normalize_env_name() {
     raw=$(basename "$raw")
     raw="${raw#env_}"
     echo "$raw"
+}
+
+activate_environment_override() {
+    local env_type="$1"
+    local env_path="$HOME/env_${env_type}"
+    local activate_script=""
+
+    if [ ! -d "$env_path" ]; then
+        print_error "Requested environment not found: $env_path"
+        print_info "Create it first: ./05_setup_env.sh env_${env_type} --auto"
+        return 1
+    fi
+
+    if [ ! -x "$env_path/bin/python" ]; then
+        print_error "Requested environment has no working Python interpreter: $env_path/bin/python"
+        print_info "Rebuild it with: ./05_setup_env.sh env_${env_type} --auto"
+        return 1
+    fi
+
+    if [ -f "$env_path/activate_ml" ]; then
+        activate_script="$env_path/activate_ml"
+    elif [ -f "$env_path/bin/activate" ]; then
+        activate_script="$env_path/bin/activate"
+    else
+        print_error "Requested environment has no activation script: $env_path"
+        print_info "Rebuild it with: ./05_setup_env.sh env_${env_type} --auto"
+        return 1
+    fi
+
+    print_info "Activating requested environment: $env_path"
+    # shellcheck source=/dev/null
+    if ! source "$activate_script"; then
+        print_error "Failed to activate requested environment: $env_path"
+        return 1
+    fi
+
+    if [ "${VIRTUAL_ENV:-}" != "$env_path" ]; then
+        print_error "Activation did not select the requested environment: $env_path"
+        return 1
+    fi
 }
 
 detect_environment() {
@@ -1174,6 +1214,10 @@ main() {
                     print_error "Missing value for --env"
                     return 1
                 fi
+                if [ -n "$override" ]; then
+                    print_error "Only one environment may be specified."
+                    return 1
+                fi
                 override="$2"
                 shift 2
                 ;;
@@ -1185,15 +1229,23 @@ main() {
                 show_help=true
                 shift
                 ;;
+            -*)
+                print_error "Unknown option: $1"
+                return 1
+                ;;
             *)
-                print_warning "Ignoring unknown argument: $1"
+                if [ -n "$override" ]; then
+                    print_error "Only one environment may be specified."
+                    return 1
+                fi
+                override="$1"
                 shift
                 ;;
         esac
     done
 
     if [ "$show_help" = true ]; then
-        echo "Usage: ./06_install_packages.sh [--env ENV_NAME]"
+        echo "Usage: ./06_install_packages.sh [ENV_NAME | --env ENV_NAME]"
         echo
         print_env_options
         return 0
@@ -1204,6 +1256,9 @@ main() {
     if [ -n "$override" ]; then
         if env_type=$(resolve_env_type "$override"); then
             print_info "Environment override provided: $env_type"
+            if ! activate_environment_override "$env_type"; then
+                return 1
+            fi
         else
             print_warning "Environment override '$override' is not managed by this script."
             print_info "Nothing to configure in 06_install_packages.sh."
