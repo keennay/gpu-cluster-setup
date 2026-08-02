@@ -1,16 +1,113 @@
 #!/usr/bin/env bash
 
 # Shared inference recipe runtime; source after defining recipe configuration.
-case "${INFERENCE_PROVIDER,,}" in
+: "${RECIPE_DIR:?RECIPE_DIR must be set by the calling recipe}"
+PYTHON_ENV="${PYTHON_ENV:-}"
+INFERENCE_PROVIDER_NORMALIZED="${INFERENCE_PROVIDER,,}"
+HELPER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPTS_DIR="$(cd -- "$HELPER_DIR/../.." && pwd -P)"
+SETUP_ENV_SCRIPT="$SCRIPTS_DIR/05_setup_env.sh"
+PACKAGE_INSTALLER_SCRIPT="$SCRIPTS_DIR/06_install_packages.sh"
+INFERENCE_COMMAND=""
+INFERENCE_EXECUTABLE=""
+
+configured_environment_is_usable() {
+    local env_path="$1"
+
+    [ -d "$env_path" ] &&
+        [ -x "$env_path/bin/python" ] &&
+        { [ -f "$env_path/activate_ml" ] || [ -f "$env_path/bin/activate" ]; }
+}
+is_valid_python_environment_name() {
+    local env_name="$1"
+
+    [ "${#env_name}" -le 128 ] &&
+        [[ "$env_name" =~ ^env_[a-z0-9]+([._-][a-z0-9]+)*$ ]]
+}
+
+
+install_inference_provider() {
+    if [ ! -x "$PACKAGE_INSTALLER_SCRIPT" ]; then
+        echo "Error: package installer not found or not executable: $PACKAGE_INSTALLER_SCRIPT" >&2
+        return 1
+    fi
+
+    "$PACKAGE_INSTALLER_SCRIPT" "$PYTHON_ENV"
+}
+
+prepare_inference_runtime() {
+    if [ -z "$PYTHON_ENV" ]; then
+        echo "Error: PYTHON_ENV must be set in the recipe." >&2
+        return 1
+    fi
+    if ! is_valid_python_environment_name "$PYTHON_ENV"; then
+        echo "Error: invalid PYTHON_ENV '$PYTHON_ENV'." >&2
+        echo "Use a lowercase environment name such as 'env_qwen3-vllm'." >&2
+        return 1
+    fi
+
+    local env_path="$HOME/$PYTHON_ENV"
+    if ! configured_environment_is_usable "$env_path"; then
+        if [ ! -x "$SETUP_ENV_SCRIPT" ]; then
+            echo "Error: environment setup script not found or not executable: $SETUP_ENV_SCRIPT" >&2
+            return 1
+        fi
+        echo "Python environment '$PYTHON_ENV' is missing or unusable; creating it..."
+        if ! "$SETUP_ENV_SCRIPT" --auto "$PYTHON_ENV"; then
+            echo "Error: failed to create Python environment '$PYTHON_ENV'." >&2
+            return 1
+        fi
+    fi
+
+    if ! configured_environment_is_usable "$env_path"; then
+        echo "Error: Python environment '$PYTHON_ENV' is unusable after setup: $env_path" >&2
+        return 1
+    fi
+
+    local provider_path="$env_path/bin/$INFERENCE_COMMAND"
+    if [ ! -x "$provider_path" ]; then
+        echo "$INFERENCE_PROVIDER is not installed in '$PYTHON_ENV'; installing it..."
+        if ! install_inference_provider; then
+            echo "Error: failed to install $INFERENCE_PROVIDER in '$PYTHON_ENV'." >&2
+            return 1
+        fi
+    fi
+
+    if [ ! -x "$provider_path" ]; then
+        echo "Error: $INFERENCE_PROVIDER executable not found after installation: $provider_path" >&2
+        return 1
+    fi
+
+    if [ "${VIRTUAL_ENV:-}" != "$env_path" ]; then
+        local activation_script="$env_path/activate_ml"
+        if [ ! -f "$activation_script" ]; then
+            activation_script="$env_path/bin/activate"
+        fi
+        echo "Using Python environment: $env_path"
+        # shellcheck source=/dev/null
+        if ! source "$activation_script"; then
+            echo "Error: failed to activate Python environment '$PYTHON_ENV'." >&2
+            return 1
+        fi
+    fi
+
+    if [ "${VIRTUAL_ENV:-}" != "$env_path" ]; then
+        echo "Error: activation did not select Python environment '$PYTHON_ENV'." >&2
+        return 1
+    fi
+    INFERENCE_EXECUTABLE="$provider_path"
+}
+
+case "$INFERENCE_PROVIDER_NORMALIZED" in
     sglang)
-        INFERENCE_LAUNCH="sglang serve"
+        INFERENCE_COMMAND="sglang"
         MODEL_PATH="--model-path $MODEL_REPO"
         TENSOR_PARALLEL_SIZE_FLAG="--tp"
         CONTEXT_LEN_FLAG="--context-length $CONTEXT_LEN_VALUE"
         GPU_MEM_UTIL_FLAG="--mem-fraction-static $GPU_MEM_UTIL_VALUE"
         ;;
     vllm)
-        INFERENCE_LAUNCH="vllm serve"
+        INFERENCE_COMMAND="vllm"
         MODEL_PATH="$MODEL_REPO"
         TENSOR_PARALLEL_SIZE_FLAG="--tensor-parallel-size"
         CONTEXT_LEN_FLAG="--max-model-len $CONTEXT_LEN_VALUE"
@@ -21,12 +118,16 @@ case "${INFERENCE_PROVIDER,,}" in
         exit 1
         ;;
 esac
+if ! prepare_inference_runtime; then
+    exit 1
+fi
+INFERENCE_LAUNCH="$INFERENCE_EXECUTABLE serve"
+
 
 # Runtime argument state
 DEFAULT_ENABLE_SPECULATIVE="$ENABLE_SPECULATIVE"
 INTERACTIVE_MODE=0
 POSITIONAL_ARGS=()
-: "${RECIPE_DIR:?RECIPE_DIR must be set by the calling recipe}"
 LOG_SUFFIX="${INFERENCE_PROVIDER,,}"
 case "$LOG_SUFFIX" in
     vllm|sglang)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="openai/gpt-oss-safeguard-120b"

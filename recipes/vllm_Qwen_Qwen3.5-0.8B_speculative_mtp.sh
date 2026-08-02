@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="Qwen/Qwen3.5-0.8B"

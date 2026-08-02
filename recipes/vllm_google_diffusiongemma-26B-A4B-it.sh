@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="google/diffusiongemma-26B-A4B-it"

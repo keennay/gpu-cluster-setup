@@ -2,7 +2,7 @@
 
 # Script: 06_install_packages.sh
 # Purpose: Provide environment placeholders without installing packages.
-# Usage: ./06_install_packages.sh [ENV_NAME | --env ENV_NAME]
+# Usage: ./06_install_packages.sh [ENV_NAME]
 
 if [ -f "$HOME/.bashrc" ]; then
     # shellcheck source=/dev/null
@@ -1209,22 +1209,6 @@ main() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --env)
-                if [[ $# -lt 2 ]]; then
-                    print_error "Missing value for --env"
-                    return 1
-                fi
-                if [ -n "$override" ]; then
-                    print_error "Only one environment may be specified."
-                    return 1
-                fi
-                override="$2"
-                shift 2
-                ;;
-            -y|--yes|--auto)
-                print_warning "Flag '$1' has no effect; no installations occur in this script."
-                shift
-                ;;
             -h|--help)
                 show_help=true
                 shift
@@ -1245,7 +1229,7 @@ main() {
     done
 
     if [ "$show_help" = true ]; then
-        echo "Usage: ./06_install_packages.sh [ENV_NAME | --env ENV_NAME]"
+        echo "Usage: ./06_install_packages.sh [ENV_NAME]"
         echo
         print_env_options
         return 0

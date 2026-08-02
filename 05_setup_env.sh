@@ -2,7 +2,7 @@
 
 # Script: 05_setup_env.sh
 # Purpose: Create ML virtual environment and set up environment variables
-# Usage: source 05_setup_env.sh [--auto] [env_name]
+# Usage: source 05_setup_env.sh [--auto] [ENV_NAME|1-48]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f "$HOME/.bashrc" ]; then
@@ -446,15 +446,27 @@ fi
 AUTO_MODE=false
 ENV_TYPE=""
 
-for arg in "$@"; do
-    case $arg in
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --auto)
             AUTO_MODE=true
+            shift
+            ;;
+        -*)
+            fail_script "Unknown option: $1"
+            if [ "$BEING_SOURCED" = true ]; then
+                return 1
+            fi
             ;;
         *)
-            if [[ ! "$arg" =~ ^-- ]]; then
-                ENV_TYPE="$arg"
+            if [ -n "$ENV_TYPE" ]; then
+                fail_script "Only one environment may be specified."
+                if [ "$BEING_SOURCED" = true ]; then
+                    return 1
+                fi
             fi
+            ENV_TYPE="$1"
+            shift
             ;;
     esac
 done
@@ -525,20 +537,15 @@ elif [ -z "$ENV_TYPE" ]; then
     ENV_TYPE="glm_sglang"
 fi
 
-# Normalize environment type when provided directly
+# Normalize and validate the selected managed environment.
 if [ -n "$ENV_TYPE" ]; then
-    if ENV_TYPE_MAPPED=$(resolve_env_type "$ENV_TYPE"); then
-        ENV_TYPE="$ENV_TYPE_MAPPED"
+    if ! ENV_TYPE_MAPPED=$(resolve_env_type "$ENV_TYPE"); then
+        fail_script "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 48."
+        if [ "$BEING_SOURCED" = true ]; then
+            return 1
+        fi
     fi
-fi
-
-if [[ "$ENV_TYPE" =~ ^[0-9]+$ ]]; then
-    print_error "Invalid environment selection: $ENV_TYPE"
-    if [ "$BEING_SOURCED" = false ]; then
-        exit 1
-    else
-        return 1
-    fi
+    ENV_TYPE="$ENV_TYPE_MAPPED"
 fi
 
 # Set environment name based on type

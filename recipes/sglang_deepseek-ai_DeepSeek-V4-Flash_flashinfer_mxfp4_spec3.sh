@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="SGLang"
 INFERENCE_ENV=""
 MODEL_REPO="deepseek-ai/DeepSeek-V4-Flash"

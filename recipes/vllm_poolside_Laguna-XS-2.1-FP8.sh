@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=0"
 MODEL_REPO="poolside/Laguna-XS-2.1-FP8"

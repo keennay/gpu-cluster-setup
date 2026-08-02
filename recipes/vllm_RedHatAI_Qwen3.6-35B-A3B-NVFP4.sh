@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_NVFP4_GEMM_BACKEND=marlin"
 MODEL_REPO="RedHatAI/Qwen3.6-35B-A3B-NVFP4"

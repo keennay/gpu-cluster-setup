@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_NVFP4_GEMM_BACKEND=marlin"
 MODEL_REPO="nvidia/Qwen3.6-27B-NVFP4"

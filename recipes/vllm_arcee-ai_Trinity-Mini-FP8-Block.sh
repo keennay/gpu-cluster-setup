@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_USE_DEEP_GEMM=1"
 MODEL_REPO="arcee-ai/Trinity-Mini-FP8-Block"

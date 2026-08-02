@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mandatory inference configuration
+PYTHON_ENV=""
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_ALLOW_LONG_MAX_MODEL_LEN=1"
 MODEL_REPO="nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
