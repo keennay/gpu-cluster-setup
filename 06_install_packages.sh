@@ -67,6 +67,8 @@ ENV_TYPES=(
   "z-lab-vllm"
   "zyphra-transformers"
   "zyphra-vllm"
+  "zyphra-legacy-transformers"
+  "zyphra-legacy-vllm"
 )
 
 declare -A ENV_DESCRIPTIONS=(
@@ -114,6 +116,8 @@ declare -A ENV_DESCRIPTIONS=(
   ["z-lab-vllm"]="z-lab (vLLM)"
   ["zyphra-transformers"]="Zyphra (Transformers)"
   ["zyphra-vllm"]="Zyphra (vLLM)"
+  ["zyphra-legacy-transformers"]="Zyphra Legacy (Transformers)"
+  ["zyphra-legacy-vllm"]="Zyphra Legacy (vLLM)"
 )
 
 resolve_env_type() {
@@ -252,10 +256,16 @@ resolve_env_type() {
         44|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        45|custom|custom_uv|custom-uv|env_custom_uv)
+        45|zyphra_legacy_transformers|zyphra-legacy-transformers)
+            echo "zyphra-legacy-transformers"
+            ;;
+        46|zyphra_legacy_vllm|zyphra-legacy-vllm)
+            echo "zyphra-legacy-vllm"
+            ;;
+        47|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        46|custom_pip|custom-pip|env_custom_pip)
+        48|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -987,6 +997,12 @@ install_zyphra_vllm() {
     run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" || return 1
 }
 
+install_zyphra_legacy_vllm() {
+    print_info "Installing Zyphra Legacy vLLM from the zaya1-pr-legacy branch..."
+    ensure_active_environment_matches zyphra-legacy-vllm || return 1
+    run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr-legacy" || return 1
+}
+
 perform_environment_action() {
     ACTION_TAKEN=false
 
@@ -1133,6 +1149,10 @@ perform_environment_action() {
             ;;
         zyphra-vllm)
             install_zyphra_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        zyphra-legacy-vllm)
+            install_zyphra_legacy_vllm || return 1
             ACTION_TAKEN=true
             ;;
         *)

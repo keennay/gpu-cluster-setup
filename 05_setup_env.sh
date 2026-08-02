@@ -50,7 +50,7 @@ run_env_pip_install() {
 
 uses_pip_venv() {
     case "$ENV_TYPE" in
-        deepseek-ktransformers|glm-ktransformers|kimi-ktransformers|minimax-ktransformers|nanbeige-vllm|qwen3-ktransformers|zyphra-vllm|custom_pip)
+        deepseek-ktransformers|glm-ktransformers|kimi-ktransformers|minimax-ktransformers|nanbeige-vllm|qwen3-ktransformers|zyphra-vllm|zyphra-legacy-vllm|custom_pip)
             return 0
             ;;
         *)
@@ -218,10 +218,16 @@ resolve_env_type() {
         44|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        45|custom|custom_uv|custom-uv|env_custom_uv)
+        45|zyphra_legacy_transformers|zyphra-legacy-transformers)
+            echo "zyphra-legacy-transformers"
+            ;;
+        46|zyphra_legacy_vllm|zyphra-legacy-vllm)
+            echo "zyphra-legacy-vllm"
+            ;;
+        47|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        46|custom_pip|custom-pip|env_custom_pip)
+        48|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -492,15 +498,17 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "42) z-lab (vLLM)"
     echo "43) Zyphra (Transformers)"
     echo "44) Zyphra (vLLM)"
-    echo "45) Custom (uv)"
-    echo "46) Custom (pip)"
+    echo "45) Zyphra Legacy (Transformers)"
+    echo "46) Zyphra Legacy (vLLM)"
+    echo "47) Custom (uv)"
+    echo "48) Custom (pip)"
     echo ""
     while true; do
-        read -r -p "Enter your choice (1-46): " choice
+        read -r -p "Enter your choice (1-48): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 46."
+            print_error "Invalid choice. Please enter a number between 1 and 48."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
