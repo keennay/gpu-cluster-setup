@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV=""
+PYTHON_ENV="env_arcee-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_USE_DEEP_GEMM=1"
 MODEL_REPO="arcee-ai/Trinity-Nano-Preview-FP8-Block"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV=""
+PYTHON_ENV="env_liquidai-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="LiquidAI/LFM2.5-1.2B-Thinking"

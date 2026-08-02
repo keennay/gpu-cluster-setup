@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV=""
+PYTHON_ENV="env_microsoft-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="microsoft/Fara1.5-4B"

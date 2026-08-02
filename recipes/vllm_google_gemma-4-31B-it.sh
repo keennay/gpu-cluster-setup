@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV=""
+PYTHON_ENV="env_gemma-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="google/gemma-4-31B-it"

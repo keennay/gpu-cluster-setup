@@ -8,7 +8,7 @@ repo_parent="$(cd -- "${repo_root}/.." && pwd)"
 cd "${repo_root}"
 
 KT_EXPERTS_PATH="${KT_EXPERTS_PATH:-kimi_k26/h200x2}"
-KT_PYTHON_ENV="${KT_PYTHON_ENV:-${HOME}/env_qwen3-ktransformers}"
+KT_PYTHON_ENV="${KT_PYTHON_ENV:-${HOME}/env_qwen-ktransformers}"
 KT_TEST_ENV="${KT_TEST_ENV:-${repo_root}/envs/${KT_EXPERTS_PATH}.env}"
 KT_BENCHMARK_MODEL="${KT_BENCHMARK_MODEL:-kimi_k2}"
 KT_BENCHMARK_PATH="${KT_BENCHMARK_PATH:-${repo_parent}/benchmarks/benchmark.py}"

@@ -42,7 +42,7 @@ prepare_inference_runtime() {
     fi
     if ! is_valid_python_environment_name "$PYTHON_ENV"; then
         echo "Error: invalid PYTHON_ENV '$PYTHON_ENV'." >&2
-        echo "Use a lowercase environment name such as 'env_qwen3-vllm'." >&2
+        echo "Use a lowercase environment name such as 'env_qwen-vllm'." >&2
         return 1
     fi
 

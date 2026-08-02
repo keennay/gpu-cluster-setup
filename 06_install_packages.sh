@@ -23,6 +23,8 @@ print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 ACTION_TAKEN=false
 
 ENV_TYPES=(
+  "allenai-transformers"
+  "allenai-vllm"
   "arcee-transformers"
   "arcee-vllm"
   "cohere-transformers"
@@ -39,239 +41,323 @@ ENV_TYPES=(
   "glm-vllm"
   "gpt-oss-transformers"
   "gpt-oss-vllm"
+  "inclusionai-sglang"
+  "inclusionai-transformers"
+  "inclusionai-vllm"
+  "intel-vllm"
   "kimi-ktransformers"
   "kimi-sglang"
   "kimi-vllm"
   "laguna-sglang"
   "laguna-trtllm"
   "laguna-vllm"
-  "ling-sglang"
-  "ling-transformers"
-  "ling-vllm"
+  "liquidai-sglang"
+  "liquidai-transformers"
+  "liquidai-vllm"
+  "microsoft-vllm"
   "minimax-ktransformers"
   "minimax-sglang"
   "minimax-transformers"
   "minimax-vllm"
+  "mistralai-transformers"
+  "mistralai-vllm"
   "nanbeige-sglang"
   "nanbeige-transformers"
   "nanbeige-vllm"
   "nemotron-sglang"
   "nemotron-trtllm"
   "nemotron-vllm"
-  "qwen3-ktransformers"
-  "qwen3-sglang"
-  "qwen3-transformers"
-  "qwen3-vllm"
+  "nvidia-vllm"
+  "poolside-sglang"
+  "poolside-transformers"
+  "poolside-vllm"
+  "primeintellect-vllm"
+  "qwen-ktransformers"
+  "qwen-sglang"
+  "qwen-transformers"
+  "qwen-vllm"
   "redhat-vllm"
+  "stepfun-sglang"
+  "stepfun-transformers"
+  "stepfun-vllm"
   "z-lab-sglang"
   "z-lab-vllm"
   "zyphra-transformers"
   "zyphra-vllm"
   "zyphra-legacy-transformers"
   "zyphra-legacy-vllm"
+  "custom_uv"
+  "custom_pip"
 )
 
 declare -A ENV_DESCRIPTIONS=(
+  ["allenai-transformers"]="AllenAI (Transformers)"
+  ["allenai-vllm"]="AllenAI (vLLM)"
   ["arcee-transformers"]="Arcee (Transformers)"
   ["arcee-vllm"]="Arcee (vLLM)"
   ["cohere-transformers"]="Cohere (Transformers)"
   ["cohere-vllm"]="Cohere (vLLM)"
-  ["deepseek-ktransformers"]="DeepSeek-V3/V4/R1/OCR (KTransformers)"
-  ["deepseek-lmdeploy"]="DeepSeek-V3/V4/R1/OCR (LMDeploy)"
-  ["deepseek-sglang"]="DeepSeek-V3/V4/R1/OCR (SGLang)"
-  ["deepseek-vllm"]="DeepSeek-V3/V4/R1/OCR (vLLM)"
-  ["gemma-sglang"]="Gemma-4 (SGLang)"
-  ["gemma-vllm"]="Gemma-4 (vLLM)"
-  ["glm-ktransformers"]="GLM-4/5 (KTransformers)"
-  ["glm-sglang"]="GLM-4/5 (SGLang)"
-  ["glm-transformers"]="GLM-4/5 (Transformers)"
-  ["glm-vllm"]="GLM-4/5 (vLLM)"
+  ["deepseek-ktransformers"]="DeepSeek (KTransformers)"
+  ["deepseek-lmdeploy"]="DeepSeek (LMDeploy)"
+  ["deepseek-sglang"]="DeepSeek (SGLang)"
+  ["deepseek-vllm"]="DeepSeek (vLLM)"
+  ["gemma-sglang"]="Gemma (SGLang)"
+  ["gemma-vllm"]="Gemma (vLLM)"
+  ["glm-ktransformers"]="GLM (KTransformers)"
+  ["glm-sglang"]="GLM (SGLang)"
+  ["glm-transformers"]="GLM (Transformers)"
+  ["glm-vllm"]="GLM (vLLM)"
   ["gpt-oss-transformers"]="gpt-oss (Transformers)"
   ["gpt-oss-vllm"]="gpt-oss (vLLM)"
-  ["kimi-ktransformers"]="Kimi K2.X (KTransformers)"
-  ["kimi-sglang"]="Kimi K2.X (SGLang)"
-  ["kimi-vllm"]="Kimi K2.X (vLLM)"
+  ["inclusionai-sglang"]="InclusionAI (SGLang)"
+  ["inclusionai-transformers"]="InclusionAI (Transformers)"
+  ["inclusionai-vllm"]="InclusionAI (vLLM)"
+  ["intel-vllm"]="Intel (vLLM)"
+  ["kimi-ktransformers"]="Kimi (KTransformers)"
+  ["kimi-sglang"]="Kimi (SGLang)"
+  ["kimi-vllm"]="Kimi (vLLM)"
   ["laguna-sglang"]="Laguna (SGLang)"
   ["laguna-trtllm"]="Laguna (TRT-LLM)"
   ["laguna-vllm"]="Laguna (vLLM)"
-  ["ling-sglang"]="Ling-2.6 (SGLang)"
-  ["ling-transformers"]="Ling-2.6 (Transformers)"
-  ["ling-vllm"]="Ling-2.6 (vLLM)"
-  ["minimax-ktransformers"]="MiniMax-M2.X (KTransformers)"
-  ["minimax-sglang"]="MiniMax-M2.X (SGLang)"
-  ["minimax-transformers"]="MiniMax-M2.X (Transformers)"
-  ["minimax-vllm"]="MiniMax-M2.X (vLLM)"
+  ["liquidai-sglang"]="LiquidAI (SGLang)"
+  ["liquidai-transformers"]="LiquidAI (Transformers)"
+  ["liquidai-vllm"]="LiquidAI (vLLM)"
+  ["microsoft-vllm"]="Microsoft (vLLM)"
+  ["minimax-ktransformers"]="MiniMax (KTransformers)"
+  ["minimax-sglang"]="MiniMax (SGLang)"
+  ["minimax-transformers"]="MiniMax (Transformers)"
+  ["minimax-vllm"]="MiniMax (vLLM)"
+  ["mistralai-transformers"]="MistralAI (Transformers)"
+  ["mistralai-vllm"]="MistralAI (vLLM)"
   ["nanbeige-sglang"]="Nanbeige (SGLang)"
   ["nanbeige-transformers"]="Nanbeige (Transformers)"
   ["nanbeige-vllm"]="Nanbeige (vLLM)"
-  ["nemotron-sglang"]="Nemotron-3 (SGLang)"
-  ["nemotron-trtllm"]="Nemotron-3 (TRT-LLM)"
-  ["nemotron-vllm"]="Nemotron-3 (vLLM)"
-  ["qwen3-ktransformers"]="Qwen3 (KTransformers)"
-  ["qwen3-sglang"]="Qwen3 (SGLang)"
-  ["qwen3-transformers"]="Qwen3 (Transformers)"
-  ["qwen3-vllm"]="Qwen3 (vLLM)"
+  ["nemotron-sglang"]="Nemotron (SGLang)"
+  ["nemotron-trtllm"]="Nemotron (TRT-LLM)"
+  ["nemotron-vllm"]="Nemotron (vLLM)"
+  ["nvidia-vllm"]="NVIDIA (vLLM)"
+  ["poolside-sglang"]="Poolside (SGLang)"
+  ["poolside-transformers"]="Poolside (Transformers)"
+  ["poolside-vllm"]="Poolside (vLLM)"
+  ["primeintellect-vllm"]="PrimeIntellect (vLLM)"
+  ["qwen-ktransformers"]="Qwen (KTransformers)"
+  ["qwen-sglang"]="Qwen (SGLang)"
+  ["qwen-transformers"]="Qwen (Transformers)"
+  ["qwen-vllm"]="Qwen (vLLM)"
   ["redhat-vllm"]="RedHat (vLLM)"
+  ["stepfun-sglang"]="StepFun (SGLang)"
+  ["stepfun-transformers"]="StepFun (Transformers)"
+  ["stepfun-vllm"]="StepFun (vLLM)"
   ["z-lab-sglang"]="z-lab (SGLang)"
   ["z-lab-vllm"]="z-lab (vLLM)"
   ["zyphra-transformers"]="Zyphra (Transformers)"
   ["zyphra-vllm"]="Zyphra (vLLM)"
   ["zyphra-legacy-transformers"]="Zyphra Legacy (Transformers)"
   ["zyphra-legacy-vllm"]="Zyphra Legacy (vLLM)"
+  ["custom_uv"]="Custom (uv)"
+  ["custom_pip"]="Custom (pip)"
 )
 
 resolve_env_type() {
     local input="${1#env_}"
 
     case "$input" in
-        1|arcee_transformers|arcee-transformers)
+        1|allenai_transformers|allenai-transformers)
+            echo "allenai-transformers"
+            ;;
+        2|allenai_vllm|allenai-vllm)
+            echo "allenai-vllm"
+            ;;
+        3|arcee_transformers|arcee-transformers)
             echo "arcee-transformers"
             ;;
-        2|arcee_vllm|arcee-vllm)
+        4|arcee_vllm|arcee-vllm)
             echo "arcee-vllm"
             ;;
-        3|cohere_transformers|cohere-transformers)
+        5|cohere_transformers|cohere-transformers)
             echo "cohere-transformers"
             ;;
-        4|cohere_vllm|cohere-vllm)
+        6|cohere_vllm|cohere-vllm)
             echo "cohere-vllm"
             ;;
-        5|deepseek_ktransformers|deepseek-ktransformers)
+        7|deepseek_ktransformers|deepseek-ktransformers)
             echo "deepseek-ktransformers"
             ;;
-        6|deepseek_lmdeploy|deepseek-lmdeploy)
+        8|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
-        7|deepseek_sglang|deepseek-sglang)
+        9|deepseek_sglang|deepseek-sglang)
             echo "deepseek-sglang"
             ;;
-        8|deepseek_vllm|deepseek-vllm)
+        10|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        9|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+        11|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
             echo "gemma-sglang"
             ;;
-        10|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+        12|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
             echo "gemma-vllm"
             ;;
-        11|glm_ktransformers|glm-ktransformers|glm45-ktransformers|glm_4_5_ktransformers|glm-4.5-ktransformers)
+        13|glm_ktransformers|glm-ktransformers)
             echo "glm-ktransformers"
             ;;
-        12|glm_sglang|glm-sglang|glm45-sglang)
+        14|glm_sglang|glm-sglang)
             echo "glm-sglang"
             ;;
-        13|glm_transformers|glm-transformers)
+        15|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        14|glm_vllm|glm-vllm)
+        16|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        15|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        17|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        16|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        18|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        17|kimi_ktransformers|kimi-ktransformers)
+        19|inclusionai_sglang|inclusionai-sglang)
+            echo "inclusionai-sglang"
+            ;;
+        20|inclusionai_transformers|inclusionai-transformers)
+            echo "inclusionai-transformers"
+            ;;
+        21|inclusionai_vllm|inclusionai-vllm)
+            echo "inclusionai-vllm"
+            ;;
+        22|intel_vllm|intel-vllm)
+            echo "intel-vllm"
+            ;;
+        23|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        18|kimi_sglang|kimi-sglang)
+        24|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        19|kimi_vllm|kimi-vllm)
+        25|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        20|laguna_sglang|laguna-sglang)
+        26|laguna_sglang|laguna-sglang)
             echo "laguna-sglang"
             ;;
-        21|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
+        27|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
             echo "laguna-trtllm"
             ;;
-        22|laguna_vllm|laguna-vllm)
+        28|laguna_vllm|laguna-vllm)
             echo "laguna-vllm"
             ;;
-        23|ling_sglang|ling-sglang|ling26_sglang|ling26-sglang|ling_2_6_sglang|ling-2.6-sglang)
-            echo "ling-sglang"
+        29|liquidai_sglang|liquidai-sglang)
+            echo "liquidai-sglang"
             ;;
-        24|ling_transformers|ling-transformers|ling26_transformers|ling26-transformers|ling_2_6_transformers|ling-2.6-transformers)
-            echo "ling-transformers"
+        30|liquidai_transformers|liquidai-transformers)
+            echo "liquidai-transformers"
             ;;
-        25|ling_vllm|ling-vllm|ling26_vllm|ling26-vllm|ling_2_6_vllm|ling-2.6-vllm)
-            echo "ling-vllm"
+        31|liquidai_vllm|liquidai-vllm)
+            echo "liquidai-vllm"
             ;;
-        26|minimax_ktransformers|minimax-ktransformers)
+        32|microsoft_vllm|microsoft-vllm)
+            echo "microsoft-vllm"
+            ;;
+        33|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        27|minimax_sglang|minimax-sglang)
+        34|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        28|minimax_transformers|minimax-transformers)
+        35|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        29|minimax_vllm|minimax-vllm)
+        36|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        30|nanbeige_sglang|nanbeige-sglang)
+        37|mistralai_transformers|mistralai-transformers)
+            echo "mistralai-transformers"
+            ;;
+        38|mistralai_vllm|mistralai-vllm)
+            echo "mistralai-vllm"
+            ;;
+        39|nanbeige_sglang|nanbeige-sglang)
             echo "nanbeige-sglang"
             ;;
-        31|nanbeige_transformers|nanbeige-transformers)
+        40|nanbeige_transformers|nanbeige-transformers)
             echo "nanbeige-transformers"
             ;;
-        32|nanbeige_vllm|nanbeige-vllm)
+        41|nanbeige_vllm|nanbeige-vllm)
             echo "nanbeige-vllm"
             ;;
-        33|nemotron_sglang|nemotron-sglang)
+        42|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        34|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        43|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        35|nemotron_vllm|nemotron-vllm)
+        44|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        36|qwen3_ktransformers|qwen3-ktransformers)
-            echo "qwen3-ktransformers"
+        45|nvidia_vllm|nvidia-vllm)
+            echo "nvidia-vllm"
             ;;
-        37|qwen3_sglang|qwen3-sglang)
-            echo "qwen3-sglang"
+        46|poolside_sglang|poolside-sglang)
+            echo "poolside-sglang"
             ;;
-        38|qwen3_transformers|qwen3-transformers)
-            echo "qwen3-transformers"
+        47|poolside_transformers|poolside-transformers)
+            echo "poolside-transformers"
             ;;
-        39|qwen3_vllm|qwen3-vllm)
-            echo "qwen3-vllm"
+        48|poolside_vllm|poolside-vllm)
+            echo "poolside-vllm"
             ;;
-        40|redhat_vllm|redhat-vllm)
+        49|primeintellect_vllm|primeintellect-vllm)
+            echo "primeintellect-vllm"
+            ;;
+        50|qwen_ktransformers|qwen-ktransformers)
+            echo "qwen-ktransformers"
+            ;;
+        51|qwen_sglang|qwen-sglang)
+            echo "qwen-sglang"
+            ;;
+        52|qwen_transformers|qwen-transformers)
+            echo "qwen-transformers"
+            ;;
+        53|qwen_vllm|qwen-vllm)
+            echo "qwen-vllm"
+            ;;
+        54|redhat_vllm|redhat-vllm)
             echo "redhat-vllm"
             ;;
-        41|zlab_sglang|z_lab_sglang|z-lab_sglang|zlab-sglang|z-lab-sglang)
+        55|stepfun_sglang|stepfun-sglang)
+            echo "stepfun-sglang"
+            ;;
+        56|stepfun_transformers|stepfun-transformers)
+            echo "stepfun-transformers"
+            ;;
+        57|stepfun_vllm|stepfun-vllm)
+            echo "stepfun-vllm"
+            ;;
+        58|zlab_sglang|z_lab_sglang|z-lab_sglang|zlab-sglang|z-lab-sglang)
             echo "z-lab-sglang"
             ;;
-        42|zlab_vllm|z_lab_vllm|z-lab_vllm|zlab-vllm|z-lab-vllm)
+        59|zlab_vllm|z_lab_vllm|z-lab_vllm|zlab-vllm|z-lab-vllm)
             echo "z-lab-vllm"
             ;;
-        43|zyphra_transformers|zyphra-transformers)
+        60|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        44|zyphra_vllm|zyphra-vllm)
+        61|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        45|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        62|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        46|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        63|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        47|custom|custom_uv|custom-uv|env_custom_uv)
+        64|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        48|custom_pip|custom-pip|env_custom_pip)
+        65|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
-            if [[ "$1" =~ ^[0-9]+$ ]]; then
-                return 1
-            fi
             return 1
             ;;
     esac
@@ -586,6 +672,12 @@ install_kt_kernel() {
     run_command bash -c "cd \"$kt_kernel_dir\" && ./install.sh build"
 }
 
+install_allenai_vllm() {
+    print_info "Installing nightly vLLM for AllenAI..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+}
+
 install_arcee_vllm() {
     print_info "Installing vLLM 0.18.0 for Arcee..."
     run_uv_install "vllm==0.18.0" || return 1
@@ -599,33 +691,33 @@ install_cohere_vllm() {
 }
 
 install_gemma_sglang() {
-    print_info "Installing packages for Gemma-4 (SGLang)..."
+    print_info "Installing packages for Gemma (SGLang)..."
 
     install_bleeding_edge_sglang gemma-sglang || return 1
     run_uv_install "git+https://github.com/huggingface/transformers.git@91b1ab1fdfa81a552644a92fbe3e8d88de40e167"
 }
 
 install_gemma_vllm() {
-    print_info "Installing vLLM for Gemma-4..."
+    print_info "Installing vLLM for Gemma..."
     run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_glm_sglang() {
-    print_info "Installing packages for GLM-4/5 (SGLang)..."
+    print_info "Installing packages for GLM (SGLang)..."
     
     install_bleeding_edge_sglang glm-sglang || return 1
     run_uv_install "kernels==0.14.1"
 }
 
 install_glm_transformers() {
-    print_info "Installing packages for GLM-4/5 (Transformers)..."
+    print_info "Installing packages for GLM (Transformers)..."
 
     run_uv_install git+https://github.com/huggingface/transformers.git@76732b4e7120808ff989edbd16401f61fa6a0afa
 }
 
 install_glm_vllm() {
-    print_info "Installing packages for GLM-4/5 (vLLM)..."
+    print_info "Installing packages for GLM (vLLM)..."
     local packages=(
         "git+https://github.com/huggingface/transformers.git"
         "pre-commit>=4.2.0"
@@ -666,7 +758,7 @@ install_deepseek_lmdeploy() {
 }
 
 install_deepseek_ktransformers() {
-    print_info "Installing KTransformers for DeepSeek-V3/V4/R1/OCR..."
+    print_info "Installing KTransformers for DeepSeek..."
     ensure_active_environment_matches deepseek-ktransformers || return 1
 
     local ktransformers_dir=""
@@ -691,7 +783,7 @@ install_deepseek_ktransformers() {
 
     install_kt_kernel "$ktransformers_dir" || return 1
 
-    print_info "Installing SGLang for DeepSeek-V3/V4/R1/OCR from ktransformers checkout..."
+    print_info "Installing SGLang for DeepSeek from ktransformers checkout..."
 
     if [ ! -x "$ktransformers_dir/install.sh" ]; then
         print_error "ktransformers installer not found or not executable at $ktransformers_dir/install.sh"
@@ -836,8 +928,14 @@ install_gptoss_vllm() {
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
+install_intel_vllm() {
+    print_info "Installing nightly vLLM for Intel..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+}
+
 install_kimi_ktransformers() {
-    print_info "Installing KTransformers for Kimi K2.X..."
+    print_info "Installing KTransformers for Kimi..."
 
     local ktransformers_dir=""
     if [ -n "${KTRANSFORMERS_DIR:-}" ]; then
@@ -861,7 +959,7 @@ install_kimi_ktransformers() {
 
     install_kt_kernel "$ktransformers_dir" || return 1
 
-    print_info "Installing SGLang for Kimi K2.X..."
+    print_info "Installing SGLang for Kimi..."
 
     local sglang_dir=""
     if [ -n "${SGLANG_DIR:-}" ]; then
@@ -885,7 +983,7 @@ install_kimi_ktransformers() {
     run_pip_install nvidia-cudnn-cu12==9.16.0.29 || return 1
 }
 install_kimi_sglang() {
-    print_info "Installing SGLang for Kimi K2.X..."
+    print_info "Installing SGLang for Kimi..."
     install_bleeding_edge_sglang kimi-sglang || return 1
     run_uv_install remote_pdb
     run_uv_install imageio
@@ -896,7 +994,7 @@ install_kimi_sglang() {
 }
 
 install_kimi_vllm() {
-    print_info "Installing vLLM for Kimi K2.X..."
+    print_info "Installing vLLM for Kimi..."
     run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
@@ -915,35 +1013,53 @@ install_laguna_vllm() {
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
-install_ling_sglang() {
-    print_info "Installing SGLang for Ling-2.6..."
-
-    install_bleeding_edge_sglang ling-sglang || return 1
+install_liquidai_vllm() {
+    print_info "Installing nightly vLLM for LiquidAI..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
-install_ling_transformers() {
-    print_info "No package install configured for Ling-2.6 (Transformers) yet."
+install_inclusionai_sglang() {
+    print_info "Installing SGLang for InclusionAI..."
+
+    install_bleeding_edge_sglang inclusionai-sglang || return 1
 }
 
-install_ling_vllm() {
-    print_info "Installing vLLM for Ling-2.6..."
+install_inclusionai_transformers() {
+    print_info "No package install configured for InclusionAI (Transformers) yet."
+}
+
+install_inclusionai_vllm() {
+    print_info "Installing vLLM for InclusionAI..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+}
+
+install_microsoft_vllm() {
+    print_info "Installing nightly vLLM for Microsoft..."
     run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_minimax_sglang() {
-    print_info "Installing SGLang for MiniMax-M2.X..."
+    print_info "Installing SGLang for MiniMax..."
 
     install_bleeding_edge_sglang minimax-sglang || return 1
 }
 
 install_minimax_transformers() {
-    print_info "Installing Transformers for MiniMax-M2.X..."
+    print_info "Installing Transformers for MiniMax..."
     run_uv_install "transformers==4.57.1" "torch" "accelerate" "--torch-backend=auto"
 }
 
 install_minimax_vllm() {
-    print_info "Installing vLLM for MiniMax-M2.X..."
+    print_info "Installing vLLM for MiniMax..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+}
+
+install_mistralai_vllm() {
+    print_info "Installing nightly vLLM for MistralAI..."
     run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
@@ -972,24 +1088,42 @@ install_nanbeige_vllm() {
 }
 
 install_nemotron_sglang() {
-    print_info "Installing SGLang for Nemotron-3..."
+    print_info "Installing SGLang for Nemotron..."
     install_bleeding_edge_sglang nemotron-sglang || return 1
 }
 
 install_nemotron_trtllm() {
-    print_info "Installing TRT-LLM dependencies for Nemotron-3..."
+    print_info "Installing TRT-LLM dependencies for Nemotron..."
     run_uv_install torch==2.9.1 openai==2.6.1 requests
 }
 
 install_nemotron_vllm() {
-    print_info "Installing vLLM for Nemotron-3..."
+    print_info "Installing vLLM for Nemotron..."
     run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
-install_qwen3_ktransformers() {
-    print_info "Installing KTransformers stack for Qwen3..."
-    ensure_active_environment_matches qwen3-ktransformers || return 1
+install_nvidia_vllm() {
+    print_info "Installing nightly vLLM for NVIDIA..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+}
+
+install_poolside_vllm() {
+    print_info "Installing nightly vLLM for Poolside..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+}
+
+install_primeintellect_vllm() {
+    print_info "Installing nightly vLLM for PrimeIntellect..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+}
+
+install_qwen_ktransformers() {
+    print_info "Installing KTransformers stack for Qwen..."
+    ensure_active_environment_matches qwen-ktransformers || return 1
 
     run_pip_install --upgrade --force-reinstall \
         'torch==2.9.1' \
@@ -1002,18 +1136,18 @@ install_qwen3_ktransformers() {
     run_pip_install --force-reinstall --no-deps 'nvidia-cudnn-cu12==9.16.0.29'
 }
 
-install_qwen3_sglang() {
-    print_info "Installing SGLang for Qwen3..."
-    install_bleeding_edge_sglang qwen3-sglang || return 1
+install_qwen_sglang() {
+    print_info "Installing SGLang for Qwen..."
+    install_bleeding_edge_sglang qwen-sglang || return 1
 }
 
-install_qwen3_transformers() {
-    print_info "Installing Transformers stack for Qwen3..."
+install_qwen_transformers() {
+    print_info "Installing Transformers stack for Qwen..."
     run_uv_install "transformers>=4.51.0" "torch>=2.6"
 }
 
-install_qwen3_vllm() {
-    print_info "Installing vLLM for Qwen3..."
+install_qwen_vllm() {
+    print_info "Installing vLLM for Qwen..."
     run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
@@ -1023,6 +1157,12 @@ install_redhat_vllm() {
     run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
     run_uv_install timm || return 1
+}
+
+install_stepfun_vllm() {
+    print_info "Installing nightly vLLM for StepFun..."
+    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
+        --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
 install_z_lab_vllm() {
@@ -1047,6 +1187,10 @@ perform_environment_action() {
     ACTION_TAKEN=false
 
     case "$1" in
+        allenai-vllm)
+            install_allenai_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
         arcee-vllm)
             install_arcee_vllm || return 1
             ACTION_TAKEN=true
@@ -1099,6 +1243,22 @@ perform_environment_action() {
             install_gptoss_vllm || return 1
             ACTION_TAKEN=true
             ;;
+        inclusionai-sglang)
+            install_inclusionai_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        inclusionai-transformers)
+            install_inclusionai_transformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        inclusionai-vllm)
+            install_inclusionai_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        intel-vllm)
+            install_intel_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
         kimi-ktransformers)
             install_kimi_ktransformers || return 1
             ACTION_TAKEN=true
@@ -1123,16 +1283,12 @@ perform_environment_action() {
             install_laguna_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        ling-sglang)
-            install_ling_sglang || return 1
+        liquidai-vllm)
+            install_liquidai_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        ling-transformers)
-            install_ling_transformers || return 1
-            ACTION_TAKEN=true
-            ;;
-        ling-vllm)
-            install_ling_vllm || return 1
+        microsoft-vllm)
+            install_microsoft_vllm || return 1
             ACTION_TAKEN=true
             ;;
         minimax-sglang)
@@ -1145,6 +1301,10 @@ perform_environment_action() {
             ;;
         minimax-vllm)
             install_minimax_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        mistralai-vllm)
+            install_mistralai_vllm || return 1
             ACTION_TAKEN=true
             ;;
         nanbeige-vllm)
@@ -1163,24 +1323,40 @@ perform_environment_action() {
             install_nemotron_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        qwen3-ktransformers)
-            install_qwen3_ktransformers || return 1
+        nvidia-vllm)
+            install_nvidia_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        qwen3-sglang)
-            install_qwen3_sglang || return 1
+        poolside-vllm)
+            install_poolside_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        qwen3-transformers)
-            install_qwen3_transformers || return 1
+        primeintellect-vllm)
+            install_primeintellect_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        qwen3-vllm)
-            install_qwen3_vllm || return 1
+        qwen-ktransformers)
+            install_qwen_ktransformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        qwen-sglang)
+            install_qwen_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        qwen-transformers)
+            install_qwen_transformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        qwen-vllm)
+            install_qwen_vllm || return 1
             ACTION_TAKEN=true
             ;;
         redhat-vllm)
             install_redhat_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        stepfun-vllm)
+            install_stepfun_vllm || return 1
             ACTION_TAKEN=true
             ;;
         z-lab-vllm)
