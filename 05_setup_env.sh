@@ -867,10 +867,11 @@ prepend_env_path_once() {
     esac
 
     if [ -n "$current" ]; then
-        export "$var_name=$dir:$current"
+        printf -v "$var_name" '%s' "$dir:$current"
     else
-        export "$var_name=$dir"
+        printf -v "$var_name" '%s' "$dir"
     fi
+    export "$var_name"
 }
 
 cuda_home_is_valid() {

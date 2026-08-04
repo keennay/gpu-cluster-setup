@@ -681,6 +681,23 @@ install_allenai_vllm() {
 install_arcee_vllm() {
     print_info "Installing vLLM 0.18.0 for Arcee..."
     run_uv_install "vllm==0.18.0" || return 1
+
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        print_error "No active virtual environment detected for DeepGEMM install."
+        return 1
+    fi
+
+    local deepgemm_installer="$VIRTUAL_ENV/install_deepgemm.sh"
+    local deepgemm_installer_url="https://raw.githubusercontent.com/vllm-project/vllm/v0.18.0/tools/install_deepgemm.sh"
+
+    print_info "Downloading vLLM 0.18.0 DeepGEMM installer into $VIRTUAL_ENV..."
+    run_command curl -fsSL "$deepgemm_installer_url" -o "$deepgemm_installer" || return 1
+    run_command chmod +x "$deepgemm_installer" || return 1
+
+    print_info "Installing vLLM 0.18.0's pinned DeepGEMM build for Arcee..."
+    # shellcheck disable=SC2016
+    run_command env VIRTUAL_ENV="$VIRTUAL_ENV" PATH="$VIRTUAL_ENV/bin:$PATH" \
+        bash -c 'cd "$1" && bash "$2"' _ "$VIRTUAL_ENV" "$deepgemm_installer" || return 1
 }
 
 install_cohere_vllm() {
