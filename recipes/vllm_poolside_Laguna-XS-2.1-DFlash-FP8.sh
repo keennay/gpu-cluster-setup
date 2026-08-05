@@ -12,7 +12,7 @@ TRUST_REMOTE_CODE="--trust-remote-code"
 REASONING_PARSER="--reasoning-parser $MODEL_NAME"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
 TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
-GPU_MEM_UTIL_VALUE=0.880665
+GPU_MEM_UTIL_VALUE=0.878665
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
@@ -32,7 +32,7 @@ QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--moe-backend triton --reasoning-parser poolside_v1 --max-num-batched-tokens 32768"
+EXTRA_ARGS="--reasoning-parser poolside_v1 --max-num-batched-tokens 32768"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

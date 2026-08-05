@@ -80,8 +80,6 @@ ENV_TYPES=(
   "stepfun-sglang"
   "stepfun-transformers"
   "stepfun-vllm"
-  "z-lab-sglang"
-  "z-lab-vllm"
   "zyphra-transformers"
   "zyphra-vllm"
   "zyphra-legacy-transformers"
@@ -148,8 +146,6 @@ declare -A ENV_DESCRIPTIONS=(
   ["stepfun-sglang"]="StepFun (SGLang)"
   ["stepfun-transformers"]="StepFun (Transformers)"
   ["stepfun-vllm"]="StepFun (vLLM)"
-  ["z-lab-sglang"]="z-lab (SGLang)"
-  ["z-lab-vllm"]="z-lab (vLLM)"
   ["zyphra-transformers"]="Zyphra (Transformers)"
   ["zyphra-vllm"]="Zyphra (vLLM)"
   ["zyphra-legacy-transformers"]="Zyphra Legacy (Transformers)"
@@ -333,28 +329,22 @@ resolve_env_type() {
         57|stepfun_vllm|stepfun-vllm)
             echo "stepfun-vllm"
             ;;
-        58|zlab_sglang|z_lab_sglang|z-lab_sglang|zlab-sglang|z-lab-sglang)
-            echo "z-lab-sglang"
-            ;;
-        59|zlab_vllm|z_lab_vllm|z-lab_vllm|zlab-vllm|z-lab-vllm)
-            echo "z-lab-vllm"
-            ;;
-        60|zyphra_transformers|zyphra-transformers)
+        58|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        61|zyphra_vllm|zyphra-vllm)
+        59|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        62|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        60|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        63|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        61|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        64|custom|custom_uv|custom-uv|env_custom_uv)
+        62|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        65|custom_pip|custom-pip|env_custom_pip)
+        63|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -1109,9 +1099,8 @@ install_nvidia_vllm() {
 }
 
 install_poolside_vllm() {
-    print_info "Installing nightly vLLM for Poolside..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing vLLM 0.26.0 for Poolside..."
+    run_uv_install "vllm==0.26.0" || return 1
 }
 
 install_primeintellect_vllm() {
@@ -1164,11 +1153,6 @@ install_stepfun_vllm() {
         --extra-index-url https://wheels.vllm.ai/nightly || return 1
 }
 
-install_z_lab_vllm() {
-    print_info "Installing vLLM for z-lab..."
-    run_uv_install -U --torch-backend=auto \
-        "vllm @ git+https://github.com/vllm-project/vllm.git@refs/pull/41703/head" || return 1
-}
 
 install_zyphra_vllm() {
     print_info "Installing Zyphra vLLM from the zaya1-pr branch..."
@@ -1356,10 +1340,6 @@ perform_environment_action() {
             ;;
         stepfun-vllm)
             install_stepfun_vllm || return 1
-            ACTION_TAKEN=true
-            ;;
-        z-lab-vllm)
-            install_z_lab_vllm || return 1
             ACTION_TAKEN=true
             ;;
         zyphra-vllm)

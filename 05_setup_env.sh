@@ -2,7 +2,7 @@
 
 # Script: 05_setup_env.sh
 # Purpose: Create ML virtual environment and set up environment variables
-# Usage: source 05_setup_env.sh [--auto] [ENV_NAME|1-65]
+# Usage: source 05_setup_env.sh [--auto] [ENV_NAME|1-66]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f "$HOME/.bashrc" ]; then
@@ -267,28 +267,22 @@ resolve_env_type() {
         57|stepfun_vllm|stepfun-vllm)
             echo "stepfun-vllm"
             ;;
-        58|zlab_sglang|z_lab_sglang|z-lab_sglang|zlab-sglang|z-lab-sglang)
-            echo "z-lab-sglang"
-            ;;
-        59|zlab_vllm|z_lab_vllm|z-lab_vllm|zlab-vllm|z-lab-vllm)
-            echo "z-lab-vllm"
-            ;;
-        60|zyphra_transformers|zyphra-transformers)
+        58|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        61|zyphra_vllm|zyphra-vllm)
+        59|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        62|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        60|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        63|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        61|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        64|custom|custom_uv|custom-uv|env_custom_uv)
+        62|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        65|custom_pip|custom-pip|env_custom_pip)
+        63|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -580,21 +574,19 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "55) StepFun (SGLang)"
     echo "56) StepFun (Transformers)"
     echo "57) StepFun (vLLM)"
-    echo "58) z-lab (SGLang)"
-    echo "59) z-lab (vLLM)"
-    echo "60) Zyphra (Transformers)"
-    echo "61) Zyphra (vLLM)"
-    echo "62) Zyphra Legacy (Transformers)"
-    echo "63) Zyphra Legacy (vLLM)"
-    echo "64) Custom (uv)"
-    echo "65) Custom (pip)"
+    echo "58) Zyphra (Transformers)"
+    echo "59) Zyphra (vLLM)"
+    echo "60) Zyphra Legacy (Transformers)"
+    echo "61) Zyphra Legacy (vLLM)"
+    echo "62) Custom (uv)"
+    echo "63) Custom (pip)"
     echo ""
     while true; do
-        read -r -p "Enter your choice (1-65): " choice
+        read -r -p "Enter your choice (1-63): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 65."
+            print_error "Invalid choice. Please enter a number between 1 and 66."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
@@ -605,7 +597,7 @@ fi
 # Normalize and validate the selected managed environment.
 if [ -n "$ENV_TYPE" ]; then
     if ! ENV_TYPE_MAPPED=$(resolve_env_type "$ENV_TYPE"); then
-        fail_script "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 65."
+        fail_script "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 66."
         if [ "$BEING_SOURCED" = true ]; then
             return 1
         fi
