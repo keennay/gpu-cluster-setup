@@ -663,9 +663,8 @@ install_kt_kernel() {
 }
 
 install_allenai_vllm() {
-    print_info "Installing nightly vLLM for AllenAI..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for AllenAI..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_arcee_vllm() {
@@ -706,8 +705,7 @@ install_gemma_sglang() {
 
 install_gemma_vllm() {
     print_info "Installing vLLM for Gemma..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_glm_sglang() {
@@ -731,8 +729,7 @@ install_glm_vllm() {
         "accelerate>=1.10.1"
     )
 
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
     run_uv_install "${packages[@]}"
 }
 
@@ -913,14 +910,12 @@ install_gptoss_transformers() {
 
 install_gptoss_vllm() {
     print_info "Installing vLLM for gpt-oss..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_intel_vllm() {
-    print_info "Installing nightly vLLM for Intel..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for Intel..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_kimi_ktransformers() {
@@ -984,8 +979,7 @@ install_kimi_sglang() {
 
 install_kimi_vllm() {
     print_info "Installing vLLM for Kimi..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_laguna_sglang() {
@@ -998,14 +992,12 @@ install_laguna_trtllm() {
 
 install_laguna_vllm() {
     print_info "Installing vLLM for Laguna..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_liquidai_vllm() {
-    print_info "Installing nightly vLLM for LiquidAI..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for LiquidAI..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_inclusionai_sglang() {
@@ -1020,14 +1012,12 @@ install_inclusionai_transformers() {
 
 install_inclusionai_vllm() {
     print_info "Installing vLLM for InclusionAI..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_microsoft_vllm() {
-    print_info "Installing nightly vLLM for Microsoft..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for Microsoft..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_minimax_sglang() {
@@ -1043,14 +1033,12 @@ install_minimax_transformers() {
 
 install_minimax_vllm() {
     print_info "Installing vLLM for MiniMax..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_mistralai_vllm() {
-    print_info "Installing nightly vLLM for MistralAI..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for MistralAI..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_nanbeige_vllm() {
@@ -1088,14 +1076,12 @@ install_nemotron_trtllm() {
 
 install_nemotron_vllm() {
     print_info "Installing vLLM for Nemotron..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_nvidia_vllm() {
-    print_info "Installing nightly vLLM for NVIDIA..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for NVIDIA..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_poolside_vllm() {
@@ -1104,9 +1090,8 @@ install_poolside_vllm() {
 }
 
 install_primeintellect_vllm() {
-    print_info "Installing nightly vLLM for PrimeIntellect..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for PrimeIntellect..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_qwen_ktransformers() {
@@ -1136,21 +1121,18 @@ install_qwen_transformers() {
 
 install_qwen_vllm() {
     print_info "Installing vLLM for Qwen..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 install_redhat_vllm() {
     print_info "Installing vLLM and timm for RedHat..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
     run_uv_install timm || return 1
 }
 
 install_stepfun_vllm() {
-    print_info "Installing nightly vLLM for StepFun..."
-    run_uv_install -U vllm --pre --index-url https://pypi.org/simple \
-        --extra-index-url https://wheels.vllm.ai/nightly || return 1
+    print_info "Installing stable vLLM for StepFun..."
+    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
 

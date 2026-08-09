@@ -291,6 +291,7 @@ if [ "$OS_TYPE" = "ubuntu" ]; then
         "cmake"
         "pkg-config"
         "protobuf-compiler"
+        "libclang-dev"
 
         # NUMA optimization
         "numactl"
@@ -316,6 +317,7 @@ else
         "cmake"
         "pkgconf-pkg-config"
         "protobuf-compiler"
+        "clang-devel"
 
         # NUMA optimization
         "numactl"
@@ -945,6 +947,179 @@ else
     else
         print_info "Skipped Rustup installation"
     fi
+fi
+
+
+# Install the latest stable Zig release
+ZIG_ALREADY_AVAILABLE=false
+ZIG_CURRENT_VERSION=""
+if command -v zig &> /dev/null; then
+    ZIG_ALREADY_AVAILABLE=true
+    ZIG_CURRENT_VERSION="$(zig version 2>/dev/null || true)"
+fi
+
+if [ "$AUTO_YES" = true ]; then
+    INSTALL_ZIG="y"
+elif [ "$ZIG_ALREADY_AVAILABLE" = true ]; then
+    read -r -p "Update Zig to the latest stable release (currently ${ZIG_CURRENT_VERSION:-unknown})? (y/n): " INSTALL_ZIG
+else
+    read -r -p "Install the latest stable Zig release? (y/n): " INSTALL_ZIG
+fi
+
+if [[ "$INSTALL_ZIG" =~ ^[Yy]$ ]]; then
+    if ! command -v curl &> /dev/null; then
+        print_error "curl not found - install basic Linux essentials before installing Zig"
+        exit 1
+    fi
+
+    ZIG_INDEX_URL="https://ziglang.org/download/index.json"
+    print_info "Resolving latest stable Zig release..."
+    if ! ZIG_RELEASE_JSON="$(curl --proto '=https' --tlsv1.2 -fsSL "$ZIG_INDEX_URL")"; then
+        print_error "Failed to retrieve the Zig release index"
+        exit 1
+    fi
+
+    ZIG_VERSION="$(
+        printf '%s\n' "$ZIG_RELEASE_JSON" \
+            | sed -nE '/^  "[0-9]+(\.[0-9]+)+": \{$/ { s/^  "([^"]+)".*/\1/; p; }' \
+            | sort -V \
+            | sed -n '$p'
+    )"
+    if [ -z "$ZIG_VERSION" ]; then
+        print_error "Failed to resolve the latest stable Zig version"
+        exit 1
+    fi
+    print_info "Latest stable Zig release: $ZIG_VERSION"
+
+    if [ "$ZIG_CURRENT_VERSION" = "$ZIG_VERSION" ]; then
+        print_info "Zig is already at the latest stable version: $ZIG_VERSION"
+    else
+        if ! command -v tar &> /dev/null; then
+            print_error "tar not found - install basic Linux essentials before installing Zig"
+            exit 1
+        fi
+
+        if ! command -v sha256sum &> /dev/null; then
+            print_error "sha256sum not found - install coreutils before installing Zig"
+            exit 1
+        fi
+
+        if ! command -v xz &> /dev/null; then
+            if [ "$OS_TYPE" = "ubuntu" ]; then
+                ZIG_XZ_PACKAGE="xz-utils"
+            else
+                ZIG_XZ_PACKAGE="xz"
+            fi
+            print_info "Installing $ZIG_XZ_PACKAGE for Zig archive extraction..."
+            if ! $PKG_INSTALL_CMD "$ZIG_XZ_PACKAGE"; then
+                print_error "Failed to install $ZIG_XZ_PACKAGE"
+                exit 1
+            fi
+        fi
+
+        ZIG_UNAME_ARCH="$(uname -m)"
+        case "$ZIG_UNAME_ARCH" in
+            x86_64|amd64) ZIG_ARCH="x86_64" ;;
+            aarch64|arm64) ZIG_ARCH="aarch64" ;;
+            *)
+                print_error "Unsupported Zig architecture: $ZIG_UNAME_ARCH"
+                exit 1
+                ;;
+        esac
+
+        ZIG_ASSET_METADATA="$(
+            printf '%s\n' "$ZIG_RELEASE_JSON" | awk \
+                -v version="$ZIG_VERSION" \
+                -v platform="${ZIG_ARCH}-linux" '
+                $0 == "  \"" version "\": {" {
+                    in_version = 1
+                    next
+                }
+                in_version && $0 == "    \"" platform "\": {" {
+                    in_platform = 1
+                    next
+                }
+                in_platform && /"tarball":/ {
+                    tarball = $0
+                    sub(/^.*"tarball": "/, "", tarball)
+                    sub(/".*$/, "", tarball)
+                    next
+                }
+                in_platform && /"shasum":/ {
+                    shasum = $0
+                    sub(/^.*"shasum": "/, "", shasum)
+                    sub(/".*$/, "", shasum)
+                    print tarball, shasum
+                    exit
+                }
+            '
+        )"
+        read -r ZIG_DOWNLOAD_URL ZIG_SHA256 <<< "$ZIG_ASSET_METADATA"
+        if [ -z "$ZIG_DOWNLOAD_URL" ] || [ -z "$ZIG_SHA256" ]; then
+            print_error "Failed to resolve the ${ZIG_ARCH}-linux Zig archive metadata"
+            exit 1
+        fi
+
+        ZIG_TARBALL="${ZIG_DOWNLOAD_URL##*/}"
+        ZIG_ARCHIVE_ROOT="${ZIG_TARBALL%.tar.xz}"
+        ZIG_INSTALL_ROOT="/opt/zig"
+        ZIG_INSTALL_DIR="$ZIG_INSTALL_ROOT/$ZIG_VERSION"
+        TMP_DIR="$(mktemp -d /tmp/zig-install.XXXXXX)"
+
+        print_info "Downloading $ZIG_TARBALL to $TMP_DIR..."
+        if ! curl --proto '=https' --tlsv1.2 -fL "$ZIG_DOWNLOAD_URL" -o "$TMP_DIR/$ZIG_TARBALL"; then
+            print_error "Failed to download Zig $ZIG_VERSION"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        print_info "Verifying $ZIG_TARBALL..."
+        if ! (cd "$TMP_DIR" && printf '%s  %s\n' "$ZIG_SHA256" "$ZIG_TARBALL" | sha256sum -c -); then
+            print_error "Zig archive checksum verification failed"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        if ! tar -C "$TMP_DIR" -xJf "$TMP_DIR/$ZIG_TARBALL"; then
+            print_error "Failed to extract Zig archive"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        ZIG_EXTRACTED_DIR="$TMP_DIR/$ZIG_ARCHIVE_ROOT"
+        if [ ! -x "$ZIG_EXTRACTED_DIR/zig" ]; then
+            print_error "Zig executable not found in extracted archive"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        print_info "Installing Zig to $ZIG_INSTALL_DIR..."
+        sudo mkdir -p "$ZIG_INSTALL_ROOT" /usr/local/bin
+        sudo rm -rf "$ZIG_INSTALL_DIR"
+        if ! sudo mv "$ZIG_EXTRACTED_DIR" "$ZIG_INSTALL_DIR"; then
+            print_error "Failed to install Zig to $ZIG_INSTALL_DIR"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        if ! sudo ln -sfn "$ZIG_INSTALL_DIR/zig" /usr/local/bin/zig; then
+            print_error "Failed to link Zig into /usr/local/bin"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        rm -rf "$TMP_DIR"
+        export PATH="/usr/local/bin:$PATH"
+        hash -r 2>/dev/null || true
+        ZIG_INSTALLED_VERSION="$(zig version 2>/dev/null || true)"
+        if [ "$ZIG_INSTALLED_VERSION" != "$ZIG_VERSION" ]; then
+            print_error "Zig installation verification failed: expected $ZIG_VERSION, got ${ZIG_INSTALLED_VERSION:-no version}"
+            exit 1
+        fi
+        print_info "✓ Zig ready: $ZIG_INSTALLED_VERSION"
+    fi
+else
+    print_info "Skipped Zig installation"
 fi
 
 NVIM_AVAILABLE=false
