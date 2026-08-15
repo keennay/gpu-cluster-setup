@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_poolside-vllm"
+PYTHON_ENV="env_poolside-laguna-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=0"
 MODEL_REPO="poolside/Laguna-XS-2.1-FP8"
@@ -12,7 +12,7 @@ TRUST_REMOTE_CODE="--trust-remote-code"
 REASONING_PARSER="--reasoning-parser $MODEL_NAME"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
 TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
-GPU_MEM_UTIL_VALUE=0.876918
+GPU_MEM_UTIL_VALUE=0.877197
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000

@@ -27,6 +27,7 @@ ENV_TYPES=(
   "allenai-vllm"
   "arcee-transformers"
   "arcee-vllm"
+  "arcee-nvfp4-vllm"
   "cohere-transformers"
   "cohere-vllm"
   "deepseek-ktransformers"
@@ -70,7 +71,8 @@ ENV_TYPES=(
   "nvidia-vllm"
   "poolside-sglang"
   "poolside-transformers"
-  "poolside-vllm"
+  "poolside-laguna-vllm"
+  "poolside-laguna-s21-vllm"
   "primeintellect-vllm"
   "qwen-ktransformers"
   "qwen-sglang"
@@ -93,6 +95,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["allenai-vllm"]="AllenAI (vLLM)"
   ["arcee-transformers"]="Arcee (Transformers)"
   ["arcee-vllm"]="Arcee (vLLM)"
+  ["arcee-nvfp4-vllm"]="Arcee NVFP4 (vLLM)"
   ["cohere-transformers"]="Cohere (Transformers)"
   ["cohere-vllm"]="Cohere (vLLM)"
   ["deepseek-ktransformers"]="DeepSeek (KTransformers)"
@@ -136,7 +139,8 @@ declare -A ENV_DESCRIPTIONS=(
   ["nvidia-vllm"]="NVIDIA (vLLM)"
   ["poolside-sglang"]="Poolside (SGLang)"
   ["poolside-transformers"]="Poolside (Transformers)"
-  ["poolside-vllm"]="Poolside (vLLM)"
+  ["poolside-laguna-vllm"]="Poolside Laguna (vLLM)"
+  ["poolside-laguna-s21-vllm"]="Poolside Laguna S 2.1 (vLLM)"
   ["primeintellect-vllm"]="PrimeIntellect (vLLM)"
   ["qwen-ktransformers"]="Qwen (KTransformers)"
   ["qwen-sglang"]="Qwen (SGLang)"
@@ -170,181 +174,187 @@ resolve_env_type() {
         4|arcee_vllm|arcee-vllm)
             echo "arcee-vllm"
             ;;
-        5|cohere_transformers|cohere-transformers)
+        5|arcee_nvfp4_vllm|arcee-nvfp4-vllm)
+            echo "arcee-nvfp4-vllm"
+            ;;
+        6|cohere_transformers|cohere-transformers)
             echo "cohere-transformers"
             ;;
-        6|cohere_vllm|cohere-vllm)
+        7|cohere_vllm|cohere-vllm)
             echo "cohere-vllm"
             ;;
-        7|deepseek_ktransformers|deepseek-ktransformers)
+        8|deepseek_ktransformers|deepseek-ktransformers)
             echo "deepseek-ktransformers"
             ;;
-        8|deepseek_lmdeploy|deepseek-lmdeploy)
+        9|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
-        9|deepseek_sglang|deepseek-sglang)
+        10|deepseek_sglang|deepseek-sglang)
             echo "deepseek-sglang"
             ;;
-        10|deepseek_vllm|deepseek-vllm)
+        11|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        11|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+        12|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
             echo "gemma-sglang"
             ;;
-        12|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+        13|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
             echo "gemma-vllm"
             ;;
-        13|glm_ktransformers|glm-ktransformers)
+        14|glm_ktransformers|glm-ktransformers)
             echo "glm-ktransformers"
             ;;
-        14|glm_sglang|glm-sglang)
+        15|glm_sglang|glm-sglang)
             echo "glm-sglang"
             ;;
-        15|glm_transformers|glm-transformers)
+        16|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        16|glm_vllm|glm-vllm)
+        17|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        17|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        18|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        18|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        19|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        19|inclusionai_sglang|inclusionai-sglang)
+        20|inclusionai_sglang|inclusionai-sglang)
             echo "inclusionai-sglang"
             ;;
-        20|inclusionai_transformers|inclusionai-transformers)
+        21|inclusionai_transformers|inclusionai-transformers)
             echo "inclusionai-transformers"
             ;;
-        21|inclusionai_vllm|inclusionai-vllm)
+        22|inclusionai_vllm|inclusionai-vllm)
             echo "inclusionai-vllm"
             ;;
-        22|intel_vllm|intel-vllm)
+        23|intel_vllm|intel-vllm)
             echo "intel-vllm"
             ;;
-        23|kimi_ktransformers|kimi-ktransformers)
+        24|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        24|kimi_sglang|kimi-sglang)
+        25|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        25|kimi_vllm|kimi-vllm)
+        26|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        26|laguna_sglang|laguna-sglang)
+        27|laguna_sglang|laguna-sglang)
             echo "laguna-sglang"
             ;;
-        27|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
+        28|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
             echo "laguna-trtllm"
             ;;
-        28|laguna_vllm|laguna-vllm)
+        29|laguna_vllm|laguna-vllm)
             echo "laguna-vllm"
             ;;
-        29|liquidai_sglang|liquidai-sglang)
+        30|liquidai_sglang|liquidai-sglang)
             echo "liquidai-sglang"
             ;;
-        30|liquidai_transformers|liquidai-transformers)
+        31|liquidai_transformers|liquidai-transformers)
             echo "liquidai-transformers"
             ;;
-        31|liquidai_vllm|liquidai-vllm)
+        32|liquidai_vllm|liquidai-vllm)
             echo "liquidai-vllm"
             ;;
-        32|microsoft_vllm|microsoft-vllm)
+        33|microsoft_vllm|microsoft-vllm)
             echo "microsoft-vllm"
             ;;
-        33|minimax_ktransformers|minimax-ktransformers)
+        34|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        34|minimax_sglang|minimax-sglang)
+        35|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        35|minimax_transformers|minimax-transformers)
+        36|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        36|minimax_vllm|minimax-vllm)
+        37|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        37|mistralai_transformers|mistralai-transformers)
+        38|mistralai_transformers|mistralai-transformers)
             echo "mistralai-transformers"
             ;;
-        38|mistralai_vllm|mistralai-vllm)
+        39|mistralai_vllm|mistralai-vllm)
             echo "mistralai-vllm"
             ;;
-        39|nanbeige_sglang|nanbeige-sglang)
+        40|nanbeige_sglang|nanbeige-sglang)
             echo "nanbeige-sglang"
             ;;
-        40|nanbeige_transformers|nanbeige-transformers)
+        41|nanbeige_transformers|nanbeige-transformers)
             echo "nanbeige-transformers"
             ;;
-        41|nanbeige_vllm|nanbeige-vllm)
+        42|nanbeige_vllm|nanbeige-vllm)
             echo "nanbeige-vllm"
             ;;
-        42|nemotron_sglang|nemotron-sglang)
+        43|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        43|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        44|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        44|nemotron_vllm|nemotron-vllm)
+        45|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        45|nvidia_vllm|nvidia-vllm)
+        46|nvidia_vllm|nvidia-vllm)
             echo "nvidia-vllm"
             ;;
-        46|poolside_sglang|poolside-sglang)
+        47|poolside_sglang|poolside-sglang)
             echo "poolside-sglang"
             ;;
-        47|poolside_transformers|poolside-transformers)
+        48|poolside_transformers|poolside-transformers)
             echo "poolside-transformers"
             ;;
-        48|poolside_vllm|poolside-vllm)
-            echo "poolside-vllm"
+        49|poolside_laguna_vllm|poolside-laguna-vllm)
+            echo "poolside-laguna-vllm"
             ;;
-        49|primeintellect_vllm|primeintellect-vllm)
+        50|poolside_laguna_s21_vllm|poolside-laguna-s21-vllm)
+            echo "poolside-laguna-s21-vllm"
+            ;;
+        51|primeintellect_vllm|primeintellect-vllm)
             echo "primeintellect-vllm"
             ;;
-        50|qwen_ktransformers|qwen-ktransformers)
+        52|qwen_ktransformers|qwen-ktransformers)
             echo "qwen-ktransformers"
             ;;
-        51|qwen_sglang|qwen-sglang)
+        53|qwen_sglang|qwen-sglang)
             echo "qwen-sglang"
             ;;
-        52|qwen_transformers|qwen-transformers)
+        54|qwen_transformers|qwen-transformers)
             echo "qwen-transformers"
             ;;
-        53|qwen_vllm|qwen-vllm)
+        55|qwen_vllm|qwen-vllm)
             echo "qwen-vllm"
             ;;
-        54|redhat_vllm|redhat-vllm)
+        56|redhat_vllm|redhat-vllm)
             echo "redhat-vllm"
             ;;
-        55|stepfun_sglang|stepfun-sglang)
+        57|stepfun_sglang|stepfun-sglang)
             echo "stepfun-sglang"
             ;;
-        56|stepfun_transformers|stepfun-transformers)
+        58|stepfun_transformers|stepfun-transformers)
             echo "stepfun-transformers"
             ;;
-        57|stepfun_vllm|stepfun-vllm)
+        59|stepfun_vllm|stepfun-vllm)
             echo "stepfun-vllm"
             ;;
-        58|zyphra_transformers|zyphra-transformers)
+        60|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        59|zyphra_vllm|zyphra-vllm)
+        61|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        60|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        62|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        61|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        63|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        62|custom|custom_uv|custom-uv|env_custom_uv)
+        64|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        63|custom_pip|custom-pip|env_custom_pip)
+        65|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -662,36 +672,97 @@ install_kt_kernel() {
     run_command bash -c "cd \"$kt_kernel_dir\" && ./install.sh build"
 }
 
-install_allenai_vllm() {
-    print_info "Installing stable vLLM for AllenAI..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+install_flashinfer_python311_compatible() {
+    local incompatible_package
+
+    if ! python -c 'import sys; raise SystemExit(0 if sys.version_info < (3, 12) else 1)'; then
+        return 0
+    fi
+
+    print_info "Installing FlashInfer 0.6.17 for Python 3.10/3.11 annotation compatibility..."
+    run_uv_install --upgrade --no-deps "flashinfer-python==0.6.17" || return 1
+
+    for incompatible_package in flashinfer-cubin flashinfer-jit-cache; do
+        if python -c 'import importlib.metadata as m, sys; m.version(sys.argv[1])' \
+            "$incompatible_package" >/dev/null 2>&1; then
+            print_info "Removing incompatible $incompatible_package companion package..."
+            run_command uv pip uninstall "$incompatible_package" || return 1
+        fi
+    done
 }
 
-install_arcee_vllm() {
-    print_info "Installing vLLM 0.18.0 for Arcee..."
-    run_uv_install "vllm==0.18.0" || return 1
+install_vllm_pinned_commit_python311_compatible() {
+    local source_commit="52be12cfac0c5a18ba906814b2d2bcadb40a9c4b"
+    local source_dir=""
 
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        print_error "No active virtual environment detected for the vLLM source checkout."
+        return 1
+    fi
+    source_dir="$VIRTUAL_ENV/vllm"
+
+    if [ -e "$source_dir" ] && [ ! -d "$source_dir/.git" ]; then
+        print_error "vLLM target exists but is not a git checkout: $source_dir"
+        return 1
+    fi
+
+    if [ ! -d "$source_dir/.git" ]; then
+        run_command git clone https://github.com/vllm-project/vllm.git \
+            "$source_dir" || return 1
+    fi
+
+    run_command git -C "$source_dir" fetch origin --tags || return 1
+    run_command git -C "$source_dir" checkout --force "$source_commit" || return 1
+
+    print_info "Installing pinned GitHub commit $source_commit from $source_dir..."
+    VLLM_USE_PRECOMPILED=1 \
+        VLLM_PRECOMPILED_WHEEL_COMMIT="$source_commit" \
+        run_uv_install -U --reinstall --prerelease=allow \
+        -e "$source_dir" --torch-backend=auto || return 1
+
+    install_flashinfer_python311_compatible || return 1
+}
+
+install_allenai_vllm() {
+    print_info "Installing the pinned GitHub vLLM commit for AllenAI..."
+    install_vllm_pinned_commit_python311_compatible || return 1
+}
+
+install_arcee_deepgemm() {
     if [ -z "${VIRTUAL_ENV:-}" ]; then
         print_error "No active virtual environment detected for DeepGEMM install."
         return 1
     fi
 
+    local vllm_ref="${1:-v0.18.0}"
     local deepgemm_installer="$VIRTUAL_ENV/install_deepgemm.sh"
-    local deepgemm_installer_url="https://raw.githubusercontent.com/vllm-project/vllm/v0.18.0/tools/install_deepgemm.sh"
+    local deepgemm_installer_url="https://raw.githubusercontent.com/vllm-project/vllm/$vllm_ref/tools/install_deepgemm.sh"
 
-    print_info "Downloading vLLM 0.18.0 DeepGEMM installer into $VIRTUAL_ENV..."
+    print_info "Downloading vLLM $vllm_ref DeepGEMM installer into $VIRTUAL_ENV..."
     run_command curl -fsSL "$deepgemm_installer_url" -o "$deepgemm_installer" || return 1
     run_command chmod +x "$deepgemm_installer" || return 1
 
-    print_info "Installing vLLM 0.18.0's pinned DeepGEMM build for Arcee..."
+    print_info "Installing vLLM $vllm_ref's pinned DeepGEMM build for Arcee..."
     # shellcheck disable=SC2016
     run_command env VIRTUAL_ENV="$VIRTUAL_ENV" PATH="$VIRTUAL_ENV/bin:$PATH" \
         bash -c 'cd "$1" && bash "$2"' _ "$VIRTUAL_ENV" "$deepgemm_installer" || return 1
 }
 
+install_arcee_vllm() {
+    print_info "Installing the pinned GitHub vLLM commit for Arcee..."
+    install_vllm_pinned_commit_python311_compatible || return 1
+    install_arcee_deepgemm "52be12cfac0c5a18ba906814b2d2bcadb40a9c4b" || return 1
+}
+
+install_arcee_nvfp4_vllm() {
+    print_info "Installing vLLM 0.18.0 for Arcee NVFP4..."
+    run_uv_install -U "vllm==0.18.0" || return 1
+    install_arcee_deepgemm "v0.18.0" || return 1
+}
+
 install_cohere_vllm() {
-    print_info "Installing vLLM 0.21.0 and Cohere Melody for Cohere..."
-    run_uv_install "vllm==0.21.0" || return 1
+    print_info "Installing the pinned GitHub vLLM commit and Cohere Melody for Cohere..."
+    install_vllm_pinned_commit_python311_compatible || return 1
     run_uv_install "transformers>=5,<6" || return 1
     run_uv_install "cohere_melody>=0.9.0" || return 1
 }
@@ -704,8 +775,8 @@ install_gemma_sglang() {
 }
 
 install_gemma_vllm() {
-    print_info "Installing vLLM for Gemma..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for Gemma..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_glm_sglang() {
@@ -909,13 +980,13 @@ install_gptoss_transformers() {
 }
 
 install_gptoss_vllm() {
-    print_info "Installing vLLM for gpt-oss..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for GPT-OSS..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_intel_vllm() {
-    print_info "Installing stable vLLM for Intel..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for Intel..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_kimi_ktransformers() {
@@ -996,8 +1067,8 @@ install_laguna_vllm() {
 }
 
 install_liquidai_vllm() {
-    print_info "Installing stable vLLM for LiquidAI..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for LiquidAI..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_inclusionai_sglang() {
@@ -1011,13 +1082,13 @@ install_inclusionai_transformers() {
 }
 
 install_inclusionai_vllm() {
-    print_info "Installing vLLM for InclusionAI..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for InclusionAI..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_microsoft_vllm() {
-    print_info "Installing stable vLLM for Microsoft..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for Microsoft..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_minimax_sglang() {
@@ -1037,12 +1108,14 @@ install_minimax_vllm() {
 }
 
 install_mistralai_vllm() {
-    print_info "Installing stable vLLM for MistralAI..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for MistralAI..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_nanbeige_vllm() {
-    print_info "Installing Nanbeige vLLM from the nanbeige42 branch..."
+    local source_commit="1cf78162bed34ab18ba951396ab5d2c163c85714"
+
+    print_info "Installing the proven Nanbeige vLLM commit $source_commit..."
     ensure_active_environment_matches nanbeige-vllm || return 1
 
     local target_dir="$VIRTUAL_ENV/vllm"
@@ -1058,8 +1131,7 @@ install_nanbeige_vllm() {
     fi
 
     run_command git -C "$target_dir" fetch origin nanbeige42 --tags || return 1
-    run_command git -C "$target_dir" checkout nanbeige42 || return 1
-    run_command git -C "$target_dir" pull --ff-only origin nanbeige42 || return 1
+    run_command git -C "$target_dir" checkout --force "$source_commit" || return 1
 
     run_pip_install -e "$target_dir" || return 1
 }
@@ -1075,23 +1147,41 @@ install_nemotron_trtllm() {
 }
 
 install_nemotron_vllm() {
-    print_info "Installing vLLM for Nemotron..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for the shared Nemotron environment..."
+    install_vllm_pinned_commit_python311_compatible || return 1
+
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        print_error "No active virtual environment detected for DeepGEMM install."
+        return 1
+    fi
+
+    local deepgemm_installer="$VIRTUAL_ENV/install_deepgemm.sh"
+    local deepgemm_installer_url="https://raw.githubusercontent.com/vllm-project/vllm/v0.20.0/tools/install_deepgemm.sh"
+
+    print_info "Installing the proven vLLM 0.20.0 DeepGEMM companion build for Nemotron..."
+    run_command curl -fsSL "$deepgemm_installer_url" -o "$deepgemm_installer" || return 1
+    run_command env VIRTUAL_ENV="$VIRTUAL_ENV" PATH="$VIRTUAL_ENV/bin:$PATH" \
+        bash "$deepgemm_installer" || return 1
 }
 
 install_nvidia_vllm() {
-    print_info "Installing stable vLLM for NVIDIA..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for NVIDIA..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
-install_poolside_vllm() {
-    print_info "Installing vLLM 0.26.0 for Poolside..."
+install_poolside_laguna_vllm() {
+    print_info "Installing vLLM 0.26.0 for Poolside Laguna..."
     run_uv_install "vllm==0.26.0" || return 1
 }
 
+install_poolside_laguna_s21_vllm() {
+    print_info "Installing the pinned GitHub vLLM commit for Poolside Laguna S 2.1..."
+    install_vllm_pinned_commit_python311_compatible || return 1
+}
+
 install_primeintellect_vllm() {
-    print_info "Installing stable vLLM for PrimeIntellect..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for PrimeIntellect..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_qwen_ktransformers() {
@@ -1120,32 +1210,37 @@ install_qwen_transformers() {
 }
 
 install_qwen_vllm() {
-    print_info "Installing vLLM for Qwen..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit for Qwen..."
+    install_vllm_pinned_commit_python311_compatible || return 1
 }
 
 install_redhat_vllm() {
-    print_info "Installing vLLM and timm for RedHat..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit and timm for RedHat..."
+    install_vllm_pinned_commit_python311_compatible || return 1
     run_uv_install timm || return 1
 }
 
 install_stepfun_vllm() {
-    print_info "Installing stable vLLM for StepFun..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
+    print_info "Installing the pinned GitHub vLLM commit and required Transformers 5 for StepFun..."
+    install_vllm_pinned_commit_python311_compatible || return 1
+    run_uv_install "transformers>=5,<6" || return 1
 }
 
 
 install_zyphra_vllm() {
-    print_info "Installing Zyphra vLLM from the zaya1-pr branch..."
+    local source_commit="b1b99a08b20f858035894f7f2a8080c556423844"
+
+    print_info "Installing the proven Zyphra vLLM commit $source_commit..."
     ensure_active_environment_matches zyphra-vllm || return 1
-    run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" || return 1
+    run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@$source_commit" || return 1
 }
 
 install_zyphra_legacy_vllm() {
-    print_info "Installing Zyphra Legacy vLLM from the zaya1-pr-legacy branch..."
+    local source_commit="8df704c5258830b18ca19722bcfd40357b410f66"
+
+    print_info "Installing the proven Zyphra Legacy vLLM commit $source_commit..."
     ensure_active_environment_matches zyphra-legacy-vllm || return 1
-    run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr-legacy" || return 1
+    run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@$source_commit" || return 1
 }
 
 perform_environment_action() {
@@ -1158,6 +1253,10 @@ perform_environment_action() {
             ;;
         arcee-vllm)
             install_arcee_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        arcee-nvfp4-vllm)
+            install_arcee_nvfp4_vllm || return 1
             ACTION_TAKEN=true
             ;;
         cohere-vllm)
@@ -1292,8 +1391,12 @@ perform_environment_action() {
             install_nvidia_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        poolside-vllm)
-            install_poolside_vllm || return 1
+        poolside-laguna-vllm)
+            install_poolside_laguna_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        poolside-laguna-s21-vllm)
+            install_poolside_laguna_s21_vllm || return 1
             ACTION_TAKEN=true
             ;;
         primeintellect-vllm)
