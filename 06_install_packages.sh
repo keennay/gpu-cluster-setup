@@ -1082,9 +1082,14 @@ install_inclusionai_transformers() {
 }
 
 install_inclusionai_vllm() {
-    print_info "Installing the pinned GitHub vLLM commit for InclusionAI..."
-    install_vllm_pinned_commit_python311_compatible || return 1
+    local vllm_version="0.27.2rc1.dev113+g5cecfc013"
+    local vllm_wheel="https://wheels.vllm.ai/5cecfc01375052698823fc401e31518fb32a981e/vllm-0.27.2rc1.dev113%2Bg5cecfc013-cp38-abi3-manylinux_2_28_x86_64.whl#sha256=7858cbbd1fbf426a6eac5a9e2dc3779e04ee63705f65c90ab5baca4705a4a638"
+
+    print_info "Installing vLLM $vllm_version for InclusionAI from its immutable commit wheel..."
+    run_uv_install --upgrade --reinstall --prerelease=allow \
+        "$vllm_wheel" --torch-backend=auto || return 1
 }
+
 
 install_microsoft_vllm() {
     print_info "Installing the pinned GitHub vLLM commit for Microsoft..."
