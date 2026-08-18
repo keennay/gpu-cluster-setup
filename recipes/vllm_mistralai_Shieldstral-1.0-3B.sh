@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_poolside-laguna-xs-vllm"
+PYTHON_ENV="env_mistralai-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
-MODEL_REPO="poolside/Laguna-XS-2.1-NVFP4"
-MODEL_NAME="poolside_v1"
-SERVED_MODEL_NAME="poolside"
-CONTEXT_LEN_VALUE=262144
+MODEL_REPO="mistralai/Shieldstral-1.0-3B"
+MODEL_NAME="mistral"
+SERVED_MODEL_NAME="shieldstral"
+CONTEXT_LEN_VALUE=32768
 DEFAULT_TENSOR_PARALLEL_SIZE=1
-TRUST_REMOTE_CODE="--trust-remote-code"
-REASONING_PARSER="--reasoning-parser $MODEL_NAME"
-ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
-TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
-GPU_MEM_UTIL_VALUE=0.876095
+TRUST_REMOTE_CODE=""
+REASONING_PARSER=""
+ENABLE_AUTO_TOOL_CHOICE=""
+TOOL_CALL_PARSER=""
+GPU_MEM_UTIL_VALUE=0.874627
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
@@ -32,7 +32,7 @@ QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--reasoning-parser poolside_v1"
+EXTRA_ARGS=""
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

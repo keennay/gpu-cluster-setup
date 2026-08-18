@@ -30,6 +30,7 @@ ENV_TYPES=(
   "arcee-nvfp4-vllm"
   "cohere-transformers"
   "cohere-vllm"
+  "datalab-vllm"
   "deepseek-ktransformers"
   "deepseek-lmdeploy"
   "deepseek-sglang"
@@ -49,9 +50,6 @@ ENV_TYPES=(
   "kimi-ktransformers"
   "kimi-sglang"
   "kimi-vllm"
-  "laguna-sglang"
-  "laguna-trtllm"
-  "laguna-vllm"
   "liquidai-sglang"
   "liquidai-transformers"
   "liquidai-vllm"
@@ -62,6 +60,7 @@ ENV_TYPES=(
   "minimax-vllm"
   "mistralai-transformers"
   "mistralai-vllm"
+  "muse-vllm"
   "nanbeige-sglang"
   "nanbeige-transformers"
   "nanbeige-vllm"
@@ -71,8 +70,8 @@ ENV_TYPES=(
   "nvidia-vllm"
   "poolside-sglang"
   "poolside-transformers"
+  "poolside-laguna-xs-vllm"
   "poolside-laguna-vllm"
-  "poolside-laguna-s21-vllm"
   "primeintellect-vllm"
   "qwen-ktransformers"
   "qwen-sglang"
@@ -98,6 +97,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["arcee-nvfp4-vllm"]="Arcee NVFP4 (vLLM)"
   ["cohere-transformers"]="Cohere (Transformers)"
   ["cohere-vllm"]="Cohere (vLLM)"
+  ["datalab-vllm"]="DataLab (vLLM)"
   ["deepseek-ktransformers"]="DeepSeek (KTransformers)"
   ["deepseek-lmdeploy"]="DeepSeek (LMDeploy)"
   ["deepseek-sglang"]="DeepSeek (SGLang)"
@@ -117,9 +117,6 @@ declare -A ENV_DESCRIPTIONS=(
   ["kimi-ktransformers"]="Kimi (KTransformers)"
   ["kimi-sglang"]="Kimi (SGLang)"
   ["kimi-vllm"]="Kimi (vLLM)"
-  ["laguna-sglang"]="Laguna (SGLang)"
-  ["laguna-trtllm"]="Laguna (TRT-LLM)"
-  ["laguna-vllm"]="Laguna (vLLM)"
   ["liquidai-sglang"]="LiquidAI (SGLang)"
   ["liquidai-transformers"]="LiquidAI (Transformers)"
   ["liquidai-vllm"]="LiquidAI (vLLM)"
@@ -130,6 +127,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["minimax-vllm"]="MiniMax (vLLM)"
   ["mistralai-transformers"]="MistralAI (Transformers)"
   ["mistralai-vllm"]="MistralAI (vLLM)"
+  ["muse-vllm"]="Muse (vLLM)"
   ["nanbeige-sglang"]="Nanbeige (SGLang)"
   ["nanbeige-transformers"]="Nanbeige (Transformers)"
   ["nanbeige-vllm"]="Nanbeige (vLLM)"
@@ -139,8 +137,8 @@ declare -A ENV_DESCRIPTIONS=(
   ["nvidia-vllm"]="NVIDIA (vLLM)"
   ["poolside-sglang"]="Poolside (SGLang)"
   ["poolside-transformers"]="Poolside (Transformers)"
+  ["poolside-laguna-xs-vllm"]="Poolside Laguna XS (vLLM)"
   ["poolside-laguna-vllm"]="Poolside Laguna (vLLM)"
-  ["poolside-laguna-s21-vllm"]="Poolside Laguna S 2.1 (vLLM)"
   ["primeintellect-vllm"]="PrimeIntellect (vLLM)"
   ["qwen-ktransformers"]="Qwen (KTransformers)"
   ["qwen-sglang"]="Qwen (SGLang)"
@@ -183,178 +181,175 @@ resolve_env_type() {
         7|cohere_vllm|cohere-vllm)
             echo "cohere-vllm"
             ;;
-        8|deepseek_ktransformers|deepseek-ktransformers)
+        8|datalab_vllm|datalab-vllm)
+            echo "datalab-vllm"
+            ;;
+        9|deepseek_ktransformers|deepseek-ktransformers)
             echo "deepseek-ktransformers"
             ;;
-        9|deepseek_lmdeploy|deepseek-lmdeploy)
+        10|deepseek_lmdeploy|deepseek-lmdeploy)
             echo "deepseek-lmdeploy"
             ;;
-        10|deepseek_sglang|deepseek-sglang)
+        11|deepseek_sglang|deepseek-sglang)
             echo "deepseek-sglang"
             ;;
-        11|deepseek_vllm|deepseek-vllm)
+        12|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        12|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+        13|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
             echo "gemma-sglang"
             ;;
-        13|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+        14|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
             echo "gemma-vllm"
             ;;
-        14|glm_ktransformers|glm-ktransformers)
+        15|glm_ktransformers|glm-ktransformers)
             echo "glm-ktransformers"
             ;;
-        15|glm_sglang|glm-sglang)
+        16|glm_sglang|glm-sglang)
             echo "glm-sglang"
             ;;
-        16|glm_transformers|glm-transformers)
+        17|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        17|glm_vllm|glm-vllm)
+        18|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        18|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        19|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        19|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        20|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        20|inclusionai_sglang|inclusionai-sglang)
+        21|inclusionai_sglang|inclusionai-sglang)
             echo "inclusionai-sglang"
             ;;
-        21|inclusionai_transformers|inclusionai-transformers)
+        22|inclusionai_transformers|inclusionai-transformers)
             echo "inclusionai-transformers"
             ;;
-        22|inclusionai_vllm|inclusionai-vllm)
+        23|inclusionai_vllm|inclusionai-vllm)
             echo "inclusionai-vllm"
             ;;
-        23|intel_vllm|intel-vllm)
+        24|intel_vllm|intel-vllm)
             echo "intel-vllm"
             ;;
-        24|kimi_ktransformers|kimi-ktransformers)
+        25|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        25|kimi_sglang|kimi-sglang)
+        26|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        26|kimi_vllm|kimi-vllm)
+        27|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        27|laguna_sglang|laguna-sglang)
-            echo "laguna-sglang"
-            ;;
-        28|laguna_trtllm|laguna-trtllm|laguna_trt_llm|laguna-trt-llm)
-            echo "laguna-trtllm"
-            ;;
-        29|laguna_vllm|laguna-vllm)
-            echo "laguna-vllm"
-            ;;
-        30|liquidai_sglang|liquidai-sglang)
+        28|liquidai_sglang|liquidai-sglang)
             echo "liquidai-sglang"
             ;;
-        31|liquidai_transformers|liquidai-transformers)
+        29|liquidai_transformers|liquidai-transformers)
             echo "liquidai-transformers"
             ;;
-        32|liquidai_vllm|liquidai-vllm)
+        30|liquidai_vllm|liquidai-vllm)
             echo "liquidai-vllm"
             ;;
-        33|microsoft_vllm|microsoft-vllm)
+        31|microsoft_vllm|microsoft-vllm)
             echo "microsoft-vllm"
             ;;
-        34|minimax_ktransformers|minimax-ktransformers)
+        32|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        35|minimax_sglang|minimax-sglang)
+        33|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        36|minimax_transformers|minimax-transformers)
+        34|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        37|minimax_vllm|minimax-vllm)
+        35|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        38|mistralai_transformers|mistralai-transformers)
+        36|mistralai_transformers|mistralai-transformers)
             echo "mistralai-transformers"
             ;;
-        39|mistralai_vllm|mistralai-vllm)
+        37|mistralai_vllm|mistralai-vllm)
             echo "mistralai-vllm"
             ;;
-        40|nanbeige_sglang|nanbeige-sglang)
+        38|muse_vllm|muse-vllm)
+            echo "muse-vllm"
+            ;;
+        39|nanbeige_sglang|nanbeige-sglang)
             echo "nanbeige-sglang"
             ;;
-        41|nanbeige_transformers|nanbeige-transformers)
+        40|nanbeige_transformers|nanbeige-transformers)
             echo "nanbeige-transformers"
             ;;
-        42|nanbeige_vllm|nanbeige-vllm)
+        41|nanbeige_vllm|nanbeige-vllm)
             echo "nanbeige-vllm"
             ;;
-        43|nemotron_sglang|nemotron-sglang)
+        42|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        44|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        43|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        45|nemotron_vllm|nemotron-vllm)
+        44|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        46|nvidia_vllm|nvidia-vllm)
+        45|nvidia_vllm|nvidia-vllm)
             echo "nvidia-vllm"
             ;;
-        47|poolside_sglang|poolside-sglang)
+        46|poolside_sglang|poolside-sglang)
             echo "poolside-sglang"
             ;;
-        48|poolside_transformers|poolside-transformers)
+        47|poolside_transformers|poolside-transformers)
             echo "poolside-transformers"
+            ;;
+        48|poolside_laguna_xs_vllm|poolside-laguna-xs-vllm)
+            echo "poolside-laguna-xs-vllm"
             ;;
         49|poolside_laguna_vllm|poolside-laguna-vllm)
             echo "poolside-laguna-vllm"
             ;;
-        50|poolside_laguna_s21_vllm|poolside-laguna-s21-vllm)
-            echo "poolside-laguna-s21-vllm"
-            ;;
-        51|primeintellect_vllm|primeintellect-vllm)
+        50|primeintellect_vllm|primeintellect-vllm)
             echo "primeintellect-vllm"
             ;;
-        52|qwen_ktransformers|qwen-ktransformers)
+        51|qwen_ktransformers|qwen-ktransformers)
             echo "qwen-ktransformers"
             ;;
-        53|qwen_sglang|qwen-sglang)
+        52|qwen_sglang|qwen-sglang)
             echo "qwen-sglang"
             ;;
-        54|qwen_transformers|qwen-transformers)
+        53|qwen_transformers|qwen-transformers)
             echo "qwen-transformers"
             ;;
-        55|qwen_vllm|qwen-vllm)
+        54|qwen_vllm|qwen-vllm)
             echo "qwen-vllm"
             ;;
-        56|redhat_vllm|redhat-vllm)
+        55|redhat_vllm|redhat-vllm)
             echo "redhat-vllm"
             ;;
-        57|stepfun_sglang|stepfun-sglang)
+        56|stepfun_sglang|stepfun-sglang)
             echo "stepfun-sglang"
             ;;
-        58|stepfun_transformers|stepfun-transformers)
+        57|stepfun_transformers|stepfun-transformers)
             echo "stepfun-transformers"
             ;;
-        59|stepfun_vllm|stepfun-vllm)
+        58|stepfun_vllm|stepfun-vllm)
             echo "stepfun-vllm"
             ;;
-        60|zyphra_transformers|zyphra-transformers)
+        59|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        61|zyphra_vllm|zyphra-vllm)
+        60|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        62|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        61|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        63|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        62|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        64|custom|custom_uv|custom-uv|env_custom_uv)
+        63|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        65|custom_pip|custom-pip|env_custom_pip)
+        64|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -767,6 +762,11 @@ install_cohere_vllm() {
     run_uv_install "cohere_melody>=0.9.0" || return 1
 }
 
+install_datalab_vllm() {
+    print_info "Installing the pinned GitHub vLLM commit for DataLab..."
+    install_vllm_pinned_commit_python311_compatible || return 1
+}
+
 install_gemma_sglang() {
     print_info "Installing packages for Gemma (SGLang)..."
 
@@ -1053,19 +1053,6 @@ install_kimi_vllm() {
     run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
 }
 
-install_laguna_sglang() {
-    print_info "No package install configured for Laguna (SGLang) yet."
-}
-
-install_laguna_trtllm() {
-    print_info "No package install configured for Laguna (TRT-LLM) yet."
-}
-
-install_laguna_vllm() {
-    print_info "Installing vLLM for Laguna..."
-    run_uv_install -U vllm --index-url https://pypi.org/simple || return 1
-}
-
 install_liquidai_vllm() {
     print_info "Installing the pinned GitHub vLLM commit for LiquidAI..."
     install_vllm_pinned_commit_python311_compatible || return 1
@@ -1115,6 +1102,36 @@ install_minimax_vllm() {
 install_mistralai_vllm() {
     print_info "Installing the pinned GitHub vLLM commit for MistralAI..."
     install_vllm_pinned_commit_python311_compatible || return 1
+}
+
+install_muse_vllm() {
+    local source_commit="c89c0c93086397f699807737d02a1de0c1d55430"
+    local binary_commit="52be12cfac0c5a18ba906814b2d2bcadb40a9c4b"
+    local target_dir=""
+
+    print_info "Installing the proven Muse Glimmer vLLM commit $source_commit..."
+    ensure_active_environment_matches muse-vllm || return 1
+    target_dir="$VIRTUAL_ENV/vllm"
+
+    if [ -e "$target_dir" ] && [ ! -d "$target_dir/.git" ]; then
+        print_error "vLLM target exists but is not a git checkout: $target_dir"
+        return 1
+    fi
+
+    if [ ! -d "$target_dir/.git" ]; then
+        run_command git clone --filter=blob:none --single-branch \
+            --branch fix-spec-decode https://github.com/xianbaoqian/vllm.git \
+            "$target_dir" || return 1
+    fi
+
+    run_command git -C "$target_dir" fetch origin fix-spec-decode --tags || return 1
+    run_command git -C "$target_dir" checkout --force "$source_commit" || return 1
+
+    VLLM_USE_PRECOMPILED=1 \
+        VLLM_PRECOMPILED_WHEEL_COMMIT="$binary_commit" \
+        run_uv_install -U --reinstall --prerelease=allow \
+        -e "$target_dir" --torch-backend=auto || return 1
+    run_uv_install timm || return 1
 }
 
 install_nanbeige_vllm() {
@@ -1174,14 +1191,14 @@ install_nvidia_vllm() {
     install_vllm_pinned_commit_python311_compatible || return 1
 }
 
-install_poolside_laguna_vllm() {
-    print_info "Installing vLLM 0.26.0 for Poolside Laguna..."
+install_poolside_laguna_xs_vllm() {
+    print_info "Installing vLLM 0.26.0 for Poolside Laguna XS..."
     run_uv_install "vllm==0.26.0" || return 1
 }
 
-install_poolside_laguna_s21_vllm() {
-    print_info "Installing the pinned GitHub vLLM commit for Poolside Laguna S 2.1..."
-    install_vllm_pinned_commit_python311_compatible || return 1
+install_poolside_laguna_vllm() {
+    print_info "Installing vLLM 0.27.1 for Poolside Laguna..."
+    run_uv_install -U "vllm==0.27.1" || return 1
 }
 
 install_primeintellect_vllm() {
@@ -1268,6 +1285,10 @@ perform_environment_action() {
             install_cohere_vllm || return 1
             ACTION_TAKEN=true
             ;;
+        datalab-vllm)
+            install_datalab_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
         deepseek-ktransformers)
             install_deepseek_ktransformers || return 1
             ACTION_TAKEN=true
@@ -1340,18 +1361,6 @@ perform_environment_action() {
             install_kimi_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        laguna-sglang)
-            install_laguna_sglang || return 1
-            ACTION_TAKEN=true
-            ;;
-        laguna-trtllm)
-            install_laguna_trtllm || return 1
-            ACTION_TAKEN=true
-            ;;
-        laguna-vllm)
-            install_laguna_vllm || return 1
-            ACTION_TAKEN=true
-            ;;
         liquidai-vllm)
             install_liquidai_vllm || return 1
             ACTION_TAKEN=true
@@ -1376,6 +1385,10 @@ perform_environment_action() {
             install_mistralai_vllm || return 1
             ACTION_TAKEN=true
             ;;
+        muse-vllm)
+            install_muse_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
         nanbeige-vllm)
             install_nanbeige_vllm || return 1
             ACTION_TAKEN=true
@@ -1396,12 +1409,12 @@ perform_environment_action() {
             install_nvidia_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        poolside-laguna-vllm)
-            install_poolside_laguna_vllm || return 1
+        poolside-laguna-xs-vllm)
+            install_poolside_laguna_xs_vllm || return 1
             ACTION_TAKEN=true
             ;;
-        poolside-laguna-s21-vllm)
-            install_poolside_laguna_s21_vllm || return 1
+        poolside-laguna-vllm)
+            install_poolside_laguna_vllm || return 1
             ACTION_TAKEN=true
             ;;
         primeintellect-vllm)

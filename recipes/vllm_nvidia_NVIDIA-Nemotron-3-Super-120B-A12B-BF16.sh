@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_poolside-laguna-xs-vllm"
+PYTHON_ENV="env_nvidia-vllm"
 INFERENCE_PROVIDER="vLLM"
-INFERENCE_ENV=""
-MODEL_REPO="poolside/Laguna-XS-2.1-NVFP4"
-MODEL_NAME="poolside_v1"
-SERVED_MODEL_NAME="poolside"
-CONTEXT_LEN_VALUE=262144
-DEFAULT_TENSOR_PARALLEL_SIZE=1
+INFERENCE_ENV="env VLLM_ALLOW_LONG_MAX_MODEL_LEN=1"
+MODEL_REPO="nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16"
+MODEL_NAME="nemotron_v3"
+SERVED_MODEL_NAME="nemotron"
+CONTEXT_LEN_VALUE=1048576
+DEFAULT_TENSOR_PARALLEL_SIZE=2
 TRUST_REMOTE_CODE="--trust-remote-code"
-REASONING_PARSER="--reasoning-parser $MODEL_NAME"
+REASONING_PARSER="--reasoning-parser nemotron_v3"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
-TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
-GPU_MEM_UTIL_VALUE=0.876095
+TOOL_CALL_PARSER="--tool-call-parser qwen3_coder"
+GPU_MEM_UTIL_VALUE=0.872038
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
@@ -27,12 +27,12 @@ BACKEND_MOE_RUNNER_SM121=""
 ENABLE_CACHE_FLAG=0
 ENABLE_SPECULATIVE=0
 ENABLE_REASONING_PARSER=0
-SPECULATIVE=''
+SPECULATIVE='--speculative-config {"method":"nemotron_h_mtp","num_speculative_tokens":1}'
 QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--reasoning-parser poolside_v1"
+EXTRA_ARGS="--async-scheduling --dtype auto --kv-cache-dtype fp8 --mamba-ssm-cache-dtype float32 --max-num-seqs 256 --max-cudagraph-capture-size 128 --enable-chunked-prefill"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

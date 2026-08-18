@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_poolside-laguna-xs-vllm"
+PYTHON_ENV="env_mistralai-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
-MODEL_REPO="poolside/Laguna-XS-2.1-NVFP4"
-MODEL_NAME="poolside_v1"
-SERVED_MODEL_NAME="poolside"
+MODEL_REPO="mistralai/Mistral-Medium-3.5-128B"
+MODEL_NAME="mistral"
+SERVED_MODEL_NAME="mistral"
 CONTEXT_LEN_VALUE=262144
-DEFAULT_TENSOR_PARALLEL_SIZE=1
+DEFAULT_TENSOR_PARALLEL_SIZE=2
 TRUST_REMOTE_CODE="--trust-remote-code"
 REASONING_PARSER="--reasoning-parser $MODEL_NAME"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
 TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
-GPU_MEM_UTIL_VALUE=0.876095
+GPU_MEM_UTIL_VALUE=0.838949
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
@@ -25,14 +25,14 @@ BACKEND_MOE_RUNNER_SM120=""
 BACKEND_MOE_RUNNER_SM121=""
 
 ENABLE_CACHE_FLAG=0
-ENABLE_SPECULATIVE=0
+ENABLE_SPECULATIVE=1
 ENABLE_REASONING_PARSER=0
-SPECULATIVE=''
+SPECULATIVE='--speculative-config {"model":"mistralai/Mistral-Medium-3.5-128B-EAGLE","num_speculative_tokens":3,"method":"eagle","max_model_len":65536}'
 QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--reasoning-parser poolside_v1"
+EXTRA_ARGS="--tokenizer_mode mistral --config_format mistral --load_format mistral"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

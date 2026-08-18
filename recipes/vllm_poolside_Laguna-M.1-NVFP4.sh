@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_poolside-laguna-xs-vllm"
+PYTHON_ENV="env_poolside-laguna-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
-MODEL_REPO="poolside/Laguna-XS-2.1-NVFP4"
+MODEL_REPO="poolside/Laguna-M.1-NVFP4"
 MODEL_NAME="poolside_v1"
 SERVED_MODEL_NAME="poolside"
 CONTEXT_LEN_VALUE=262144
-DEFAULT_TENSOR_PARALLEL_SIZE=1
+DEFAULT_TENSOR_PARALLEL_SIZE=2
 TRUST_REMOTE_CODE="--trust-remote-code"
 REASONING_PARSER="--reasoning-parser $MODEL_NAME"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
 TOOL_CALL_PARSER="--tool-call-parser $MODEL_NAME"
-GPU_MEM_UTIL_VALUE=0.876095
+GPU_MEM_UTIL_VALUE=0.863994
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
