@@ -2,7 +2,7 @@
 
 # Script: launch_env.sh
 # Purpose: Activate ML environment with all optimizations
-# Usage: source launch_env.sh [--auto] [ENV_NAME|1-64]
+# Usage: source launch_env.sh [--auto] [ENV_NAME|1-65]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f ~/.bashrc ]; then
@@ -336,10 +336,13 @@ resolve_env_type() {
         62|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        63|custom|custom_uv|custom-uv|env_custom_uv)
+        63|z_lab_vllm|z-lab_vllm|zlab_vllm|zlab-vllm|z-lab-vllm)
+            echo "z-lab-vllm"
+            ;;
+        64|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        64|custom_pip|custom-pip|env_custom_pip)
+        65|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -365,7 +368,7 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
 else
     BEING_SOURCED=false
     print_error "This script must be sourced, not executed!"
-    print_error "Use: source $0 [--auto] [ENV_NAME|1-64]"
+    print_error "Use: source $0 [--auto] [ENV_NAME|1-65]"
     exit 1
 fi
 
@@ -452,15 +455,16 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "60) Zyphra (vLLM)"
     echo "61) Zyphra Legacy (Transformers)"
     echo "62) Zyphra Legacy (vLLM)"
-    echo "63) Custom (uv)"
-    echo "64) Custom (pip)"
+    echo "63) z-lab (vLLM)"
+    echo "64) Custom (uv)"
+    echo "65) Custom (pip)"
     echo ""
     while true; do
-        read -p "Enter your choice (1-64): " choice
+        read -p "Enter your choice (1-65): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 64."
+            print_error "Invalid choice. Please enter a number between 1 and 65."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
@@ -471,7 +475,7 @@ fi
 # Normalize and validate the selected managed environment.
 if [ -n "$ENV_TYPE" ]; then
     if ! ENV_TYPE_MAPPED=$(resolve_env_type "$ENV_TYPE"); then
-        print_error "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 64."
+        print_error "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 65."
         return 1
     fi
     ENV_TYPE="$ENV_TYPE_MAPPED"

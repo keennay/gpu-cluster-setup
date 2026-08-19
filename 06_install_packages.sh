@@ -85,6 +85,7 @@ ENV_TYPES=(
   "zyphra-vllm"
   "zyphra-legacy-transformers"
   "zyphra-legacy-vllm"
+  "z-lab-vllm"
   "custom_uv"
   "custom_pip"
 )
@@ -152,6 +153,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["zyphra-vllm"]="Zyphra (vLLM)"
   ["zyphra-legacy-transformers"]="Zyphra Legacy (Transformers)"
   ["zyphra-legacy-vllm"]="Zyphra Legacy (vLLM)"
+  ["z-lab-vllm"]="z-lab (vLLM)"
   ["custom_uv"]="Custom (uv)"
   ["custom_pip"]="Custom (pip)"
 )
@@ -346,10 +348,13 @@ resolve_env_type() {
         62|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        63|custom|custom_uv|custom-uv|env_custom_uv)
+        63|z_lab_vllm|z-lab_vllm|zlab_vllm|zlab-vllm|z-lab-vllm)
+            echo "z-lab-vllm"
+            ;;
+        64|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        64|custom_pip|custom-pip|env_custom_pip)
+        65|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -1265,6 +1270,161 @@ install_zyphra_legacy_vllm() {
     run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@$source_commit" || return 1
 }
 
+install_zlab_vllm() {
+    local upstream_commit="31840cf3ead3632f3c99db4a24e4aba39ad54ef6"
+    local proven_commit="c3dabcddc328e00990892370317d36cda31745e6"
+    local binary_commit="9842d701450214d4b78cd9aefb8eee0c616bce33"
+    local source_dir=""
+    local actual_commit=""
+
+    print_info "Installing the proven z-lab vLLM patchset $proven_commit..."
+    ensure_active_environment_matches z-lab-vllm || return 1
+    source_dir="$VIRTUAL_ENV/vllm"
+
+    if [ -e "$source_dir" ] && [ ! -d "$source_dir/.git" ]; then
+        print_error "vLLM target exists but is not a git checkout: $source_dir"
+        return 1
+    fi
+
+    if [ ! -d "$source_dir/.git" ]; then
+        run_command git clone --filter=blob:none \
+            https://github.com/vllm-project/vllm.git "$source_dir" || return 1
+    fi
+
+    run_command git -C "$source_dir" fetch origin \
+        refs/pull/52816/head --tags || return 1
+    run_command git -C "$source_dir" checkout --force "$upstream_commit" || return 1
+
+    print_command "git -C $source_dir apply z-lab compatibility patch"
+    if git -C "$source_dir" apply <<'ZLAB_VLLM_PATCH'
+diff --git a/vllm/model_executor/layers/attention/attention.py b/vllm/model_executor/layers/attention/attention.py
+index b4831e2a0b..cf19311915 100644
+--- a/vllm/model_executor/layers/attention/attention.py
++++ b/vllm/model_executor/layers/attention/attention.py
+@@ -247,6 +247,7 @@ class Attention(nn.Module, AttentionLayerBase):
+         attn_type: str = AttentionType.DECODER,
+         kv_sharing_target_layer_name: str | None = None,
+         mm_prefix_clamp_sliding_window: bool = False,
++        use_mm_prefix: bool | None = None,
+         attn_backend: type[AttentionBackend] | None = None,
+         head_size_v: int | None = None,
+         **extra_impl_args,
+@@ -333,9 +334,15 @@ class Attention(nn.Module, AttentionLayerBase):
+         self.sliding_window = sliding_window
+         self.has_sink = extra_impl_args.get("sinks") is not None
+ 
+-        # NOTE: model_config may be None during certain tests
++        # NOTE: model_config may be None during certain tests. Draft models can
++        # opt out because they process text/query tokens only and must not
++        # inherit a multimodal-prefix requirement from the target model.
+         model_config = vllm_config.model_config
+-        self.use_mm_prefix = model_config is not None and model_config.is_mm_prefix_lm
++        self.use_mm_prefix = (
++            model_config is not None and model_config.is_mm_prefix_lm
++            if use_mm_prefix is None
++            else use_mm_prefix
++        )
+ 
+         # During model initialization, the default dtype is set as the model
+         # weight and activation dtype.
+diff --git a/vllm/model_executor/models/qwen3_dflash.py b/vllm/model_executor/models/qwen3_dflash.py
+index 410204490e..aab8d8c9c8 100644
+--- a/vllm/model_executor/models/qwen3_dflash.py
++++ b/vllm/model_executor/models/qwen3_dflash.py
+@@ -255,6 +255,7 @@ class DFlashQwen3Attention(nn.Module):
+             prefix=f"{prefix}.attn",
+             attn_type=attn_type,
+             sinks=self.attention_sink_bias,
++            use_mm_prefix=False,
+         )
+         self.causal = causal
+         self.q_norm = RMSNorm(self.head_dim, eps=rms_norm_eps)
+@@ -425,6 +426,13 @@ class DFlashQwen3Model(nn.Module):
+             prefix=maybe_prefix(prefix, "embed_tokens"),
+         )
+ 
++        target_config = vllm_config.model_config.hf_text_config
++        self.embed_normalizer: float | None = None
++        if str(getattr(target_config, "model_type", "")).startswith("gemma4"):
++            # Gemma4 scales token embeddings by sqrt(hidden_size). DFlash
++            # shares the target embeddings, so the draft path must match.
++            self.embed_normalizer = target_config.hidden_size**0.5
++
+         # Masked query slots are fed to the draft as `mask_token_id`. Most DFlash
+         # checkpoints will have the mask embedding in the vocabulary embedding table
+         # at that slot id. Some checkpoints (XiaomiMiMo/MiMo-V2.5-Pro-FP4-DFlash) ship
+@@ -477,6 +485,8 @@ class DFlashQwen3Model(nn.Module):
+             # Replace masked slots with the dedicated mask embedding.
+             is_mask = (input_ids == self.mask_token_id).unsqueeze(-1)
+             embeds = torch.where(is_mask, self.mask_embedding.to(embeds.dtype), embeds)
++        if self.embed_normalizer is not None:
++            embeds = embeds * self.embed_normalizer
+         return embeds
+ 
+     def _build_context_kv_buffers(
+@@ -728,7 +738,9 @@ class DFlashQwen3ForCausalLM(Qwen3ForCausalLM):
+             prefix=maybe_prefix(prefix, "lm_head"),
+         )
+         self.logits_processor = LogitsProcessor(
+-            self.config.draft_vocab_size, scale=logit_scale
++            self.config.draft_vocab_size,
++            scale=logit_scale,
++            soft_cap=getattr(self.config, "final_logit_softcapping", None),
+         )
+         target_vocab_size = vllm_config.model_config.get_vocab_size()
+         if self.config.draft_vocab_size != target_vocab_size:
+diff --git a/vllm/v1/attention/backends/triton_attn.py b/vllm/v1/attention/backends/triton_attn.py
+index 4b1c167e7f..014a390dba 100644
+--- a/vllm/v1/attention/backends/triton_attn.py
++++ b/vllm/v1/attention/backends/triton_attn.py
+@@ -119,8 +119,8 @@ class TritonAttentionMetadataBuilder(AttentionMetadataBuilder[TritonAttentionMet
+         self.num_heads_q = get_num_attention_heads_from_layers(
+             vllm_config, layer_names
+         ) or model_config.get_num_attention_heads(vllm_config.parallel_config)
+-        self.num_heads_kv = model_config.get_num_kv_heads(vllm_config.parallel_config)
+-        self.headdim = model_config.get_head_size()
++        self.num_heads_kv = kv_cache_spec.num_kv_heads
++        self.headdim = kv_cache_spec.head_size
+ 
+         # Check if CUDA Graphs are enabled for decode
+         self.decode_cudagraph_enabled = (
+ZLAB_VLLM_PATCH
+    then
+        :
+    else
+        print_error "Failed to apply the proven z-lab vLLM compatibility patch."
+        return 1
+    fi
+
+    run_command git -C "$source_dir" add \
+        vllm/model_executor/layers/attention/attention.py \
+        vllm/model_executor/models/qwen3_dflash.py \
+        vllm/v1/attention/backends/triton_attn.py || return 1
+
+    run_command env \
+        "GIT_AUTHOR_NAME=OMP Integration" \
+        "GIT_AUTHOR_EMAIL=omp@localhost" \
+        "GIT_AUTHOR_DATE=2026-08-19T14:39:58+00:00" \
+        "GIT_COMMITTER_NAME=OMP Integration" \
+        "GIT_COMMITTER_EMAIL=omp@localhost" \
+        "GIT_COMMITTER_DATE=2026-08-19T14:39:58+00:00" \
+        git -C "$source_dir" commit --no-gpg-sign \
+        -m "Port Gemma4 DFlash fixes onto DFlash2 branch" || return 1
+
+    actual_commit=$(git -C "$source_dir" rev-parse HEAD) || return 1
+    if [ "$actual_commit" != "$proven_commit" ]; then
+        print_error "Recreated z-lab vLLM commit is $actual_commit; expected $proven_commit."
+        return 1
+    fi
+
+    VLLM_USE_PRECOMPILED=1 \
+        VLLM_PRECOMPILED_WHEEL_COMMIT="$binary_commit" \
+        run_uv_install -U --reinstall --prerelease=allow \
+        -e "$source_dir" --torch-backend=auto || return 1
+
+    install_flashinfer_python311_compatible || return 1
+}
+
 perform_environment_action() {
     ACTION_TAKEN=false
 
@@ -1451,6 +1611,10 @@ perform_environment_action() {
             ;;
         zyphra-legacy-vllm)
             install_zyphra_legacy_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        z-lab-vllm)
+            install_zlab_vllm || return 1
             ACTION_TAKEN=true
             ;;
         *)
