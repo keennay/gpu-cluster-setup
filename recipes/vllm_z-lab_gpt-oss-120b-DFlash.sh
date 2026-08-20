@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_z-lab-vllm"
+PYTHON_ENV="env_dflash-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_USE_V2_MODEL_RUNNER=1"
 MODEL_REPO="openai/gpt-oss-120b"

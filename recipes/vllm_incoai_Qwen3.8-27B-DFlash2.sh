@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_redhat-vllm"
+PYTHON_ENV="env_dflash-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
-MODEL_REPO="RedHatAI/Qwen3.6-35B-A3B-FP8-dynamic"
+MODEL_REPO="Qwen/Qwen3.8-27B"
 MODEL_NAME="qwen3"
 SERVED_MODEL_NAME="qwen"
 CONTEXT_LEN_VALUE=262144
@@ -12,7 +12,7 @@ TRUST_REMOTE_CODE="--trust-remote-code"
 REASONING_PARSER="--reasoning-parser $MODEL_NAME"
 ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
 TOOL_CALL_PARSER="--tool-call-parser qwen3_coder"
-GPU_MEM_UTIL_VALUE=0.881803
+GPU_MEM_UTIL_VALUE=0.908214
 METRICS_FLAG=""
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
@@ -25,14 +25,14 @@ BACKEND_MOE_RUNNER_SM120=""
 BACKEND_MOE_RUNNER_SM121=""
 
 ENABLE_CACHE_FLAG=0
-ENABLE_SPECULATIVE=0
+ENABLE_SPECULATIVE=1
 ENABLE_REASONING_PARSER=0
-SPECULATIVE=''
+SPECULATIVE='--speculative-config {"method":"dflash","model":"incoai/Qwen3.8-27B-DFlash2","num_speculative_tokens":7}'
 QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS=""
+EXTRA_ARGS="--attention-backend flash_attn --max-num-batched-tokens 32768"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

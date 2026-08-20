@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_z-lab-vllm"
+PYTHON_ENV="env_dflash-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="Qwen/Qwen3.5-4B"

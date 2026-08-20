@@ -35,6 +35,7 @@ ENV_TYPES=(
   "deepseek-lmdeploy"
   "deepseek-sglang"
   "deepseek-vllm"
+  "dflash-vllm"
   "gemma-sglang"
   "gemma-vllm"
   "glm-ktransformers"
@@ -53,6 +54,7 @@ ENV_TYPES=(
   "liquidai-sglang"
   "liquidai-transformers"
   "liquidai-vllm"
+  "meta-vllm"
   "microsoft-vllm"
   "minimax-ktransformers"
   "minimax-sglang"
@@ -60,7 +62,6 @@ ENV_TYPES=(
   "minimax-vllm"
   "mistralai-transformers"
   "mistralai-vllm"
-  "muse-vllm"
   "nanbeige-sglang"
   "nanbeige-transformers"
   "nanbeige-vllm"
@@ -85,7 +86,6 @@ ENV_TYPES=(
   "zyphra-vllm"
   "zyphra-legacy-transformers"
   "zyphra-legacy-vllm"
-  "z-lab-vllm"
   "custom_uv"
   "custom_pip"
 )
@@ -103,6 +103,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["deepseek-lmdeploy"]="DeepSeek (LMDeploy)"
   ["deepseek-sglang"]="DeepSeek (SGLang)"
   ["deepseek-vllm"]="DeepSeek (vLLM)"
+  ["dflash-vllm"]="DFlash (vLLM)"
   ["gemma-sglang"]="Gemma (SGLang)"
   ["gemma-vllm"]="Gemma (vLLM)"
   ["glm-ktransformers"]="GLM (KTransformers)"
@@ -121,6 +122,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["liquidai-sglang"]="LiquidAI (SGLang)"
   ["liquidai-transformers"]="LiquidAI (Transformers)"
   ["liquidai-vllm"]="LiquidAI (vLLM)"
+  ["meta-vllm"]="Meta (vLLM)"
   ["microsoft-vllm"]="Microsoft (vLLM)"
   ["minimax-ktransformers"]="MiniMax (KTransformers)"
   ["minimax-sglang"]="MiniMax (SGLang)"
@@ -128,7 +130,6 @@ declare -A ENV_DESCRIPTIONS=(
   ["minimax-vllm"]="MiniMax (vLLM)"
   ["mistralai-transformers"]="MistralAI (Transformers)"
   ["mistralai-vllm"]="MistralAI (vLLM)"
-  ["muse-vllm"]="Muse (vLLM)"
   ["nanbeige-sglang"]="Nanbeige (SGLang)"
   ["nanbeige-transformers"]="Nanbeige (Transformers)"
   ["nanbeige-vllm"]="Nanbeige (vLLM)"
@@ -153,7 +154,6 @@ declare -A ENV_DESCRIPTIONS=(
   ["zyphra-vllm"]="Zyphra (vLLM)"
   ["zyphra-legacy-transformers"]="Zyphra Legacy (Transformers)"
   ["zyphra-legacy-vllm"]="Zyphra Legacy (vLLM)"
-  ["z-lab-vllm"]="z-lab (vLLM)"
   ["custom_uv"]="Custom (uv)"
   ["custom_pip"]="Custom (pip)"
 )
@@ -198,158 +198,158 @@ resolve_env_type() {
         12|deepseek_vllm|deepseek-vllm)
             echo "deepseek-vllm"
             ;;
-        13|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
+        13|dflash_vllm|dflash-vllm)
+            echo "dflash-vllm"
+            ;;
+        14|gemma_sglang|gemma-sglang|gemma4_sglang|gemma4-sglang|gemma_4_sglang|gemma-4-sglang)
             echo "gemma-sglang"
             ;;
-        14|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
+        15|gemma_vllm|gemma-vllm|gemma4_vllm|gemma4-vllm|gemma_4_vllm|gemma-4-vllm)
             echo "gemma-vllm"
             ;;
-        15|glm_ktransformers|glm-ktransformers)
+        16|glm_ktransformers|glm-ktransformers)
             echo "glm-ktransformers"
             ;;
-        16|glm_sglang|glm-sglang)
+        17|glm_sglang|glm-sglang)
             echo "glm-sglang"
             ;;
-        17|glm_transformers|glm-transformers)
+        18|glm_transformers|glm-transformers)
             echo "glm-transformers"
             ;;
-        18|glm_vllm|glm-vllm)
+        19|glm_vllm|glm-vllm)
             echo "glm-vllm"
             ;;
-        19|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        20|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        20|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        21|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        21|inclusionai_sglang|inclusionai-sglang)
+        22|inclusionai_sglang|inclusionai-sglang)
             echo "inclusionai-sglang"
             ;;
-        22|inclusionai_transformers|inclusionai-transformers)
+        23|inclusionai_transformers|inclusionai-transformers)
             echo "inclusionai-transformers"
             ;;
-        23|inclusionai_vllm|inclusionai-vllm)
+        24|inclusionai_vllm|inclusionai-vllm)
             echo "inclusionai-vllm"
             ;;
-        24|intel_vllm|intel-vllm)
+        25|intel_vllm|intel-vllm)
             echo "intel-vllm"
             ;;
-        25|kimi_ktransformers|kimi-ktransformers)
+        26|kimi_ktransformers|kimi-ktransformers)
             echo "kimi-ktransformers"
             ;;
-        26|kimi_sglang|kimi-sglang)
+        27|kimi_sglang|kimi-sglang)
             echo "kimi-sglang"
             ;;
-        27|kimi_vllm|kimi-vllm)
+        28|kimi_vllm|kimi-vllm)
             echo "kimi-vllm"
             ;;
-        28|liquidai_sglang|liquidai-sglang)
+        29|liquidai_sglang|liquidai-sglang)
             echo "liquidai-sglang"
             ;;
-        29|liquidai_transformers|liquidai-transformers)
+        30|liquidai_transformers|liquidai-transformers)
             echo "liquidai-transformers"
             ;;
-        30|liquidai_vllm|liquidai-vllm)
+        31|liquidai_vllm|liquidai-vllm)
             echo "liquidai-vllm"
             ;;
-        31|microsoft_vllm|microsoft-vllm)
+        32|meta_vllm|meta-vllm)
+            echo "meta-vllm"
+            ;;
+        33|microsoft_vllm|microsoft-vllm)
             echo "microsoft-vllm"
             ;;
-        32|minimax_ktransformers|minimax-ktransformers)
+        34|minimax_ktransformers|minimax-ktransformers)
             echo "minimax-ktransformers"
             ;;
-        33|minimax_sglang|minimax-sglang)
+        35|minimax_sglang|minimax-sglang)
             echo "minimax-sglang"
             ;;
-        34|minimax_transformers|minimax-transformers)
+        36|minimax_transformers|minimax-transformers)
             echo "minimax-transformers"
             ;;
-        35|minimax_vllm|minimax-vllm)
+        37|minimax_vllm|minimax-vllm)
             echo "minimax-vllm"
             ;;
-        36|mistralai_transformers|mistralai-transformers)
+        38|mistralai_transformers|mistralai-transformers)
             echo "mistralai-transformers"
             ;;
-        37|mistralai_vllm|mistralai-vllm)
+        39|mistralai_vllm|mistralai-vllm)
             echo "mistralai-vllm"
             ;;
-        38|muse_vllm|muse-vllm)
-            echo "muse-vllm"
-            ;;
-        39|nanbeige_sglang|nanbeige-sglang)
+        40|nanbeige_sglang|nanbeige-sglang)
             echo "nanbeige-sglang"
             ;;
-        40|nanbeige_transformers|nanbeige-transformers)
+        41|nanbeige_transformers|nanbeige-transformers)
             echo "nanbeige-transformers"
             ;;
-        41|nanbeige_vllm|nanbeige-vllm)
+        42|nanbeige_vllm|nanbeige-vllm)
             echo "nanbeige-vllm"
             ;;
-        42|nemotron_sglang|nemotron-sglang)
+        43|nemotron_sglang|nemotron-sglang)
             echo "nemotron-sglang"
             ;;
-        43|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
+        44|nemotron_trtllm|nemotron-trtllm|nemotron_trt_llm|nemotron-trt-llm)
             echo "nemotron-trtllm"
             ;;
-        44|nemotron_vllm|nemotron-vllm)
+        45|nemotron_vllm|nemotron-vllm)
             echo "nemotron-vllm"
             ;;
-        45|nvidia_vllm|nvidia-vllm)
+        46|nvidia_vllm|nvidia-vllm)
             echo "nvidia-vllm"
             ;;
-        46|poolside_sglang|poolside-sglang)
+        47|poolside_sglang|poolside-sglang)
             echo "poolside-sglang"
             ;;
-        47|poolside_transformers|poolside-transformers)
+        48|poolside_transformers|poolside-transformers)
             echo "poolside-transformers"
             ;;
-        48|poolside_laguna_xs_vllm|poolside-laguna-xs-vllm)
+        49|poolside_laguna_xs_vllm|poolside-laguna-xs-vllm)
             echo "poolside-laguna-xs-vllm"
             ;;
-        49|poolside_laguna_vllm|poolside-laguna-vllm)
+        50|poolside_laguna_vllm|poolside-laguna-vllm)
             echo "poolside-laguna-vllm"
             ;;
-        50|primeintellect_vllm|primeintellect-vllm)
+        51|primeintellect_vllm|primeintellect-vllm)
             echo "primeintellect-vllm"
             ;;
-        51|qwen_ktransformers|qwen-ktransformers)
+        52|qwen_ktransformers|qwen-ktransformers)
             echo "qwen-ktransformers"
             ;;
-        52|qwen_sglang|qwen-sglang)
+        53|qwen_sglang|qwen-sglang)
             echo "qwen-sglang"
             ;;
-        53|qwen_transformers|qwen-transformers)
+        54|qwen_transformers|qwen-transformers)
             echo "qwen-transformers"
             ;;
-        54|qwen_vllm|qwen-vllm)
+        55|qwen_vllm|qwen-vllm)
             echo "qwen-vllm"
             ;;
-        55|redhat_vllm|redhat-vllm)
+        56|redhat_vllm|redhat-vllm)
             echo "redhat-vllm"
             ;;
-        56|stepfun_sglang|stepfun-sglang)
+        57|stepfun_sglang|stepfun-sglang)
             echo "stepfun-sglang"
             ;;
-        57|stepfun_transformers|stepfun-transformers)
+        58|stepfun_transformers|stepfun-transformers)
             echo "stepfun-transformers"
             ;;
-        58|stepfun_vllm|stepfun-vllm)
+        59|stepfun_vllm|stepfun-vllm)
             echo "stepfun-vllm"
             ;;
-        59|zyphra_transformers|zyphra-transformers)
+        60|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        60|zyphra_vllm|zyphra-vllm)
+        61|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        61|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        62|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        62|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        63|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
-            ;;
-        63|z_lab_vllm|z-lab_vllm|zlab_vllm|zlab-vllm|z-lab-vllm)
-            echo "z-lab-vllm"
             ;;
         64|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
@@ -1083,6 +1083,18 @@ install_inclusionai_vllm() {
 }
 
 
+install_meta_vllm() {
+    local vllm_version="0.27.2rc1.dev113+g5cecfc013"
+    local vllm_wheel="https://wheels.vllm.ai/5cecfc01375052698823fc401e31518fb32a981e/vllm-0.27.2rc1.dev113%2Bg5cecfc013-cp38-abi3-manylinux_2_28_x86_64.whl#sha256=7858cbbd1fbf426a6eac5a9e2dc3779e04ee63705f65c90ab5baca4705a4a638"
+
+    print_info "Installing vLLM $vllm_version for Meta from its immutable commit wheel..."
+    ensure_active_environment_matches meta-vllm || return 1
+    run_uv_install --upgrade --reinstall --prerelease=allow \
+        "$vllm_wheel" --torch-backend=auto || return 1
+    install_flashinfer_python311_compatible || return 1
+    run_uv_install timm || return 1
+}
+
 install_microsoft_vllm() {
     print_info "Installing the pinned GitHub vLLM commit for Microsoft..."
     install_vllm_pinned_commit_python311_compatible || return 1
@@ -1109,35 +1121,7 @@ install_mistralai_vllm() {
     install_vllm_pinned_commit_python311_compatible || return 1
 }
 
-install_muse_vllm() {
-    local source_commit="c89c0c93086397f699807737d02a1de0c1d55430"
-    local binary_commit="52be12cfac0c5a18ba906814b2d2bcadb40a9c4b"
-    local target_dir=""
 
-    print_info "Installing the proven Muse Glimmer vLLM commit $source_commit..."
-    ensure_active_environment_matches muse-vllm || return 1
-    target_dir="$VIRTUAL_ENV/vllm"
-
-    if [ -e "$target_dir" ] && [ ! -d "$target_dir/.git" ]; then
-        print_error "vLLM target exists but is not a git checkout: $target_dir"
-        return 1
-    fi
-
-    if [ ! -d "$target_dir/.git" ]; then
-        run_command git clone --filter=blob:none --single-branch \
-            --branch fix-spec-decode https://github.com/xianbaoqian/vllm.git \
-            "$target_dir" || return 1
-    fi
-
-    run_command git -C "$target_dir" fetch origin fix-spec-decode --tags || return 1
-    run_command git -C "$target_dir" checkout --force "$source_commit" || return 1
-
-    VLLM_USE_PRECOMPILED=1 \
-        VLLM_PRECOMPILED_WHEEL_COMMIT="$binary_commit" \
-        run_uv_install -U --reinstall --prerelease=allow \
-        -e "$target_dir" --torch-backend=auto || return 1
-    run_uv_install timm || return 1
-}
 
 install_nanbeige_vllm() {
     local source_commit="1cf78162bed34ab18ba951396ab5d2c163c85714"
@@ -1242,8 +1226,14 @@ install_qwen_vllm() {
 }
 
 install_redhat_vllm() {
-    print_info "Installing the pinned GitHub vLLM commit and timm for RedHat..."
-    install_vllm_pinned_commit_python311_compatible || return 1
+    local vllm_version="0.27.2rc1.dev113+g5cecfc013"
+    local vllm_wheel="https://wheels.vllm.ai/5cecfc01375052698823fc401e31518fb32a981e/vllm-0.27.2rc1.dev113%2Bg5cecfc013-cp38-abi3-manylinux_2_28_x86_64.whl#sha256=7858cbbd1fbf426a6eac5a9e2dc3779e04ee63705f65c90ab5baca4705a4a638"
+
+    print_info "Installing vLLM $vllm_version for RedHat from its immutable commit wheel..."
+    ensure_active_environment_matches redhat-vllm || return 1
+    run_uv_install --upgrade --reinstall --prerelease=allow \
+        "$vllm_wheel" --torch-backend=auto || return 1
+    install_flashinfer_python311_compatible || return 1
     run_uv_install timm || return 1
 }
 
@@ -1270,15 +1260,15 @@ install_zyphra_legacy_vllm() {
     run_pip_install "vllm @ git+https://github.com/Zyphra/vllm.git@$source_commit" || return 1
 }
 
-install_zlab_vllm() {
+install_dflash_vllm() {
     local upstream_commit="31840cf3ead3632f3c99db4a24e4aba39ad54ef6"
     local proven_commit="c3dabcddc328e00990892370317d36cda31745e6"
     local binary_commit="9842d701450214d4b78cd9aefb8eee0c616bce33"
     local source_dir=""
     local actual_commit=""
 
-    print_info "Installing the proven z-lab vLLM patchset $proven_commit..."
-    ensure_active_environment_matches z-lab-vllm || return 1
+    print_info "Installing the proven DFlash vLLM patchset $proven_commit..."
+    ensure_active_environment_matches dflash-vllm || return 1
     source_dir="$VIRTUAL_ENV/vllm"
 
     if [ -e "$source_dir" ] && [ ! -d "$source_dir/.git" ]; then
@@ -1295,8 +1285,8 @@ install_zlab_vllm() {
         refs/pull/52816/head --tags || return 1
     run_command git -C "$source_dir" checkout --force "$upstream_commit" || return 1
 
-    print_command "git -C $source_dir apply z-lab compatibility patch"
-    if git -C "$source_dir" apply <<'ZLAB_VLLM_PATCH'
+    print_command "git -C $source_dir apply DFlash compatibility patch"
+    if git -C "$source_dir" apply <<'DFLASH_VLLM_PATCH'
 diff --git a/vllm/model_executor/layers/attention/attention.py b/vllm/model_executor/layers/attention/attention.py
 index b4831e2a0b..cf19311915 100644
 --- a/vllm/model_executor/layers/attention/attention.py
@@ -1388,11 +1378,11 @@ index 4b1c167e7f..014a390dba 100644
  
          # Check if CUDA Graphs are enabled for decode
          self.decode_cudagraph_enabled = (
-ZLAB_VLLM_PATCH
+DFLASH_VLLM_PATCH
     then
         :
     else
-        print_error "Failed to apply the proven z-lab vLLM compatibility patch."
+        print_error "Failed to apply the proven DFlash vLLM compatibility patch."
         return 1
     fi
 
@@ -1413,7 +1403,7 @@ ZLAB_VLLM_PATCH
 
     actual_commit=$(git -C "$source_dir" rev-parse HEAD) || return 1
     if [ "$actual_commit" != "$proven_commit" ]; then
-        print_error "Recreated z-lab vLLM commit is $actual_commit; expected $proven_commit."
+        print_error "Recreated DFlash vLLM commit is $actual_commit; expected $proven_commit."
         return 1
     fi
 
@@ -1463,6 +1453,10 @@ perform_environment_action() {
             ;;
         deepseek-vllm)
             install_deepseek_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        dflash-vllm)
+            install_dflash_vllm || return 1
             ACTION_TAKEN=true
             ;;
         gemma-sglang)
@@ -1525,6 +1519,10 @@ perform_environment_action() {
             install_liquidai_vllm || return 1
             ACTION_TAKEN=true
             ;;
+        meta-vllm)
+            install_meta_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
         microsoft-vllm)
             install_microsoft_vllm || return 1
             ACTION_TAKEN=true
@@ -1543,10 +1541,6 @@ perform_environment_action() {
             ;;
         mistralai-vllm)
             install_mistralai_vllm || return 1
-            ACTION_TAKEN=true
-            ;;
-        muse-vllm)
-            install_muse_vllm || return 1
             ACTION_TAKEN=true
             ;;
         nanbeige-vllm)
@@ -1611,10 +1605,6 @@ perform_environment_action() {
             ;;
         zyphra-legacy-vllm)
             install_zyphra_legacy_vllm || return 1
-            ACTION_TAKEN=true
-            ;;
-        z-lab-vllm)
-            install_zlab_vllm || return 1
             ACTION_TAKEN=true
             ;;
         *)
