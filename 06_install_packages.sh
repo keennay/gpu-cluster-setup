@@ -1080,6 +1080,7 @@ install_inclusionai_vllm() {
     print_info "Installing vLLM $vllm_version for InclusionAI from its immutable commit wheel..."
     run_uv_install --upgrade --reinstall --prerelease=allow \
         "$vllm_wheel" --torch-backend=auto || return 1
+    install_flashinfer_python311_compatible || return 1
 }
 
 
