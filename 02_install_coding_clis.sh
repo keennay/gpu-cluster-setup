@@ -177,8 +177,11 @@ if [[ "$INSTALL_CLIS" =~ ^[Yy]$ ]]; then
     prompt_yes_no INSTALL_CODEX "  Install OpenAI Codex? (y/n): "
     if [[ "$INSTALL_CODEX" =~ ^[Yy]$ ]]; then
         print_info "Installing OpenAI Codex..."
-        npm install -g @openai/codex
-        [ $? -eq 0 ] && print_info "OpenAI Codex installed" || print_warning "Failed to install OpenAI Codex"
+        if curl -fsSL https://chatgpt.com/codex/install.sh | sh; then
+            print_info "OpenAI Codex installed"
+	else
+	    print_warning "Failed to install OpenAI Codex"
+	fi
     fi
 
     # OpenCode AI
