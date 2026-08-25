@@ -32,7 +32,7 @@ QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--revision ed0c85631cf20929c29bc36d7cb37519ed0cdd28"
+EXTRA_ARGS=""
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

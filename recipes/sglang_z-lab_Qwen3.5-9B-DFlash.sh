@@ -27,12 +27,12 @@ BACKEND_MOE_RUNNER_SM121=""
 ENABLE_CACHE_FLAG=0
 ENABLE_SPECULATIVE=1
 ENABLE_REASONING_PARSER=0
-SPECULATIVE="--speculative-algorithm DFLASH --speculative-draft-model-path z-lab/Qwen3.5-9B-DFlash --speculative-draft-model-revision 5fc3b3d474760f18c516db87d84c37edbfd3ede6 --speculative-dflash-block-size 8 --speculative-draft-attention-backend fa4"
+SPECULATIVE="--speculative-algorithm DFLASH --speculative-draft-model-path z-lab/Qwen3.5-9B-DFlash --speculative-dflash-block-size 8 --speculative-draft-attention-backend fa4"
 QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--revision c202236235762e1c871ad0ccb60c8ee5ba337b9a --attention-backend flashinfer --linear-attn-prefill-backend flashinfer --linear-attn-decode-backend flashinfer --mamba-scheduler-strategy extra_buffer --max-running-requests 32 --cuda-graph-max-bs-decode 32 --cuda-graph-backend-prefill tc_piecewise --enable-flashinfer-allreduce-fusion"
+EXTRA_ARGS="--attention-backend flashinfer --linear-attn-prefill-backend flashinfer --linear-attn-decode-backend flashinfer --mamba-scheduler-strategy extra_buffer --max-running-requests 32 --cuda-graph-max-bs-decode 32 --cuda-graph-backend-prefill tc_piecewise --enable-flashinfer-allreduce-fusion"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

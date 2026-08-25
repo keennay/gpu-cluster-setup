@@ -27,12 +27,12 @@ BACKEND_MOE_RUNNER_SM121=""
 ENABLE_CACHE_FLAG=0
 ENABLE_SPECULATIVE=1
 ENABLE_REASONING_PARSER=0
-SPECULATIVE="--speculative-algorithm DFLASH --speculative-draft-model-path z-lab/gemma-4-26B-A4B-it-DFlash --speculative-draft-model-revision 77d4202772dfe50b2396ec7bac9cfffc7b9e7057 --speculative-num-draft-tokens 16 --speculative-draft-attention-backend fa4"
+SPECULATIVE="--speculative-algorithm DFLASH --speculative-draft-model-path z-lab/gemma-4-26B-A4B-it-DFlash --speculative-num-draft-tokens 16 --speculative-draft-attention-backend fa4"
 QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--revision 4d7ae4984b7db7de8f8457170b3f1a419ee76d52 --attention-backend triton"
+EXTRA_ARGS="--attention-backend triton"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

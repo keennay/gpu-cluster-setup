@@ -27,12 +27,12 @@ BACKEND_MOE_RUNNER_SM121=""
 ENABLE_CACHE_FLAG=0
 ENABLE_SPECULATIVE=1
 ENABLE_REASONING_PARSER=0
-SPECULATIVE="--speculative-algorithm DFLASH --speculative-draft-model-path poolside/Laguna-XS-2.1-DFlash --speculative-draft-model-revision 5c36361aab23c8ed3afbd079c10c426b677bc607"
+SPECULATIVE="--speculative-algorithm DFLASH --speculative-draft-model-path poolside/Laguna-XS-2.1-DFlash"
 QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--revision e9df9a59996d790b94b70f3fef343fe1d9e34bdf --attention-backend fa3 --page-size 1"
+EXTRA_ARGS="--attention-backend fa3 --page-size 1"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

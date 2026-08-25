@@ -32,7 +32,7 @@ QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--revision 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a --enable-flashinfer-allreduce-fusion --mamba-radix-cache-strategy extra_buffer --max-running-requests 128 --chunked-prefill-size 16384"
+EXTRA_ARGS="--enable-flashinfer-allreduce-fusion --mamba-radix-cache-strategy extra_buffer --max-running-requests 128 --chunked-prefill-size 16384"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

@@ -27,12 +27,12 @@ BACKEND_MOE_RUNNER_SM121=""
 ENABLE_CACHE_FLAG=0
 ENABLE_SPECULATIVE=1
 ENABLE_REASONING_PARSER=0
-SPECULATIVE="--speculative-algorithm EAGLE --speculative-draft-model-path mistralai/Mistral-Small-4-119B-2603-eagle --speculative-draft-model-revision 06f2292922a635990cfa6543911b55ebf2974062 --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4"
+SPECULATIVE="--speculative-algorithm EAGLE --speculative-draft-model-path mistralai/Mistral-Small-4-119B-2603-eagle --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4"
 QUANTIZATION=""
 NO_PREFIX_CACHE="--disable-radix-cache"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--revision 19037a2b5fa91a94a46fab6c50f4d2fffe43ebc8 --dtype bfloat16"
+EXTRA_ARGS="--dtype bfloat16"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

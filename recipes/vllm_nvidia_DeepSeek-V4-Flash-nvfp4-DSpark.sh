@@ -32,7 +32,7 @@ QUANTIZATION="--quantization modelopt"
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--revision 7ac53121c19350518c374b67e3883ceb189fb26e --enable-expert-parallel --kv-cache-dtype fp8 --block-size 256 --tokenizer-mode deepseek_v4 --moe-backend marlin --max-num-seqs 16 --max-num-batched-tokens 16384 --enforce-eager"
+EXTRA_ARGS="--enable-expert-parallel --kv-cache-dtype fp8 --block-size 256 --tokenizer-mode deepseek_v4 --moe-backend marlin --max-num-seqs 16 --max-num-batched-tokens 16384 --enforce-eager"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh
