@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_poolside-laguna-vllm"
+PYTHON_ENV="env_poolside-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="poolside/Laguna-S-2.1-NVFP4"

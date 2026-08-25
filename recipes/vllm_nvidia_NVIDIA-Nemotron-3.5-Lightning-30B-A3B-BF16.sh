@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_nemotron-vllm"
+PYTHON_ENV="env_nvidia-nemotron"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV="env VLLM_ALLOW_LONG_MAX_MODEL_LEN=1"
 MODEL_REPO="nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
@@ -32,7 +32,7 @@ QUANTIZATION=""
 NO_PREFIX_CACHE="--no-enable-prefix-caching"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--max-num-seqs 128 --enable-prefix-caching --async-scheduling --mamba-backend flashinfer --mamba-cache-mode align --mamba-ssm-cache-dtype float16 --enable-mamba-cache-stochastic-rounding --mamba-cache-philox-rounds 5"
+EXTRA_ARGS="--max-num-seqs 128 --async-scheduling --mamba-backend flashinfer --mamba-cache-mode align --mamba-ssm-cache-dtype float16 --enable-mamba-cache-stochastic-rounding --mamba-cache-philox-rounds 5"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

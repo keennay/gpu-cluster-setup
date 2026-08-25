@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_nvidia-vllm"
-INFERENCE_PROVIDER="vLLM"
-INFERENCE_ENV="env VLLM_NVFP4_GEMM_BACKEND=marlin"
-MODEL_REPO="nvidia/Qwen3.5-397B-A17B-NVFP4-V2"
+PYTHON_ENV="env_qwen-sglang"
+INFERENCE_PROVIDER="SGLang"
+INFERENCE_ENV=""
+MODEL_REPO="Qwen/Qwen3.5-2B"
 MODEL_NAME="qwen3"
 SERVED_MODEL_NAME="qwen"
 CONTEXT_LEN_VALUE=262144
-DEFAULT_TENSOR_PARALLEL_SIZE=2
+DEFAULT_TENSOR_PARALLEL_SIZE=1
 TRUST_REMOTE_CODE="--trust-remote-code"
-REASONING_PARSER="--reasoning-parser $MODEL_NAME"
-ENABLE_AUTO_TOOL_CHOICE="--enable-auto-tool-choice"
+REASONING_PARSER="--reasoning-parser qwen3"
+ENABLE_AUTO_TOOL_CHOICE=""
 TOOL_CALL_PARSER="--tool-call-parser qwen3_coder"
-GPU_MEM_UTIL_VALUE=0.868188
-METRICS_FLAG=""
+GPU_MEM_UTIL_VALUE=0.8
+METRICS_FLAG="--enable-metrics"
 HOST="0.0.0.0"
 DEFAULT_PORT=8000
 API_KEY="--api-key YOUR_API_KEY"
@@ -27,12 +27,12 @@ BACKEND_MOE_RUNNER_SM121=""
 ENABLE_CACHE_FLAG=0
 ENABLE_SPECULATIVE=0
 ENABLE_REASONING_PARSER=0
-SPECULATIVE='--speculative-config {"method":"qwen3_next_mtp","num_speculative_tokens":2}'
-QUANTIZATION="--quantization modelopt"
-NO_PREFIX_CACHE="--no-enable-prefix-caching"
+SPECULATIVE=""
+QUANTIZATION=""
+NO_PREFIX_CACHE="--disable-radix-cache"
 SCRIPT_DIR=""
 REASONING_PARSER_PLUGIN="${SCRIPT_DIR:+$SCRIPT_DIR/plugins/super_v3_reasoning_parser.py}"
-EXTRA_ARGS="--enable-expert-parallel --language-model-only --enable-prefix-caching --moe-backend marlin --max-num-seqs 128 --max-cudagraph-capture-size 128"
+EXTRA_ARGS="--revision 15852e8c16360a2fea060d615a32b45270f8a8fc --enable-flashinfer-allreduce-fusion"
 
 RECIPE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=helpers/inference_recipe.sh

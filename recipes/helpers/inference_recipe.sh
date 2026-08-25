@@ -730,6 +730,9 @@ run_inference_recipe() {
     base_command+=" $TRUST_REMOTE_CODE"
     base_command+=" $TENSOR_PARALLEL_SIZE_FLAG $TENSOR_PARALLEL_SIZE_VALUE"
     base_command+=" $REASONING_PARSER"
+    if [ -n "$REASONING_PARSER_PLUGIN" ]; then
+        base_command+=" --reasoning-parser-plugin $REASONING_PARSER_PLUGIN"
+    fi
     base_command+=" $ENABLE_AUTO_TOOL_CHOICE"
     base_command+=" $TOOL_CALL_PARSER"
     base_command+=" $CONTEXT_LEN_FLAG"

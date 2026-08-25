@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_dflash-vllm"
+PYTHON_ENV="env_incoai-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="meta-models/Muse-Glimmer-30B"

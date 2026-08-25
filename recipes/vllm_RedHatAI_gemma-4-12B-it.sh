@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_redhat-vllm"
+PYTHON_ENV="env_redhatai-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="RedHatAI/gemma-4-12B-it"
