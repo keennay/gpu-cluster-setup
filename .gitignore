@@ -5,6 +5,7 @@ experts/
 experts_backup/
 logs/
 logs_backup/
+llm-inference-bench/
 results/
 results_backup/
 tmp/
