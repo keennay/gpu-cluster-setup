@@ -127,9 +127,9 @@ editing=""
 status_message=""
 
 PANEL_WIDTH=80
-PANEL_HEIGHT=27
+PANEL_HEIGHT=28
 MIN_COLUMNS=80
-MIN_ROWS=27
+MIN_ROWS=28
 FIELD_WIDTH=47
 terminal_rows=21
 terminal_columns=80
@@ -297,7 +297,6 @@ build_panel() {
     PANEL_LINES=()
     printf -v border '%*s' "$((PANEL_WIDTH - ${#title} - 5))" ""
     PANEL_LINES+=("┌─ $title ${border// /─}┐")
-    append_blank_line
 
     marker_for "install"
     install_text="${FOCUS_MARKER} [ Install ]"
@@ -305,9 +304,9 @@ build_panel() {
     cancel_text="${FOCUS_MARKER} [ Cancel ]"
     center_content "$install_text $cancel_text"
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
+    append_blank_line
 
     append_separator "Selection"
-    append_blank_line
     if all_packages_selected; then
         all_selected=1
         selected_mark="X"
@@ -356,6 +355,7 @@ build_panel() {
     render_field "$cuda_buffer" "$active"
     printf -v content '%-11.11s%s[%s]   ' "$default_text" "$custom_text" "$RENDERED_FIELD"
     PANEL_LINES+=("│ ${content} │")
+    append_blank_line
 
     append_separator "Python Version"
     marker_for "python_default"
@@ -377,6 +377,7 @@ build_panel() {
     render_field "$python_buffer" "$active"
     printf -v content '%-13.13s%s[%s] ' "$default_text" "$custom_text" "$RENDERED_FIELD"
     PANEL_LINES+=("│ ${content} │")
+    append_blank_line
 
     append_separator "Coding CLIs"
     append_blank_line
@@ -426,11 +427,11 @@ style_panel_line() {
             title="Selection"
             is_border=1
             ;;
-        7)
+        6)
             title="Dependencies"
             is_border=1
             ;;
-        13)
+        12)
             title="CUDA Version"
             is_border=1
             ;;
@@ -438,15 +439,15 @@ style_panel_line() {
             title="Python Version"
             is_border=1
             ;;
-        17)
+        18)
             title="Coding CLIs"
             is_border=1
             ;;
-        24)
+        25)
             title="Controls"
             is_border=1
             ;;
-        26)
+        27)
             is_border=1
             ;;
     esac
@@ -464,13 +465,13 @@ style_panel_line() {
 
     body="${line#│}"
     body="${body%│}"
-    if (( line_index == 25 )); then
+    if (( line_index == 26 )); then
         if [ -n "$status_message" ]; then
             body="${STYLE_ALERT}${body}${STYLE_RESET}"
         else
             body="${STYLE_MUTED}${body}${STYLE_RESET}"
         fi
-    elif (( line_index == 6 )); then
+    elif (( line_index == 5 )); then
         body="${STYLE_MUTED}${body}${STYLE_RESET}"
     else
         body="${body//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
@@ -532,7 +533,7 @@ draw_screen() {
         if (( cursor_offset > FIELD_WIDTH - 1 )); then
             cursor_offset=$((FIELD_WIDTH - 1))
         fi
-        cursor_row=$((panel_top + 14))
+        cursor_row=$((panel_top + 13))
         cursor_column=$((panel_left + 27 + cursor_offset))
         printf '\033[?25h\033[%d;%dH' "$cursor_row" "$cursor_column" >&"$TTY_FD"
     elif [ "$editing" = "python" ]; then
@@ -648,6 +649,7 @@ read_key() {
     local byte=""
     local second=""
     local third=""
+    local read_status=0
 
     KEY=""
     KEY_CHAR=""
@@ -656,13 +658,21 @@ read_key() {
         return 0
     fi
 
-    if ! IFS= read -r -s -n 1 -u "$TTY_FD" byte; then
+    while true; do
+        read_status=0
+        IFS= read -r -s -n 1 -t 0.1 -u "$TTY_FD" byte || read_status=$?
+        if (( read_status == 0 )); then
+            break
+        fi
         if (( WINCH_PENDING )); then
             KEY="resize"
             return 0
         fi
+        if (( read_status > 128 )); then
+            continue
+        fi
         return 1
-    fi
+    done
 
     case "$byte" in
         "")
