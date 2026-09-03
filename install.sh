@@ -137,11 +137,18 @@ panel_top=1
 panel_left=1
 terminal_too_small=0
 focus_index=0
+FLASH_ENABLED=1
+FLASH_PHASE=0
+FLASH_TIMEOUT_COUNT=0
+FLASH_INTERVAL_TICKS=8
+FOCUSED_TEXT=""
 if [ -n "${NO_COLOR:-}" ]; then
     STYLE_RESET=""
     STYLE_BORDER=""
     STYLE_TITLE=""
-    STYLE_FOCUS=""
+    STYLE_FOCUS_PRIMARY=""
+    STYLE_FOCUS_ALTERNATE=""
+    FLASH_ENABLED=0
     STYLE_SELECTED=""
     STYLE_MUTED=""
     STYLE_ALERT=""
@@ -149,7 +156,8 @@ else
     STYLE_RESET=$'\033[0m'
     STYLE_BORDER=$'\033[38;5;243m'
     STYLE_TITLE=$'\033[1;38;5;81m'
-    STYLE_FOCUS=$'\033[1;38;5;81m'
+    STYLE_FOCUS_PRIMARY=$'\033[1;38;5;16;48;5;81m'
+    STYLE_FOCUS_ALTERNATE=$'\033[1;38;5;231;48;5;25m'
     STYLE_SELECTED=$'\033[1;38;5;114m'
     STYLE_MUTED=$'\033[38;5;245m'
     STYLE_ALERT=$'\033[1;38;5;203m'
@@ -233,13 +241,15 @@ append_separator() {
     PANEL_LINES+=("├─ $title ${dashes// /─}┤")
 }
 
-marker_for() {
+control_text() {
     local control="$1"
+    local text="$2"
 
     if [ "${FOCUS_CONTROLS[$focus_index]}" = "$control" ]; then
-        FOCUS_MARKER=">"
+        CONTROL_TEXT="> $text"
+        FOCUSED_TEXT="$CONTROL_TEXT"
     else
-        FOCUS_MARKER=" "
+        CONTROL_TEXT="  $text"
     fi
 }
 
@@ -249,11 +259,10 @@ checkbox_text() {
     local label="$3"
     local mark=" "
 
-    marker_for "$control"
     if (( selected )); then
         mark="X"
     fi
-    CONTROL_TEXT="${FOCUS_MARKER} [${mark}] $label"
+    control_text "$control" "[${mark}] $label"
 }
 
 render_field() {
@@ -295,13 +304,14 @@ build_panel() {
     local title="YONIQ GPU Setup"
 
     PANEL_LINES=()
+    FOCUSED_TEXT=""
     printf -v border '%*s' "$((PANEL_WIDTH - ${#title} - 5))" ""
     PANEL_LINES+=("┌─ $title ${border// /─}┐")
 
-    marker_for "install"
-    install_text="${FOCUS_MARKER} [ Install ]"
-    marker_for "cancel"
-    cancel_text="${FOCUS_MARKER} [ Cancel ]"
+    control_text "install" "[ Install ]"
+    install_text="$CONTROL_TEXT"
+    control_text "cancel" "[ Cancel ]"
+    cancel_text="$CONTROL_TEXT"
     center_content "$install_text $cancel_text"
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
     append_blank_line
@@ -311,8 +321,8 @@ build_panel() {
         all_selected=1
         selected_mark="X"
     fi
-    marker_for "install_everything"
-    center_content "${FOCUS_MARKER} [${selected_mark}] Install Everything"
+    control_text "install_everything" "[${selected_mark}] Install Everything"
+    center_content "$CONTROL_TEXT"
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
     if (( all_selected )); then
         center_content ""
@@ -336,46 +346,46 @@ build_panel() {
     append_blank_line
 
     append_separator "CUDA Version"
-    marker_for "cuda_default"
     selected_mark=" "
     if [ "$cuda_choice" = "default" ]; then
         selected_mark="X"
     fi
-    default_text="${FOCUS_MARKER} (${selected_mark}) $CUDA_DEFAULT_VERSION"
-    marker_for "cuda_custom"
+    control_text "cuda_default" "(${selected_mark}) $CUDA_DEFAULT_VERSION"
+    default_text="$CONTROL_TEXT"
     selected_mark=" "
     if [ "$cuda_choice" = "custom" ]; then
         selected_mark="X"
     fi
-    custom_text="${FOCUS_MARKER} (${selected_mark}) Custom "
     active=0
     if [ "$editing" = "cuda" ]; then
         active=1
     fi
     render_field "$cuda_buffer" "$active"
-    printf -v content '%-11.11s%s[%s]   ' "$default_text" "$custom_text" "$RENDERED_FIELD"
+    control_text "cuda_custom" "(${selected_mark}) Custom [${RENDERED_FIELD}]"
+    custom_text="$CONTROL_TEXT"
+    printf -v content '%-11.11s%s   ' "$default_text" "$custom_text"
     PANEL_LINES+=("│ ${content} │")
     append_blank_line
 
     append_separator "Python Version"
-    marker_for "python_default"
     selected_mark=" "
     if [ "$python_choice" = "default" ]; then
         selected_mark="X"
     fi
-    default_text="${FOCUS_MARKER} (${selected_mark}) $PYTHON_DEFAULT_VERSION"
-    marker_for "python_custom"
+    control_text "python_default" "(${selected_mark}) $PYTHON_DEFAULT_VERSION"
+    default_text="$CONTROL_TEXT"
     selected_mark=" "
     if [ "$python_choice" = "custom" ]; then
         selected_mark="X"
     fi
-    custom_text="${FOCUS_MARKER} (${selected_mark}) Custom "
     active=0
     if [ "$editing" = "python" ]; then
         active=1
     fi
     render_field "$python_buffer" "$active"
-    printf -v content '%-13.13s%s[%s] ' "$default_text" "$custom_text" "$RENDERED_FIELD"
+    control_text "python_custom" "(${selected_mark}) Custom [${RENDERED_FIELD}]"
+    custom_text="$CONTROL_TEXT"
+    printf -v content '%-13.13s%s ' "$default_text" "$custom_text"
     PANEL_LINES+=("│ ${content} │")
     append_blank_line
 
@@ -417,6 +427,8 @@ style_panel_line() {
     local before
     local after
     local is_border=0
+    local focused
+    local focus_style
 
     case "$line_index" in
         0)
@@ -474,9 +486,24 @@ style_panel_line() {
     elif (( line_index == 5 )); then
         body="${STYLE_MUTED}${body}${STYLE_RESET}"
     else
-        body="${body//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
-        body="${body//"(X)"/${STYLE_SELECTED}(X)${STYLE_RESET}}"
-        body="${body/>/${STYLE_FOCUS}›${STYLE_RESET}}"
+        if [ -n "$FOCUSED_TEXT" ] && [[ "$body" == *"$FOCUSED_TEXT"* ]]; then
+            before="${body%%"$FOCUSED_TEXT"*}"
+            after="${body#*"$FOCUSED_TEXT"}"
+            before="${before//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
+            before="${before//"(X)"/${STYLE_SELECTED}(X)${STYLE_RESET}}"
+            after="${after//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
+            after="${after//"(X)"/${STYLE_SELECTED}(X)${STYLE_RESET}}"
+            focused="${FOCUSED_TEXT/#>/›}"
+            if (( FLASH_PHASE )); then
+                focus_style="$STYLE_FOCUS_ALTERNATE"
+            else
+                focus_style="$STYLE_FOCUS_PRIMARY"
+            fi
+            body="${before}${focus_style}${focused}${STYLE_RESET}${after}"
+        else
+            body="${body//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
+            body="${body//"(X)"/${STYLE_SELECTED}(X)${STYLE_RESET}}"
+        fi
     fi
     STYLED_LINE="${STYLE_BORDER}│${STYLE_RESET}${body}${STYLE_BORDER}│${STYLE_RESET}"
 }
@@ -491,9 +518,14 @@ draw_screen() {
     local cursor_column
     local cursor_offset
     local buffer_length
+    local clear_screen="${1:-1}"
 
     terminal_size
-    printf '\033[0m\033[?25l\033[2J\033[H' >&"$TTY_FD"
+    if (( clear_screen )); then
+        printf '\033[0m\033[?25l\033[2J\033[H' >&"$TTY_FD"
+    else
+        printf '\033[0m\033[?25l' >&"$TTY_FD"
+    fi
 
     if (( terminal_columns < MIN_COLUMNS || terminal_rows < MIN_ROWS )); then
         terminal_too_small=1
@@ -662,6 +694,7 @@ read_key() {
         read_status=0
         IFS= read -r -s -n 1 -t 0.1 -u "$TTY_FD" byte || read_status=$?
         if (( read_status == 0 )); then
+            FLASH_TIMEOUT_COUNT=0
             break
         fi
         if (( WINCH_PENDING )); then
@@ -669,6 +702,14 @@ read_key() {
             return 0
         fi
         if (( read_status > 128 )); then
+            if (( FLASH_ENABLED )); then
+                FLASH_TIMEOUT_COUNT=$((FLASH_TIMEOUT_COUNT + 1))
+                if (( FLASH_TIMEOUT_COUNT >= FLASH_INTERVAL_TICKS )); then
+                    FLASH_TIMEOUT_COUNT=0
+                    KEY="flash"
+                    return 0
+                fi
+            fi
             continue
         fi
         return 1
@@ -741,6 +782,8 @@ move_focus() {
     else
         focus_index=$(( (focus_index - 1 + control_count) % control_count ))
     fi
+    FLASH_PHASE=0
+    FLASH_TIMEOUT_COUNT=0
     status_message=""
 }
 
@@ -767,6 +810,13 @@ edit_version() {
         if [ "$KEY" = "resize" ]; then
             WINCH_PENDING=0
             draw_screen
+            continue
+        fi
+        if [ "$KEY" = "flash" ]; then
+            FLASH_PHASE=$((1 - FLASH_PHASE))
+            if (( ! terminal_too_small )); then
+                draw_screen 0
+            fi
             continue
         fi
 
@@ -956,6 +1006,8 @@ perform_installation() {
 
     if [ "$cuda_choice" = "custom" ] && ! validate_cuda_versions "$cuda_buffer"; then
         focus_index=13
+        FLASH_PHASE=0
+        FLASH_TIMEOUT_COUNT=0
         edit_version "cuda" "$cuda_choice" "$cuda_buffer"
         edit_status=$?
         if (( edit_status == 2 )); then
@@ -970,6 +1022,8 @@ perform_installation() {
     fi
     if [ "$python_choice" = "custom" ] && ! validate_python_version "$python_buffer"; then
         focus_index=15
+        FLASH_PHASE=0
+        FLASH_TIMEOUT_COUNT=0
         edit_version "python" "$python_choice" "$python_buffer"
         edit_status=$?
         if (( edit_status == 2 )); then
@@ -1161,6 +1215,13 @@ run_tui() {
         if [ "$KEY" = "resize" ]; then
             WINCH_PENDING=0
             draw_screen
+            continue
+        fi
+        if [ "$KEY" = "flash" ]; then
+            FLASH_PHASE=$((1 - FLASH_PHASE))
+            if (( ! terminal_too_small )); then
+                draw_screen 0
+            fi
             continue
         fi
 
