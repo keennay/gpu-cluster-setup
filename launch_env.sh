@@ -2,7 +2,7 @@
 
 # Script: launch_env.sh
 # Purpose: Activate ML environment with all optimizations
-# Usage: source launch_env.sh [--auto] [ENV_NAME|1-94]
+# Usage: source launch_env.sh [--auto] [ENV_NAME|1-97]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f "$HOME/.bashrc" ]; then
@@ -360,76 +360,85 @@ resolve_env_type() {
         70|primeintellect_vllm|primeintellect-vllm)
             echo "primeintellect-vllm"
             ;;
-        71|qwen_ktransformers|qwen-ktransformers)
+        71|qwen_flash_next_sglang|qwen-flash-next-sglang)
+            echo "qwen-flash-next-sglang"
+            ;;
+        72|qwen_flash_next_vllm|qwen-flash-next-vllm)
+            echo "qwen-flash-next-vllm"
+            ;;
+        73|qwen_ktransformers|qwen-ktransformers)
             echo "qwen-ktransformers"
             ;;
-        72|qwen_sglang|qwen-sglang)
+        74|qwen_sglang|qwen-sglang)
             echo "qwen-sglang"
             ;;
-        73|qwen_sglang_pr_22121|qwen-sglang-pr-22121)
+        75|qwen_sglang_pr_22121|qwen-sglang-pr-22121)
             echo "qwen-sglang-pr-22121"
             ;;
-        74|qwen_transformers|qwen-transformers)
+        76|qwen_transformers|qwen-transformers)
             echo "qwen-transformers"
             ;;
-        75|qwen_vllm|qwen-vllm)
+        77|qwen_vllm|qwen-vllm)
             echo "qwen-vllm"
             ;;
-        76|radixark_sglang|radixark-sglang)
+        78|radixark_qwen_sglang|radixark-qwen-sglang)
+            echo "radixark-qwen-sglang"
+            ;;
+        79|radixark_sglang|radixark-sglang)
             echo "radixark-sglang"
             ;;
-        77|redhatai_sglang|redhatai-sglang)
+        80|redhatai_sglang|redhatai-sglang)
             echo "redhatai-sglang"
             ;;
-        78|redhat_sglang_pr_34966|redhat-sglang-pr-34966)
-            echo "redhat-sglang-pr-34966"
+        81|redhat_sglang_pr_35809|redhat-sglang-pr-35809)
+            echo "redhat-sglang-pr-35809"
             ;;
-        79|redhatai_vllm|redhatai-vllm)
+        82|redhatai_vllm|redhatai-vllm)
             echo "redhatai-vllm"
             ;;
-        80|stepfun_sglang|stepfun-sglang)
+        83|stepfun_sglang|stepfun-sglang)
             echo "stepfun-sglang"
             ;;
-        81|stepfun_transformers|stepfun-transformers)
+        84|stepfun_transformers|stepfun-transformers)
             echo "stepfun-transformers"
             ;;
-        82|stepfun_vllm|stepfun-vllm)
+        85|stepfun_vllm|stepfun-vllm)
             echo "stepfun-vllm"
             ;;
-        83|z_lab_sglang|z-lab-sglang)
+        86|z_lab_sglang|z-lab-sglang)
             echo "z-lab-sglang"
             ;;
-        84|z_lab_sglang_pr_35209|z-lab-sglang-pr-35209)
+        87|z_lab_sglang_pr_35209|z-lab-sglang-pr-35209)
             echo "z-lab-sglang-pr-35209"
             ;;
-        85|z_lab_vllm|z-lab-vllm)
+        88|z_lab_vllm|z-lab-vllm)
             echo "z-lab-vllm"
             ;;
-        86|zyphra_legacy_sglang|zyphra-legacy-sglang)
+        89|zyphra_legacy_sglang|zyphra-legacy-sglang)
             echo "zyphra-legacy-sglang"
             ;;
-        87|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        90|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        88|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        91|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        89|zyphra_sglang|zyphra-sglang)
+        92|zyphra_sglang|zyphra-sglang)
             echo "zyphra-sglang"
             ;;
-        90|zyphra_sglang_pr_32517|zyphra-sglang-pr-32517)
+        93|zyphra_sglang_pr_32517|zyphra-sglang-pr-32517)
             echo "zyphra-sglang-pr-32517"
             ;;
-        91|zyphra_transformers|zyphra-transformers)
+        94|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        92|zyphra_vllm|zyphra-vllm)
+        95|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        93|custom|custom_uv|custom-uv|env_custom_uv)
+        96|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        94|custom_pip|custom-pip|env_custom_pip)
+        97|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -452,7 +461,7 @@ resolve_env_name() {
 # This launcher mutates the caller's shell and therefore must be sourced.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     print_error "This script must be sourced, not executed!"
-    print_error "Use: source $0 [--auto] [ENV_NAME|1-94]"
+    print_error "Use: source $0 [--auto] [ENV_NAME|1-97]"
     exit 1
 fi
 
@@ -547,37 +556,40 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "68) Poolside (vLLM)"
     echo "69) PrimeIntellect (SGLang)"
     echo "70) PrimeIntellect (vLLM)"
-    echo "71) Qwen (KTransformers)"
-    echo "72) Qwen (SGLang)"
-    echo "73) Qwen (SGLang) PR 22121"
-    echo "74) Qwen (Transformers)"
-    echo "75) Qwen (vLLM)"
-    echo "76) RadixArk (SGLang)"
-    echo "77) RedHatAI (SGLang)"
-    echo "78) RedHat (SGLang) PR 34966"
-    echo "79) RedHatAI (vLLM)"
-    echo "80) StepFun (SGLang)"
-    echo "81) StepFun (Transformers)"
-    echo "82) StepFun (vLLM)"
-    echo "83) z-lab (SGLang)"
-    echo "84) z-lab (SGLang) PR 35209"
-    echo "85) z-lab (vLLM)"
-    echo "86) Zyphra Legacy (SGLang)"
-    echo "87) Zyphra Legacy (Transformers)"
-    echo "88) Zyphra Legacy (vLLM)"
-    echo "89) Zyphra (SGLang)"
-    echo "90) Zyphra (SGLang) PR 32517"
-    echo "91) Zyphra (Transformers)"
-    echo "92) Zyphra (vLLM)"
-    echo "93) Custom (uv)"
-    echo "94) Custom (pip)"
+    echo "71) Qwen Flash Next (SGLang)"
+    echo "72) Qwen Flash Next (vLLM)"
+    echo "73) Qwen (KTransformers)"
+    echo "74) Qwen (SGLang)"
+    echo "75) Qwen (SGLang) PR 22121"
+    echo "76) Qwen (Transformers)"
+    echo "77) Qwen (vLLM)"
+    echo "78) RadixArk Qwen Flash Next (SGLang)"
+    echo "79) RadixArk (SGLang)"
+    echo "80) RedHatAI (SGLang)"
+    echo "81) RedHat (SGLang) PR 35809"
+    echo "82) RedHatAI (vLLM)"
+    echo "83) StepFun (SGLang)"
+    echo "84) StepFun (Transformers)"
+    echo "85) StepFun (vLLM)"
+    echo "86) z-lab (SGLang)"
+    echo "87) z-lab (SGLang) PR 35209"
+    echo "88) z-lab (vLLM)"
+    echo "89) Zyphra Legacy (SGLang)"
+    echo "90) Zyphra Legacy (Transformers)"
+    echo "91) Zyphra Legacy (vLLM)"
+    echo "92) Zyphra (SGLang)"
+    echo "93) Zyphra (SGLang) PR 32517"
+    echo "94) Zyphra (Transformers)"
+    echo "95) Zyphra (vLLM)"
+    echo "96) Custom (uv)"
+    echo "97) Custom (pip)"
     echo ""
     while true; do
-        read -r -p "Enter your choice (1-94): " choice
+        read -r -p "Enter your choice (1-97): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 94."
+            print_error "Invalid choice. Please enter a number between 1 and 97."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
@@ -588,7 +600,7 @@ fi
 # Normalize and validate the selected managed environment.
 if [ -n "$ENV_TYPE" ]; then
     if ! ENV_TYPE_MAPPED=$(resolve_env_type "$ENV_TYPE"); then
-        print_error "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 94."
+        print_error "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 97."
         return 1
     fi
     ENV_TYPE="$ENV_TYPE_MAPPED"

@@ -93,14 +93,17 @@ ENV_TYPES=(
   "poolside-vllm"
   "primeintellect-sglang"
   "primeintellect-vllm"
+  "qwen-flash-next-sglang"
+  "qwen-flash-next-vllm"
   "qwen-ktransformers"
   "qwen-sglang"
   "qwen-sglang-pr-22121"
   "qwen-transformers"
   "qwen-vllm"
+  "radixark-qwen-sglang"
   "radixark-sglang"
   "redhatai-sglang"
-  "redhat-sglang-pr-34966"
+  "redhat-sglang-pr-35809"
   "redhatai-vllm"
   "stepfun-sglang"
   "stepfun-transformers"
@@ -190,14 +193,17 @@ declare -A ENV_DESCRIPTIONS=(
   ["poolside-vllm"]="Poolside (vLLM)"
   ["primeintellect-sglang"]="PrimeIntellect (SGLang)"
   ["primeintellect-vllm"]="PrimeIntellect (vLLM)"
+  ["qwen-flash-next-sglang"]="Qwen Flash Next (SGLang)"
+  ["qwen-flash-next-vllm"]="Qwen Flash Next (vLLM)"
   ["qwen-ktransformers"]="Qwen (KTransformers)"
   ["qwen-sglang"]="Qwen (SGLang)"
   ["qwen-sglang-pr-22121"]="Qwen (SGLang) PR 22121"
   ["qwen-transformers"]="Qwen (Transformers)"
   ["qwen-vllm"]="Qwen (vLLM)"
+  ["radixark-qwen-sglang"]="RadixArk Qwen Flash Next (SGLang)"
   ["radixark-sglang"]="RadixArk (SGLang)"
   ["redhatai-sglang"]="RedHatAI (SGLang)"
-  ["redhat-sglang-pr-34966"]="RedHat (SGLang) PR 34966"
+  ["redhat-sglang-pr-35809"]="RedHat (SGLang) PR 35809"
   ["redhatai-vllm"]="RedHatAI (vLLM)"
   ["stepfun-sglang"]="StepFun (SGLang)"
   ["stepfun-transformers"]="StepFun (Transformers)"
@@ -430,76 +436,85 @@ resolve_env_type() {
         70|primeintellect_vllm|primeintellect-vllm)
             echo "primeintellect-vllm"
             ;;
-        71|qwen_ktransformers|qwen-ktransformers)
+        71|qwen_flash_next_sglang|qwen-flash-next-sglang)
+            echo "qwen-flash-next-sglang"
+            ;;
+        72|qwen_flash_next_vllm|qwen-flash-next-vllm)
+            echo "qwen-flash-next-vllm"
+            ;;
+        73|qwen_ktransformers|qwen-ktransformers)
             echo "qwen-ktransformers"
             ;;
-        72|qwen_sglang|qwen-sglang)
+        74|qwen_sglang|qwen-sglang)
             echo "qwen-sglang"
             ;;
-        73|qwen_sglang_pr_22121|qwen-sglang-pr-22121)
+        75|qwen_sglang_pr_22121|qwen-sglang-pr-22121)
             echo "qwen-sglang-pr-22121"
             ;;
-        74|qwen_transformers|qwen-transformers)
+        76|qwen_transformers|qwen-transformers)
             echo "qwen-transformers"
             ;;
-        75|qwen_vllm|qwen-vllm)
+        77|qwen_vllm|qwen-vllm)
             echo "qwen-vllm"
             ;;
-        76|radixark_sglang|radixark-sglang)
+        78|radixark_qwen_sglang|radixark-qwen-sglang)
+            echo "radixark-qwen-sglang"
+            ;;
+        79|radixark_sglang|radixark-sglang)
             echo "radixark-sglang"
             ;;
-        77|redhatai_sglang|redhatai-sglang)
+        80|redhatai_sglang|redhatai-sglang)
             echo "redhatai-sglang"
             ;;
-        78|redhat_sglang_pr_34966|redhat-sglang-pr-34966)
-            echo "redhat-sglang-pr-34966"
+        81|redhat_sglang_pr_35809|redhat-sglang-pr-35809)
+            echo "redhat-sglang-pr-35809"
             ;;
-        79|redhatai_vllm|redhatai-vllm)
+        82|redhatai_vllm|redhatai-vllm)
             echo "redhatai-vllm"
             ;;
-        80|stepfun_sglang|stepfun-sglang)
+        83|stepfun_sglang|stepfun-sglang)
             echo "stepfun-sglang"
             ;;
-        81|stepfun_transformers|stepfun-transformers)
+        84|stepfun_transformers|stepfun-transformers)
             echo "stepfun-transformers"
             ;;
-        82|stepfun_vllm|stepfun-vllm)
+        85|stepfun_vllm|stepfun-vllm)
             echo "stepfun-vllm"
             ;;
-        83|z_lab_sglang|z-lab-sglang)
+        86|z_lab_sglang|z-lab-sglang)
             echo "z-lab-sglang"
             ;;
-        84|z_lab_sglang_pr_35209|z-lab-sglang-pr-35209)
+        87|z_lab_sglang_pr_35209|z-lab-sglang-pr-35209)
             echo "z-lab-sglang-pr-35209"
             ;;
-        85|z_lab_vllm|z-lab-vllm)
+        88|z_lab_vllm|z-lab-vllm)
             echo "z-lab-vllm"
             ;;
-        86|zyphra_legacy_sglang|zyphra-legacy-sglang)
+        89|zyphra_legacy_sglang|zyphra-legacy-sglang)
             echo "zyphra-legacy-sglang"
             ;;
-        87|zyphra_legacy_transformers|zyphra-legacy-transformers)
+        90|zyphra_legacy_transformers|zyphra-legacy-transformers)
             echo "zyphra-legacy-transformers"
             ;;
-        88|zyphra_legacy_vllm|zyphra-legacy-vllm)
+        91|zyphra_legacy_vllm|zyphra-legacy-vllm)
             echo "zyphra-legacy-vllm"
             ;;
-        89|zyphra_sglang|zyphra-sglang)
+        92|zyphra_sglang|zyphra-sglang)
             echo "zyphra-sglang"
             ;;
-        90|zyphra_sglang_pr_32517|zyphra-sglang-pr-32517)
+        93|zyphra_sglang_pr_32517|zyphra-sglang-pr-32517)
             echo "zyphra-sglang-pr-32517"
             ;;
-        91|zyphra_transformers|zyphra-transformers)
+        94|zyphra_transformers|zyphra-transformers)
             echo "zyphra-transformers"
             ;;
-        92|zyphra_vllm|zyphra-vllm)
+        95|zyphra_vllm|zyphra-vllm)
             echo "zyphra-vllm"
             ;;
-        93|custom|custom_uv|custom-uv|env_custom_uv)
+        96|custom|custom_uv|custom-uv|env_custom_uv)
             echo "custom_uv"
             ;;
-        94|custom_pip|custom-pip|env_custom_pip)
+        97|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
         *)
@@ -889,6 +904,23 @@ install_qwen_sglang_pr_22121() {
         "ce79bc7e3964613c87f79181353f09838d1c7459"
 }
 
+install_qwen_flash_next_sglang() {
+    install_pinned_sglang_commit \
+        "qwen-flash-next-sglang" \
+        "Qwen Flash Next (SGLang) PR 36497 commit 73a255206f916366c8d26d4022f82ddfb0ab558d" \
+        "https://github.com/sgl-project/sglang.git" \
+        "73a255206f916366c8d26d4022f82ddfb0ab558d"
+}
+
+install_radixark_qwen_sglang() {
+    install_pinned_sglang_commit \
+        "radixark-qwen-sglang" \
+        "RadixArk Qwen Flash Next (SGLang) PR 36497 commit 73a255206f916366c8d26d4022f82ddfb0ab558d" \
+        "https://github.com/sgl-project/sglang.git" \
+        "73a255206f916366c8d26d4022f82ddfb0ab558d" || return 1
+    run_uv_install "transformers==5.12.1" "nvidia-modelopt[torch]==0.46.0" || return 1
+}
+
 install_radixark_sglang() {
     install_pinned_sglang_commit \
         "radixark-sglang" \
@@ -907,12 +939,13 @@ install_redhatai_sglang() {
     run_uv_install "transformers==5.12.1" || return 1
 }
 
-install_redhat_sglang_pr_34966() {
+install_redhat_sglang_pr_35809() {
     install_pinned_sglang_commit \
-        "redhat-sglang-pr-34966" \
-        "RedHat (SGLang) PR 34966 commit ef5d293e52375c75224ee9a5a373fe1daed56f84" \
-        "https://github.com/mochgolf/sglang.git" \
-        "ef5d293e52375c75224ee9a5a373fe1daed56f84"
+        "redhat-sglang-pr-35809" \
+        "RedHat (SGLang) PR 35809 commit d5bd07850f6200eff1cf0529e5ba31de1fc3abff" \
+        "https://github.com/fechaMe/sglang.git" \
+        "d5bd07850f6200eff1cf0529e5ba31de1fc3abff" || return 1
+    run_uv_install "transformers==5.12.1" || return 1
 }
 
 install_zyphra_legacy_sglang() {
@@ -1449,13 +1482,14 @@ install_mistralai_vllm() {
 
 
 install_nanbeige_sglang() {
-    print_info "Installing the pinned Nanbeige SGLang fork commit..."
+    local source_commit="3e59d89e53490d3b6957cb72754abf6a98c2b8a8"
+    print_info "Installing the pinned Nanbeige SGLang fork commit $source_commit..."
     run_uv_install -U --reinstall --prerelease=allow \
-        "sglang[all] @ git+https://github.com/Nanbeige/sglang.git@6427e2ce175a106de080239ff6f99f6f5fa441de#subdirectory=python" || return 1
+        "sglang[all] @ git+https://github.com/Nanbeige/sglang.git@${source_commit}#subdirectory=python" || return 1
 }
 
 install_nanbeige_vllm() {
-    local source_commit="1cf78162bed34ab18ba951396ab5d2c163c85714"
+    local source_commit="62f6de733d7ae63b759329993bc209e67afdf431"
 
     print_info "Installing the proven Nanbeige vLLM commit $source_commit..."
     ensure_active_environment_matches nanbeige-vllm || return 1
@@ -1554,6 +1588,16 @@ install_qwen_sglang() {
 install_qwen_transformers() {
     print_info "Installing Transformers stack for Qwen..."
     run_uv_install "transformers>=4.51.0" "torch>=2.6"
+}
+
+install_qwen_flash_next_vllm() {
+    local source_commit="f561eca6ca4f3f79808a696b1521cb76dc8aafa2"
+
+    ensure_active_environment_matches qwen-flash-next-vllm || return 1
+    print_info "Installing vLLM PR 53899 commit $source_commit for Qwen Flash Next..."
+    run_uv_install -U --reinstall --prerelease=allow \
+        "vllm @ git+https://github.com/peakcrosser7/vllm.git@$source_commit" || return 1
+    install_flashinfer_python311_compatible || return 1
 }
 
 install_qwen_vllm() {
@@ -1969,6 +2013,12 @@ perform_environment_action() {
         primeintellect-vllm)
             install_primeintellect_vllm || return 1
             ;;
+        qwen-flash-next-sglang)
+            install_qwen_flash_next_sglang || return 1
+            ;;
+        qwen-flash-next-vllm)
+            install_qwen_flash_next_vllm || return 1
+            ;;
         qwen-ktransformers)
             install_qwen_ktransformers || return 1
             ;;
@@ -1984,14 +2034,17 @@ perform_environment_action() {
         qwen-vllm)
             install_qwen_vllm || return 1
             ;;
+        radixark-qwen-sglang)
+            install_radixark_qwen_sglang || return 1
+            ;;
         radixark-sglang)
             install_radixark_sglang || return 1
             ;;
         redhatai-sglang)
             install_redhatai_sglang || return 1
             ;;
-        redhat-sglang-pr-34966)
-            install_redhat_sglang_pr_34966 || return 1
+        redhat-sglang-pr-35809)
+            install_redhat_sglang_pr_35809 || return 1
             ;;
         redhatai-vllm)
             install_redhatai_vllm || return 1

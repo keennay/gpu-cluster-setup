@@ -102,6 +102,7 @@ This installs the Python packages corresponding with the currently active Python
 
 #### Install any selection of open-weights models or input your desired repo:
 `./model_install.sh` or example with repo: `./model_install.sh Qwen/Qwen3.6-27B`
+To download only changed blobs for an update, activate the verified revision, and remove older cached snapshots: `./model_install.sh REPO_ID --update-and-prune`
 
 #### Check for updates for any of your local HuggingFace repo of open-weights models:
 `./check_model_updates.sh`

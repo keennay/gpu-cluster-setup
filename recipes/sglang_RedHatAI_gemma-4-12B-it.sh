@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_redhatai-sglang"
+PYTHON_ENV="env_redhat-sglang-pr-35809"
 INFERENCE_PROVIDER="SGLang"
 INFERENCE_ENV="env SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1"
 MODEL_REPO="RedHatAI/gemma-4-12B-it"
@@ -12,7 +12,7 @@ TRUST_REMOTE_CODE="--trust-remote-code"
 REASONING_PARSER="--reasoning-parser gemma4"
 ENABLE_AUTO_TOOL_CHOICE=""
 TOOL_CALL_PARSER="--tool-call-parser gemma4"
-GPU_MEM_UTIL_VALUE=0.85
+GPU_MEM_UTIL_VALUE=0.855556
 METRICS_FLAG="--enable-metrics"
 HOST="0.0.0.0"
 DEFAULT_PORT=8000

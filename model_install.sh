@@ -93,6 +93,7 @@ HF_CACHE_PATH=""
 QUANTIZATION=""
 AUTO_MODE=false
 AUTO_YES=false
+UPDATE_AND_PRUNE=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -m|--model)
@@ -115,6 +116,11 @@ while [[ $# -gt 0 ]]; do
             QUANTIZATION="$2"
             shift 2
             ;;
+        --update-and-prune)
+            UPDATE_AND_PRUNE=true
+            AUTO_YES=true
+            shift
+            ;;
         -y|--yes)
             AUTO_YES=true
             shift
@@ -133,6 +139,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -p, --path PATH           Custom path for Hugging Face cache (default: $DEFAULT_HF_PATH or \$HF_HOME)"
             echo "  -q, --quantization TYPE   Download quantized version (e.g., 'GGUF', 'GPTQ')"
             echo "  -y, --yes                Automatically accept snapshot download prompts"
+            echo "  --update-and-prune       Accept a new snapshot, verify it, then remove all older cached snapshots"
             echo "  --auto                    Use default settings and accept prompts"
             echo "  -h, --help               Show this help message"
             echo ""
@@ -153,6 +160,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 -m 'Qwen/Qwen3-30B-A3B-Instruct-2507' -q GGUF"
             echo "  $0 -m 'deepseek-ai/DeepSeek-V3' -p /mnt/storage/models"
             echo "  $0 -y 'google/gemma-4-31B-it'"
+            echo "  $0 'deepseek-ai/DeepSeek-V4-Flash-Vision-Exp' --update-and-prune"
             exit 0
             ;;
         *)
@@ -427,6 +435,7 @@ export HF_HUB_CACHE="$HF_CACHE_PATH"
 export MODEL_NAME
 export REPO_TYPE
 export AUTO_YES
+export UPDATE_AND_PRUNE
 
 # Enable Hugging Face's current high-performance download path. These are read
 # by huggingface_hub at import time, so they must be exported before Python runs.
@@ -509,6 +518,7 @@ retry_delay_seconds = int(os.environ.get("HF_DOWNLOAD_RETRY_DELAY_SECONDS", "10"
 max_download_retries = int(os.environ.get("HF_DOWNLOAD_MAX_RETRIES", "0"))
 cache_dir = Path(os.environ["HF_HUB_CACHE"])
 auto_yes = os.environ.get("AUTO_YES", "false").lower() == "true"
+update_and_prune = os.environ.get("UPDATE_AND_PRUNE", "false").lower() == "true"
 
 def get_remote_info(api, repo_id, repo_type):
     kwargs = {"repo_id": repo_id, "files_metadata": True}
@@ -847,11 +857,14 @@ def preferred_previous_snapshot(snapshot_shas):
         key=lambda sha: (cache_repo_dir / "snapshots" / sha).stat().st_mtime,
     )
 
-def print_old_snapshot_reminder(current_snapshot_sha):
-    old_snapshot_shas = [
+def old_snapshot_shas(current_snapshot_sha):
+    return [
         sha for sha in cached_snapshot_shas() if sha != current_snapshot_sha
     ]
-    if not old_snapshot_shas:
+
+def print_old_snapshot_reminder(current_snapshot_sha):
+    snapshot_shas_to_remove = old_snapshot_shas(current_snapshot_sha)
+    if not snapshot_shas_to_remove:
         return
 
     print("\n" + "="*60)
@@ -859,13 +872,13 @@ def print_old_snapshot_reminder(current_snapshot_sha):
     print("="*60)
     print(f"Current snapshot: {current_snapshot_sha}")
     print("Older or alternate snapshots are still cached:")
-    for old_sha in old_snapshot_shas:
+    for old_sha in snapshot_shas_to_remove:
         old_path = (cache_repo_dir / "snapshots" / old_sha).resolve()
         print(f"  - {old_path}")
 
     print("\nDelete only revisions you no longer need for rollback.")
     print("To reclaim unreferenced blobs safely, use:")
-    for old_sha in old_snapshot_shas:
+    for old_sha in snapshot_shas_to_remove:
         cleanup_command = [
             "hf",
             "cache",
@@ -879,6 +892,68 @@ def print_old_snapshot_reminder(current_snapshot_sha):
         "Removing only the snapshots/<sha> directory may not reclaim the "
         "underlying blob files."
     )
+
+def prune_old_snapshots(current_snapshot_sha):
+    snapshot_shas_to_remove = old_snapshot_shas(current_snapshot_sha)
+    if not snapshot_shas_to_remove:
+        return
+
+    current_snapshot_dir = cache_repo_dir / "snapshots" / current_snapshot_sha
+    if not current_snapshot_dir.is_dir():
+        raise RuntimeError(
+            "Refusing to prune old snapshots because the verified snapshot is "
+            f"missing: {current_snapshot_dir}"
+        )
+
+    print("\n" + "="*60)
+    print("PRUNING OLD SNAPSHOTS")
+    print("="*60)
+    print(f"Verified current snapshot: {current_snapshot_sha}")
+    for old_sha in snapshot_shas_to_remove:
+        print(f"  Removing: {old_sha}")
+
+    cleanup_command = [
+        "hf",
+        "cache",
+        "rm",
+        *snapshot_shas_to_remove,
+        "--cache-dir",
+        str(cache_dir.resolve()),
+        "--yes",
+    ]
+    print("$ " + " ".join(shlex.quote(part) for part in cleanup_command))
+    try:
+        subprocess.run(cleanup_command, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "The latest snapshot is verified and active, but pruning old "
+            "snapshots failed"
+        ) from exc
+    for old_sha in snapshot_shas_to_remove:
+        (cache_repo_dir / "trees" / f"{old_sha}.json").unlink(missing_ok=True)
+
+    remaining_snapshot_shas = set(cached_snapshot_shas())
+    failed_removals = [
+        sha for sha in snapshot_shas_to_remove if sha in remaining_snapshot_shas
+    ]
+    if failed_removals:
+        raise RuntimeError(
+            "Old snapshot cleanup completed without removing: "
+            + ", ".join(failed_removals)
+        )
+
+    print(
+        f"Removed {len(snapshot_shas_to_remove)} old snapshot(s), their refs, "
+        "and revision metadata."
+    )
+
+def handle_old_snapshots(current_snapshot_sha, prune_after_update):
+    if update_and_prune:
+        if prune_after_update:
+            prune_old_snapshots(current_snapshot_sha)
+        return
+
+    print_old_snapshot_reminder(current_snapshot_sha)
 
 def confirm_download(prompt):
     if auto_yes:
@@ -923,6 +998,15 @@ previous_snapshot = (
     if previous_snapshot_shas
     else None
 )
+main_ref_path = cache_repo_dir / "refs" / "main"
+main_ref_before = (
+    main_ref_path.read_text().strip() if main_ref_path.is_file() else None
+)
+prune_after_success = bool(
+    update_and_prune
+    and previous_snapshot
+    and main_ref_before != download_revision
+)
 update_accepted = False
 
 # If the exact remote commit has no snapshot directory, it is unambiguously a
@@ -930,6 +1014,7 @@ update_accepted = False
 if previous_snapshot and download_revision not in cached_shas:
     offer_new_snapshot(previous_snapshot)
     update_accepted = True
+    prune_after_success = update_and_prune
 
 # Check whether the exact Hub commit is already fully downloaded.
 result = check_repo_completeness(repo_id, repo_type, cache_dir, initial_remote_info)
@@ -947,7 +1032,7 @@ if len(result) == 4 and result[0]:  # Repo is complete
     print(f"\nNo download needed - {repo_type} is ready to use!")
 
     update_main_ref(download_revision)
-    print_old_snapshot_reminder(download_revision)
+    handle_old_snapshots(download_revision, prune_after_success)
     save_repo_info(local_path, local_size, "verified_at")
     write_download_result(local_path, "current")
     sys.exit(0)
@@ -956,6 +1041,8 @@ if previous_snapshot and not update_accepted:
     # The new commit directory exists but failed completeness verification.
     # Keep treating it as an available update and offer to finish it.
     offer_new_snapshot(previous_snapshot)
+    update_accepted = True
+    prune_after_success = update_and_prune
 
 # Repo is not complete, proceed with download
 print("\n" + "="*60)
@@ -1037,7 +1124,7 @@ try:
             raise RuntimeError("The Hub response did not include a snapshot commit")
         update_main_ref(verified_revision)
         local_path = final_check[3]
-        print_old_snapshot_reminder(verified_revision)
+        handle_old_snapshots(verified_revision, prune_after_success)
 
         # Update progress file
         progress_data["status"] = "completed"
