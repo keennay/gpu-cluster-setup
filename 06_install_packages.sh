@@ -120,6 +120,7 @@ ENV_TYPES=(
   "zyphra-vllm"
   "custom_uv"
   "custom_pip"
+  "inclusionai-ling3-vllm"
 )
 
 declare -A ENV_DESCRIPTIONS=(
@@ -154,6 +155,7 @@ declare -A ENV_DESCRIPTIONS=(
   ["inclusionai-sglang"]="InclusionAI (SGLang)"
   ["inclusionai-transformers"]="InclusionAI (Transformers)"
   ["inclusionai-vllm"]="InclusionAI (vLLM)"
+  ["inclusionai-ling3-vllm"]="InclusionAI Ling 3 (vLLM)"
   ["incoai-sglang"]="IncoAI (SGLang)"
   ["incoai-vllm"]="IncoAI (vLLM)"
   ["intel-sglang"]="Intel (SGLang)"
@@ -516,6 +518,9 @@ resolve_env_type() {
             ;;
         97|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
+            ;;
+        98|inclusionai_ling3_vllm|inclusionai-ling3-vllm)
+            echo "inclusionai-ling3-vllm"
             ;;
         *)
             return 1
@@ -1416,6 +1421,34 @@ install_inclusionai_vllm() {
     install_flashinfer_python311_compatible || return 1
 }
 
+install_inclusionai_ling3_vllm() {
+    local source_repo="https://github.com/inclusionAI/vllm-ling-v3.git"
+    local source_commit="92c1041123ddd8b40ae6faf7eafabac71a4c0b34"
+    local source_dir=""
+
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        print_error "No active virtual environment detected for the InclusionAI Ling 3 vLLM checkout."
+        return 1
+    fi
+    source_dir="$VIRTUAL_ENV/vllm-ling-v3"
+
+    if [ -e "$source_dir" ] && [ ! -d "$source_dir/.git" ]; then
+        print_error "InclusionAI Ling 3 vLLM target exists but is not a git checkout: $source_dir"
+        return 1
+    fi
+    if [ ! -d "$source_dir/.git" ]; then
+        run_command git clone "$source_repo" "$source_dir" || return 1
+    fi
+
+    run_command git -C "$source_dir" fetch origin "$source_commit" || return 1
+    run_command git -C "$source_dir" checkout --force "$source_commit" || return 1
+    print_info "Installing InclusionAI Ling 3 vLLM commit $source_commit from $source_dir..."
+    VLLM_USE_PRECOMPILED=1 \
+        run_uv_install -U --reinstall --prerelease=allow \
+        -e "$source_dir" --torch-backend=auto || return 1
+    install_flashinfer_python311_compatible || return 1
+}
+
 install_intel_sglang() {
     install_pinned_sglang_commit \
         "intel-sglang" \
@@ -1910,6 +1943,9 @@ perform_environment_action() {
             ;;
         inclusionai-vllm)
             install_inclusionai_vllm || return 1
+            ;;
+        inclusionai-ling3-vllm)
+            install_inclusionai_ling3_vllm || return 1
             ;;
         incoai-sglang)
             install_incoai_sglang || return 1

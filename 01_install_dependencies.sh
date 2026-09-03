@@ -81,16 +81,64 @@ ensure_sudo_installed() {
 
 # Parse arguments
 AUTO_YES=false
-if [[ "$1" == "-y" ]] || [[ "$1" == "--auto" ]]; then
-    AUTO_YES=true
-fi
+SELECT_ALL=false
+SELECT_TMUX=false
+SELECT_NODE=false
+SELECT_PNPM=false
+SELECT_BUN=false
+SELECT_GO=false
+SELECT_RUST=false
+SELECT_ZIG=false
+SELECT_NEOVIM=false
+SELECT_NEOVIM_CONFIGS=false
 
-if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
-    echo "Usage: $0 [-y|--auto]"
-    echo "  -y, --auto    Automatically accept all prompts"
-    echo "  -h, --help    Show this help message"
-    exit 0
-fi
+print_usage() {
+    echo "Usage: $0 [-y|--auto] [--all] [section flags...]"
+    echo "  -y, --auto       Automatically accept prompts for enabled sections"
+    echo "  --all            Enable every optional section"
+    echo "  --tmux           Enable tmux configuration"
+    echo "  --node           Enable Node.js 24 installation/update"
+    echo "  --pnpm           Enable pnpm installation/update"
+    echo "  --bun            Enable Bun installation/update"
+    echo "  --go             Enable Go installation/update and shell paths"
+    echo "  --rust           Enable Rustup installation/update"
+    echo "  --zig           Enable Zig installation/update and xz-utils dependency"
+    echo "  --neovim         Enable Neovim installation/update and aliases"
+    echo "  --neovim-configs Enable the author's Neovim configuration"
+    echo "  -h, --help       Show this help message"
+    echo ""
+    echo "Without section flags, optional sections are skipped. Use --all to enable them."
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -y|--auto) AUTO_YES=true ;;
+        --all) SELECT_ALL=true ;;
+        --tmux) SELECT_TMUX=true ;;
+        --node) SELECT_NODE=true ;;
+        --pnpm) SELECT_PNPM=true ;;
+        --bun) SELECT_BUN=true ;;
+        --go) SELECT_GO=true ;;
+        --rust) SELECT_RUST=true ;;
+        --zig) SELECT_ZIG=true ;;
+        --neovim) SELECT_NEOVIM=true ;;
+        --neovim-configs) SELECT_NEOVIM_CONFIGS=true ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        *)
+            print_error "Unknown option: $arg"
+            print_usage
+            exit 1
+            ;;
+    esac
+done
+
+section_selected() {
+    local selected="$1"
+    [ "$SELECT_ALL" = true ] || [ "$selected" = true ]
+}
 
 # OS/package manager detection
 OS_TYPE=""
@@ -107,7 +155,6 @@ detect_os_package_manager() {
         return 1
     fi
 
-    # shellcheck disable=SC1091
     source /etc/os-release
     OS_ID="$ID"
     OS_NAME="$NAME"
@@ -223,9 +270,9 @@ echo ""
 
 # Basic Linux essentials installed after upgrades to keep tooling current
 if [ "$OS_TYPE" = "ubuntu" ]; then
-    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim nano tmux git git-lfs htop nvtop ripgrep bubblewrap ffmpeg)
+    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim nano tmux git git-lfs htop nvtop ripgrep shellcheck bubblewrap ffmpeg)
 else
-    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim-enhanced nano tmux git git-lfs htop nvtop ripgrep bubblewrap ffmpeg)
+    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim-enhanced nano tmux git git-lfs htop nvtop ripgrep ShellCheck bubblewrap ffmpeg)
 fi
 if [ "$AUTO_YES" = true ]; then
     INSTALL_BASICS="y"
@@ -242,40 +289,6 @@ if [[ "$INSTALL_BASICS" =~ ^[Yy]$ ]]; then
     fi
 else
     print_info "Skipped installing basic Linux essentials"
-fi
-
-echo ""
-
-# Install ShellCheck for shell script linting
-if command -v shellcheck &> /dev/null; then
-    print_info "ShellCheck already installed ($(shellcheck --version | awk '/^version:/ {print $2; exit}'))"
-else
-    if [ "$OS_TYPE" = "ubuntu" ]; then
-        SHELLCHECK_PACKAGE="shellcheck"
-    else
-        SHELLCHECK_PACKAGE="ShellCheck"
-    fi
-
-    if [ "$AUTO_YES" = true ]; then
-        INSTALL_SHELLCHECK="y"
-    else
-        read -r -p "Install ShellCheck shell script linter ($SHELLCHECK_PACKAGE)? (y/n): " INSTALL_SHELLCHECK
-    fi
-
-    if [[ "$INSTALL_SHELLCHECK" =~ ^[Yy]$ ]]; then
-        print_info "Installing ShellCheck..."
-        if $PKG_INSTALL_CMD "$SHELLCHECK_PACKAGE"; then
-            print_info "✓ ShellCheck installed"
-        else
-            print_warning "Failed to install ShellCheck package: $SHELLCHECK_PACKAGE"
-            if [ "$OS_TYPE" = "rhel" ]; then
-                print_warning "On RHEL-compatible systems, ShellCheck is commonly provided by EPEL."
-                print_info "Enable EPEL, then rerun this script or install ShellCheck manually."
-            fi
-        fi
-    else
-        print_info "Skipped installing ShellCheck"
-    fi
 fi
 
 echo ""
@@ -469,28 +482,7 @@ else
     fi
 fi
 
-if command -v ibtop &> /dev/null; then
-    print_info "ibtop already installed"
-else
-    if [ "$AUTO_YES" = true ]; then
-        INSTALL_IBTOP="y"
-    else
-        read -p "Install ibtop (network monitoring tool)? (y/n): " INSTALL_IBTOP
-    fi
-
-    if [[ "$INSTALL_IBTOP" =~ ^[Yy]$ ]]; then
-        print_info "Installing ibtop network monitoring tool..."
-        if curl -fsSL https://raw.githubusercontent.com/JannikSt/ibtop/main/install.sh | bash; then
-            print_info "✓ ibtop installed successfully"
-        else
-            print_warning "Failed to install ibtop"
-        fi
-    else
-        print_info "Skipped ibtop installation"
-    fi
-fi
-
-if command -v tmux &> /dev/null; then
+if section_selected "$SELECT_TMUX" && command -v tmux &> /dev/null; then
     TMUX_CONFIG_SOURCE="$(dirname "$0")/configs/.tmux.conf"
     TMUX_CONFIG_TARGET="$HOME/.tmux.conf"
 
@@ -517,78 +509,61 @@ fi
 
 echo ""
 
-# Install nvm (Node Version Manager)
+# Install Node.js 24 through nvm, installing nvm first when needed
 NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh"
-if [ "$AUTO_YES" = true ]; then
-    INSTALL_NVM="y"
-elif [ -d "$HOME/.nvm" ]; then
-    read -p "Update nvm (Node Version Manager)? (y/n): " INSTALL_NVM
-else
-    read -p "Install nvm (Node Version Manager)? (y/n): " INSTALL_NVM
-fi
 
-if [[ "$INSTALL_NVM" =~ ^[Yy]$ ]]; then
-    if [ -d "$HOME/.nvm" ]; then
-        print_info "Updating nvm..."
-    else
-        print_info "Downloading and installing nvm..."
+load_nvm() {
+    export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    if [ -s "$NVM_DIR/nvm.sh" ]; then
+        . "$NVM_DIR/nvm.sh"
     fi
+    command -v nvm &> /dev/null
+}
 
-    if ! curl -o- "$NVM_INSTALL_URL" | bash; then
-        print_error "Failed to install or update nvm"
-        exit 1
-    fi
-
-    # Load nvm for current session
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-    NVM_VERSION=$(nvm --version 2>/dev/null)
-    if [ -n "$NVM_VERSION" ]; then
-        print_info "✓ nvm ready: $NVM_VERSION"
-    else
-        print_info "✓ nvm installed or updated"
-    fi
-else
-    print_info "Skipped nvm installation/update"
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-fi
-
-echo ""
-
-# Install Node.js 24
-if command -v nvm &> /dev/null; then
-    NODE_ALREADY_AVAILABLE=false
-    if command -v node &> /dev/null; then
-        NODE_ALREADY_AVAILABLE=true
+if section_selected "$SELECT_NODE"; then
+    NVM_AVAILABLE=false
+    if load_nvm; then
+        NVM_AVAILABLE=true
     fi
 
     if [ "$AUTO_YES" = true ]; then
         INSTALL_NODE="y"
-    elif [ "$NODE_ALREADY_AVAILABLE" = true ]; then
-        read -p "Update Node.js 24 and npm with nvm? (y/n): " INSTALL_NODE
+    elif [ "$NVM_AVAILABLE" = true ]; then
+        read -r -p "Install/update Node.js 24 with nvm? (y/n): " INSTALL_NODE
     else
-        read -p "Install Node.js 24? (y/n): " INSTALL_NODE
+        read -r -p "Install nvm and Node.js 24? (y/n): " INSTALL_NODE
     fi
 
     if [[ "$INSTALL_NODE" =~ ^[Yy]$ ]]; then
-        CURRENT_NVM_NODE=""
-        if [ "$NODE_ALREADY_AVAILABLE" = true ]; then
-            print_info "Updating Node.js 24..."
-            CURRENT_NVM_NODE=$(nvm current 2>/dev/null || true)
-        else
-            print_info "Installing Node.js 24..."
+        if [ "$NVM_AVAILABLE" = false ]; then
+            if ! command -v curl &> /dev/null; then
+                print_error "curl not found - install basic Linux essentials before installing Node.js"
+                exit 1
+            fi
+
+            print_info "Installing nvm..."
+            if ! curl -o- "$NVM_INSTALL_URL" | bash; then
+                print_error "Failed to install nvm"
+                exit 1
+            fi
+
+            if ! load_nvm; then
+                print_error "nvm installation completed, but nvm could not be loaded"
+                exit 1
+            fi
+
+            NVM_VERSION="$(nvm --version 2>/dev/null)"
+            print_info "✓ nvm ready: $NVM_VERSION"
         fi
 
-        nvm install 24
-
-        if [ $? -ne 0 ]; then
+        CURRENT_NVM_NODE="$(nvm current 2>/dev/null || true)"
+        print_info "Installing/updating Node.js 24..."
+        if ! nvm install 24; then
             print_error "Failed to install or update Node.js 24"
             exit 1
         fi
 
-        UPDATED_NVM_NODE=$(nvm current 2>/dev/null || true)
+        UPDATED_NVM_NODE="$(nvm current 2>/dev/null || true)"
         if [ -n "$CURRENT_NVM_NODE" ] && [ "$CURRENT_NVM_NODE" != "none" ] && [ "$CURRENT_NVM_NODE" != "system" ] && [ "$CURRENT_NVM_NODE" != "$UPDATED_NVM_NODE" ]; then
             print_info "Reinstalling global npm packages from $CURRENT_NVM_NODE..."
             if ! nvm reinstall-packages "$CURRENT_NVM_NODE"; then
@@ -631,18 +606,64 @@ EOF
 
         nvm use default
         hash -r 2>/dev/null || true
-        print_info "✓ Node.js ready"
 
-        # Verify installation
-        NODE_VERSION=$(node -v 2>/dev/null)
-        NPM_VERSION=$(npm -v 2>/dev/null)
-        print_info "Node.js version: $NODE_VERSION"
+        NODE_VERSION="$(node -v 2>/dev/null)"
+        if [[ "$NODE_VERSION" != v24.* ]]; then
+            print_error "Node.js installation verification failed: expected v24, got ${NODE_VERSION:-no version}"
+            exit 1
+        fi
+
+        NPM_VERSION="$(npm -v 2>/dev/null)"
+        print_info "✓ Node.js ready: $NODE_VERSION"
         print_info "npm version: $NPM_VERSION"
     else
         print_info "Skipped Node.js installation/update"
     fi
-else
-    print_warning "nvm not found - skipping Node.js 24 installation/update"
+fi
+
+echo ""
+# Install pnpm
+if section_selected "$SELECT_PNPM"; then
+    PNPM_ALREADY_AVAILABLE=false
+    if command -v pnpm &> /dev/null; then
+        PNPM_ALREADY_AVAILABLE=true
+    fi
+
+    if [ "$AUTO_YES" = true ]; then
+        INSTALL_PNPM="y"
+    elif [ "$PNPM_ALREADY_AVAILABLE" = true ]; then
+        read -r -p "Update pnpm to the latest stable version? (y/n): " INSTALL_PNPM
+    else
+        read -r -p "Install pnpm? (y/n): " INSTALL_PNPM
+    fi
+
+    if [[ "$INSTALL_PNPM" =~ ^[Yy]$ ]]; then
+        if ! command -v curl &> /dev/null; then
+            print_error "curl not found - install basic Linux essentials before installing pnpm"
+            exit 1
+        fi
+
+        print_info "Installing/updating pnpm..."
+        if (set -o pipefail; curl -fsSL https://get.pnpm.io/install.sh | sh -); then
+            if [ -d "$HOME/.local/share/pnpm" ]; then
+                export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
+                export PATH="$PNPM_HOME:$PATH"
+            fi
+            hash -r 2>/dev/null || true
+
+            PNPM_VERSION="$(pnpm --version 2>/dev/null || true)"
+            if [ -n "$PNPM_VERSION" ]; then
+                print_info "✓ pnpm ready: $PNPM_VERSION"
+            else
+                print_info "✓ pnpm installed; restart your shell to load it"
+            fi
+        else
+            print_error "Failed to install or update pnpm"
+            exit 1
+        fi
+    else
+        print_info "Skipped pnpm installation/update"
+    fi
 fi
 
 echo ""
@@ -653,7 +674,9 @@ if [ -d "$HOME/.bun/bin" ]; then
     export PATH="$BUN_INSTALL/bin:$PATH"
 fi
 
-if command -v bun &> /dev/null; then
+if ! section_selected "$SELECT_BUN"; then
+    :
+elif command -v bun &> /dev/null; then
     if [ "$AUTO_YES" = true ]; then
         UPDATE_BUN="y"
     else
@@ -722,7 +745,9 @@ if command -v go &> /dev/null; then
     GO_ALREADY_AVAILABLE=true
 fi
 
-if [ "$AUTO_YES" = true ]; then
+if ! section_selected "$SELECT_GO"; then
+    INSTALL_GO="n"
+elif [ "$AUTO_YES" = true ]; then
     INSTALL_GO="y"
 elif [ "$GO_ALREADY_AVAILABLE" = true ]; then
     read -r -p "Update Go to the latest stable version? (y/n): " INSTALL_GO
@@ -873,11 +898,12 @@ echo ""
 
 # Install Rustup
 if ! command -v rustup &> /dev/null && [ -f "$HOME/.cargo/env" ]; then
-    # shellcheck disable=SC1091
     . "$HOME/.cargo/env"
 fi
 
-if command -v rustup &> /dev/null; then
+if ! section_selected "$SELECT_RUST"; then
+    :
+elif command -v rustup &> /dev/null; then
     if [ "$AUTO_YES" = true ]; then
         UPDATE_RUSTUP="y"
     else
@@ -923,7 +949,6 @@ else
 
         if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | "${RUSTUP_INSTALL_CMD[@]}"; then
             if [ -f "$HOME/.cargo/env" ]; then
-                # shellcheck disable=SC1091
                 . "$HOME/.cargo/env"
             fi
 
@@ -958,7 +983,9 @@ if command -v zig &> /dev/null; then
     ZIG_CURRENT_VERSION="$(zig version 2>/dev/null || true)"
 fi
 
-if [ "$AUTO_YES" = true ]; then
+if ! section_selected "$SELECT_ZIG"; then
+    INSTALL_ZIG="n"
+elif [ "$AUTO_YES" = true ]; then
     INSTALL_ZIG="y"
 elif [ "$ZIG_ALREADY_AVAILABLE" = true ]; then
     read -r -p "Update Zig to the latest stable release (currently ${ZIG_CURRENT_VERSION:-unknown})? (y/n): " INSTALL_ZIG
@@ -1130,7 +1157,9 @@ if command -v nvim &> /dev/null; then
 fi
 
 # Install latest Neovim (downloaded from GitHub releases)
-if [ "$AUTO_YES" = true ]; then
+if ! section_selected "$SELECT_NEOVIM"; then
+    INSTALL_NVIM_LATEST="n"
+elif [ "$AUTO_YES" = true ]; then
     INSTALL_NVIM_LATEST="y"
 elif [ "$NVIM_ALREADY_AVAILABLE" = true ]; then
     read -p "Update latest Neovim (download from GitHub releases)? (y/n): " INSTALL_NVIM_LATEST
@@ -1207,7 +1236,7 @@ if command -v nvim &> /dev/null; then
 fi
 
 # Optionally alias vi/vim to Neovim in bashrc (only if installed here)
-if [ "$NVIM_AVAILABLE" = true ]; then
+if section_selected "$SELECT_NEOVIM" && [ "$NVIM_AVAILABLE" = true ]; then
     if [ "$AUTO_YES" = true ]; then
         ALIAS_NVIM="y"
     else
@@ -1258,7 +1287,7 @@ EOF
 fi
 
 # NeoVim config install
-if [ "$NVIM_AVAILABLE" = true ]; then
+if section_selected "$SELECT_NEOVIM_CONFIGS" && [ "$NVIM_AVAILABLE" = true ]; then
     if [ "$AUTO_YES" = true ]; then
         INSTALL_NVIM_CONFIG="y"
     else

@@ -106,7 +106,7 @@ apply_env_cuda_selection() {
         explicit)
             if ! cuda_home_is_valid "$CUDA_ENV_HOME"; then
                 print_error "Selected CUDA toolkit is not available: $CUDA_ENV_HOME"
-                print_error "Install CUDA first with ./03_install_cuda.sh or rerun 05_setup_env.sh to select another CUDA version."
+                print_error "Install CUDA first with ./02_install_cuda.sh or rerun 05_setup_env.sh to select another CUDA version."
                 return 1
             fi
             export CUDA_HOME="${CUDA_ENV_HOME%/}"
@@ -116,7 +116,7 @@ apply_env_cuda_selection() {
         bashrc|"")
             local default_cuda_home
             if ! default_cuda_home=$(detect_default_cuda_home); then
-                print_error "No CUDA toolkit detected. Install CUDA first with ./03_install_cuda.sh."
+                print_error "No CUDA toolkit detected. Install CUDA first with ./02_install_cuda.sh."
                 return 1
             fi
             export CUDA_HOME="${default_cuda_home%/}"
@@ -441,6 +441,9 @@ resolve_env_type() {
         97|custom_pip|custom-pip|env_custom_pip)
             echo "custom_pip"
             ;;
+        98|inclusionai_ling3_vllm|inclusionai-ling3-vllm)
+            echo "inclusionai-ling3-vllm"
+            ;;
         *)
             return 1
             ;;
@@ -583,13 +586,14 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "95) Zyphra (vLLM)"
     echo "96) Custom (uv)"
     echo "97) Custom (pip)"
+    echo "98) InclusionAI Ling 3 (vLLM)"
     echo ""
     while true; do
-        read -r -p "Enter your choice (1-97): " choice
+        read -r -p "Enter your choice (1-98): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 97."
+            print_error "Invalid choice. Please enter a number between 1 and 98."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
@@ -600,7 +604,7 @@ fi
 # Normalize and validate the selected managed environment.
 if [ -n "$ENV_TYPE" ]; then
     if ! ENV_TYPE_MAPPED=$(resolve_env_type "$ENV_TYPE"); then
-        print_error "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 97."
+        print_error "Invalid environment selection: $ENV_TYPE. Choose a listed environment name or a number from 1 to 98."
         return 1
     fi
     ENV_TYPE="$ENV_TYPE_MAPPED"

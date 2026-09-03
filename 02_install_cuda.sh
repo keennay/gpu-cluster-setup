@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script: 03_install_cuda.sh
+# Script: 02_install_cuda.sh
 # Purpose: Check and install CUDA/NVIDIA dependencies for ML environment
 # Colors
 RED='\033[0;31m'
@@ -15,6 +15,19 @@ print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 is_valid_cuda_version_arg() {
     [[ "$1" =~ ^[0-9]+$ || "$1" =~ ^[0-9]+\.[0-9]+$ || "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]
 }
+cuda_version_stream() {
+    local version="$1"
+    local major="${version%%.*}"
+    local remainder="${version#*.}"
+    local minor="0"
+
+    if [ "$remainder" != "$version" ]; then
+        minor="${remainder%%.*}"
+    fi
+
+    printf '%s.%s\n' "$major" "$minor"
+}
+
 
 CUDA_CACHE_DIR="$(mktemp -d /tmp/cuda-cache.XXXXXX)"
 if [ -z "$CUDA_CACHE_DIR" ] || [ ! -d "$CUDA_CACHE_DIR" ]; then
@@ -28,6 +41,7 @@ cleanup_cuda_cache() {
 }
 trap cleanup_cuda_cache EXIT
 CUDA_PACKAGE_DOWNLOADS=()
+CONFIGURED_UBUNTU_CUDA_REPOS=()
 INSTALLED_CUDA_VERSIONS=()
 INSTALLED_CUDA_VERSIONS_DISPLAY="None"
 CUDA_DEFAULT_CANDIDATE_VERSIONS=()
@@ -114,6 +128,14 @@ setup_ubuntu_cuda_repo() {
     local keyring_basename
     local keyring_file
     local keyring_url
+    local configured_repo
+
+    for configured_repo in "${CONFIGURED_UBUNTU_CUDA_REPOS[@]}"; do
+        if [ "$configured_repo" = "$repo" ]; then
+            return 0
+        fi
+    done
+
 
     keyring_filename=$(curl -fsSL "$packages_url" 2>/dev/null | awk '
         $1 == "Package:" && $2 == "cuda-keyring" { pkgmatch=1; next }
@@ -155,6 +177,7 @@ setup_ubuntu_cuda_repo() {
         print_warning "Package index update failed after enabling NVIDIA CUDA repository"
         return 1
     fi
+    CONFIGURED_UBUNTU_CUDA_REPOS+=("$repo")
 
     return 0
 }
@@ -773,27 +796,36 @@ set_default_cuda_version() {
     return "$result"
 }
 
-restore_preinstall_cuda_default_before_prompt() {
-    if [ "$AUTO_YES" = true ]; then
-        return 0
-    fi
-
-    if [ -z "$PREINSTALL_CUDA_DEFAULT_VERSION" ]; then
-        return 0
-    fi
-
-    if [ ! -d "/usr/local/cuda-${PREINSTALL_CUDA_DEFAULT_VERSION}" ]; then
-        return 0
-    fi
-
+restore_preinstall_cuda_default() {
     local current_default
     current_default=$(get_current_cuda_default_version)
-    if [ "$current_default" = "$PREINSTALL_CUDA_DEFAULT_VERSION" ]; then
-        return 0
+
+    if [ -n "$PREINSTALL_CUDA_DEFAULT_VERSION" ]; then
+        if [ "$current_default" = "$PREINSTALL_CUDA_DEFAULT_VERSION" ]; then
+            return 0
+        fi
+        if [ ! -d "/usr/local/cuda-${PREINSTALL_CUDA_DEFAULT_VERSION}" ]; then
+            print_warning "Cannot restore the pre-install CUDA default because /usr/local/cuda-${PREINSTALL_CUDA_DEFAULT_VERSION} is missing."
+            return 1
+        fi
+
+        print_info "Restoring pre-install CUDA default ($PREINSTALL_CUDA_DEFAULT_VERSION)."
+        set_default_cuda_version "$PREINSTALL_CUDA_DEFAULT_VERSION"
+        return $?
     fi
 
-    print_info "Restoring pre-install CUDA default ($PREINSTALL_CUDA_DEFAULT_VERSION) before default selection prompt."
-    set_default_cuda_version "$PREINSTALL_CUDA_DEFAULT_VERSION" || true
+    if [ "$PREINSTALL_CUDA_DEFAULT_WAS_SYMLINK" = true ]; then
+        if [ "$(readlink /usr/local/cuda 2>/dev/null)" != "$PREINSTALL_CUDA_DEFAULT_LINK_TARGET" ]; then
+            print_info "Restoring pre-install /usr/local/cuda symlink."
+            ${SUDO_PREFIX}ln -sfnT "$PREINSTALL_CUDA_DEFAULT_LINK_TARGET" /usr/local/cuda
+        fi
+        return $?
+    fi
+
+    if [ "$PREINSTALL_CUDA_DEFAULT_EXISTED" = false ] && [ -L /usr/local/cuda ]; then
+        print_info "Removing package-selected CUDA default because no version was marked with -d."
+        ${SUDO_PREFIX}rm -f /usr/local/cuda
+    fi
 }
 
 prompt_for_default_cuda_version() {
@@ -805,22 +837,19 @@ prompt_for_default_cuda_version() {
         return 0
     fi
 
-    restore_preinstall_cuda_default_before_prompt
+    restore_preinstall_cuda_default
 
     print_info "Installed CUDA versions detected: $INSTALLED_CUDA_VERSIONS_DISPLAY"
 
     local current_default
     current_default=$(get_current_cuda_default_version)
-
     if [ "$AUTO_YES" = true ]; then
-        if [ -n "$TARGET_CUDA_VERSION_NORMALIZED" ] && [ -d "/usr/local/cuda-${TARGET_CUDA_VERSION_NORMALIZED}" ]; then
-            print_info "Automatic mode enabled (-y): setting CUDA $TARGET_CUDA_VERSION_NORMALIZED as the default."
-            set_default_cuda_version "$TARGET_CUDA_VERSION_NORMALIZED" || true
-        else
-            print_warning "Automatic mode enabled (-y), but the requested CUDA install directory was not found; leaving CUDA default unchanged."
-        fi
+        print_info "Automatic mode enabled (-y): setting CUDA $TARGET_CUDA_VERSION_NORMALIZED as the default."
+        set_default_cuda_version "$TARGET_CUDA_VERSION_NORMALIZED" || true
         return 0
     fi
+
+
 
     echo "Choose the CUDA version to make default for /usr/local/cuda:"
     local index
@@ -838,9 +867,9 @@ prompt_for_default_cuda_version() {
     echo "  $skip_choice) Leave current default unchanged"
 
     local default_choice
-    read -p "Enter choice (1-$skip_choice): " default_choice
+    read -r -p "Enter choice (1-$skip_choice): " default_choice
     while ! [[ "$default_choice" =~ ^[0-9]+$ ]] || [ "$default_choice" -lt 1 ] || [ "$default_choice" -gt "$skip_choice" ]; do
-        read -p "Please enter a number from 1 to $skip_choice: " default_choice
+        read -r -p "Please enter a number from 1 to $skip_choice: " default_choice
     done
 
     if [ "$default_choice" -eq "$skip_choice" ]; then
@@ -855,35 +884,84 @@ prompt_for_default_cuda_version() {
 # Track overall success
 INSTALL_SUCCESS=true
 CURRENT_CUDA_VERSION_NORMALIZED=""
+
 # Parse arguments
 AUTO_YES=false
-CUDA_VERSION_ARG=""
+CUDA_VERSION_ARGS=()
+CUDA_VERSION_STREAMS=()
+DEFAULT_CUDA_VERSION_ARG=""
+DEFAULT_CUDA_VERSION_STREAM=""
+LAST_ARGUMENT_WAS_VERSION=false
+
 for arg in "$@"; do
     case "$arg" in
         -y|--auto)
             AUTO_YES=true
+            LAST_ARGUMENT_WAS_VERSION=false
+            ;;
+        -d)
+            if [ "$LAST_ARGUMENT_WAS_VERSION" != true ]; then
+                print_error "-d must immediately follow the CUDA version it should make default."
+                exit 1
+            fi
+            if [ -n "$DEFAULT_CUDA_VERSION_ARG" ]; then
+                print_error "Only one CUDA version can be marked as default with -d."
+                exit 1
+            fi
+            default_index=$(( ${#CUDA_VERSION_ARGS[@]} - 1 ))
+            DEFAULT_CUDA_VERSION_ARG="${CUDA_VERSION_ARGS[$default_index]}"
+            DEFAULT_CUDA_VERSION_STREAM="${CUDA_VERSION_STREAMS[$default_index]}"
+            LAST_ARGUMENT_WAS_VERSION=false
             ;;
         -h|--help)
-            echo "Usage: $0 [-y|--auto] [cuda-version]"
-            echo "  -y, --auto      Automatically accept yes/no prompts"
-            echo "  cuda-version    Automatically select custom CUDA version (e.g. 12.9, 13, 13.0.2-1)"
+            echo "Usage: $0 [-y|--auto] [cuda-version [-d] ...]"
+            echo "  -y, --auto      Install requested CUDA versions without confirmation"
+            echo "  -d              Make the immediately preceding CUDA version the default"
+            echo "  cuda-version    CUDA version to install (up to 10 distinct major.minor streams)"
+            echo ""
+            echo "Multiple CUDA versions require exactly one -d marker."
+            echo "A single CUDA version may omit -d to leave the current default unchanged."
+            echo "Examples:"
+            echo "  $0 -y 13.0 -d"
+            echo "  $0 -y 13.0 -d 12.0 13.3"
+            echo "  $0 13.0 -d 12.0"
             exit 0
             ;;
+        -*)
+            print_error "Invalid option: $arg"
+            exit 1
+            ;;
         *)
-            if is_valid_cuda_version_arg "$arg"; then
-                if [ -n "$CUDA_VERSION_ARG" ]; then
-                    print_error "Only one CUDA version argument is allowed."
-                    exit 1
-                fi
-                CUDA_VERSION_ARG="$arg"
-            else
+            if ! is_valid_cuda_version_arg "$arg"; then
                 print_error "Invalid argument: $arg"
                 print_error "CUDA version must be numeric, such as 12.9, 13, 13.0.1, or 13.0.2-1."
                 exit 1
             fi
+
+            if [ "${#CUDA_VERSION_ARGS[@]}" -ge 10 ]; then
+                print_error "At most 10 CUDA versions can be installed in one run."
+                exit 1
+            fi
+
+            version_stream="$(cuda_version_stream "$arg")"
+            for existing_stream in "${CUDA_VERSION_STREAMS[@]}"; do
+                if [ "$existing_stream" = "$version_stream" ]; then
+                    print_error "CUDA versions must use distinct major.minor streams; $version_stream was provided more than once."
+                    exit 1
+                fi
+            done
+
+            CUDA_VERSION_ARGS+=("$arg")
+            CUDA_VERSION_STREAMS+=("$version_stream")
+            LAST_ARGUMENT_WAS_VERSION=true
             ;;
     esac
 done
+
+if [ "${#CUDA_VERSION_ARGS[@]}" -gt 1 ] && [ -z "$DEFAULT_CUDA_VERSION_ARG" ]; then
+    print_error "Multiple CUDA versions require one version followed immediately by -d."
+    exit 1
+fi
 
 # OS/package manager detection
 OS_TYPE=""
@@ -981,28 +1059,24 @@ else
 fi
 
 # Check for CUDA toolkit (nvcc)
-CUDA_MISSING=false
-CUDA_VERSION_OK=false
 if command -v nvcc &> /dev/null; then
     CUDA_VERSION=$(nvcc --version | grep "release" | awk '{print $6}' | cut -d',' -f1)
     print_info "  ✓ CUDA toolkit (nvcc) - version $CUDA_VERSION"
     
     # Check if installed CUDA version needs upgrade to 12.9
-    CUDA_VERSION_MAJOR=$(echo $CUDA_VERSION | cut -d. -f1 | sed 's/V//')
-    CUDA_VERSION_MINOR=$(echo $CUDA_VERSION | cut -d. -f2)
-    CUDA_VERSION_MINOR=${CUDA_VERSION_MINOR:-0}
+    CUDA_VERSION_WITHOUT_PREFIX="${CUDA_VERSION#V}"
+    CUDA_VERSION_MAJOR="${CUDA_VERSION_WITHOUT_PREFIX%%.*}"
+    CUDA_VERSION_REMAINDER="${CUDA_VERSION_WITHOUT_PREFIX#*.}"
+    CUDA_VERSION_MINOR="${CUDA_VERSION_REMAINDER%%.*}"
     CURRENT_CUDA_VERSION_NORMALIZED="${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}"
     
-    if [ "$CUDA_VERSION_MAJOR" -gt 12 ] || ([ "$CUDA_VERSION_MAJOR" -eq 12 ] && [ "$CUDA_VERSION_MINOR" -ge 9 ]); then
-        CUDA_VERSION_OK=true
+    if [ "$CUDA_VERSION_MAJOR" -gt 12 ] || { [ "$CUDA_VERSION_MAJOR" -eq 12 ] && [ "$CUDA_VERSION_MINOR" -ge 9 ]; }; then
         print_info "  ✓ CUDA version $CUDA_VERSION meets the recommended baseline"
     else
         print_info "  CUDA version $CUDA_VERSION detected; upgrade options will be offered"
-        CUDA_MISSING=true  # Treat as missing to trigger upgrade menu
     fi
 else
     print_error "  ✗ CUDA toolkit (nvcc)"
-    CUDA_MISSING=true
 fi
 
 collect_installed_cuda_versions
@@ -1013,444 +1087,505 @@ if command -v nvcc &> /dev/null; then
     print_info "CUDA toolkit detected - reinstall, upgrade, or downgrade options available."
 else
     print_warning "CUDA toolkit (nvcc) not found - required for GPU-optimized packages"
-    CUDA_MISSING=true
 fi
 echo ""
 
 # Install/Upgrade CUDA toolkit
 echo ""
 
-            TARGET_CUDA_VERSION_DEFAULT="12.9"
-            TARGET_CUDA_VERSION=""
-            CUDA_INSTALL_REQUESTED=false
+build_cuda_repo_versions() {
+    CUDA_REPO_VERSIONS=()
 
-            CURRENT_CUDA_DISPLAY="None"
-            if command -v nvcc &> /dev/null; then
-                CURRENT_CUDA_DISPLAY="$CUDA_VERSION"
-            fi
+    if [ "$OS_TYPE" = "ubuntu" ]; then
+        local version_year="${VERSION_ID%%.*}"
+        local version_month="${VERSION_ID#*.}"
+        local year
+        local month
 
-            if [ -n "$DRIVER_CUDA_VERSION" ]; then
-                print_info "Driver reports CUDA compatibility up to version $DRIVER_CUDA_VERSION"
-            else
-                print_info "No NVIDIA driver version detected; proceeding without driver compatibility data"
-            fi
-
-            if [ "$OS_TYPE" = "ubuntu" ]; then
-                VERSION_YEAR=$(echo $VERSION_ID | cut -d. -f1)
-                VERSION_MONTH=$(echo $VERSION_ID | cut -d. -f2)
-                CUDA_REPO_VERSIONS=("ubuntu${VERSION_YEAR}${VERSION_MONTH}")
-                for year in $(seq $VERSION_YEAR -2 22); do
-                    if [ $year -eq $VERSION_YEAR ]; then
-                        for month in $(seq $VERSION_MONTH -2 4); do
-                            [ $month -lt 10 ] && month="0$month"
-                            CUDA_REPO_VERSIONS+=("ubuntu${year}${month}")
-                        done
-                    else
-                        CUDA_REPO_VERSIONS+=("ubuntu${year}10")
-                        CUDA_REPO_VERSIONS+=("ubuntu${year}04")
-                    fi
+        CUDA_REPO_VERSIONS=("ubuntu${version_year}${version_month}")
+        for year in $(seq "$version_year" -2 22); do
+            if [ "$year" -eq "$version_year" ]; then
+                for month in $(seq "$version_month" -2 4); do
+                    [ "$month" -lt 10 ] && month="0$month"
+                    CUDA_REPO_VERSIONS+=("ubuntu${year}${month}")
                 done
-            elif [ "$OS_TYPE" = "rhel" ]; then
-                CUDA_REPO_VERSIONS=("rhel9" "rhel8")
             else
-                CUDA_REPO_VERSIONS=()
+                CUDA_REPO_VERSIONS+=("ubuntu${year}10")
+                CUDA_REPO_VERSIONS+=("ubuntu${year}04")
             fi
+        done
+    elif [ "$OS_TYPE" = "rhel" ]; then
+        CUDA_REPO_VERSIONS=("rhel9" "rhel8")
+    fi
 
-            if [ ${#CUDA_REPO_VERSIONS[@]} -gt 0 ]; then
-                CUDA_REPO_VERSIONS=($(printf "%s\n" "${CUDA_REPO_VERSIONS[@]}" | awk '!seen[$0]++'))
-                print_info "Will try CUDA repositories in order: ${CUDA_REPO_VERSIONS[*]}"
-            fi
+    if [ "${#CUDA_REPO_VERSIONS[@]}" -gt 0 ]; then
+        mapfile -t CUDA_REPO_VERSIONS < <(printf "%s\n" "${CUDA_REPO_VERSIONS[@]}" | awk '!seen[$0]++')
+        print_info "Will try CUDA repositories in order: ${CUDA_REPO_VERSIONS[*]}"
+    fi
+}
 
-            LATEST_CUDA_VERSION=$(detect_latest_cuda_version "${CUDA_REPO_VERSIONS[@]}")
-            if [ -z "$LATEST_CUDA_VERSION" ]; then
-                print_warning "Unable to determine the latest CUDA version automatically; defaulting to $TARGET_CUDA_VERSION_DEFAULT."
-                LATEST_CUDA_VERSION="$TARGET_CUDA_VERSION_DEFAULT"
-            else
-                print_info "Latest CUDA version detected from repositories: $LATEST_CUDA_VERSION"
-            fi
+install_cuda_toolkit_version() {
+    local requested_version="$1"
+    local target_version="$requested_version"
+    local target_major
+    local target_remainder
+    local target_minor
+    local target_stream
+    local target_exact_version=""
+    local cuda_package_stream
+    local repo_version
+    local cuda_installed=false
 
-            print_info "Installed CUDA versions detected: $INSTALLED_CUDA_VERSIONS_DISPLAY"
-            print_info "Current CUDA version: $CURRENT_CUDA_DISPLAY"
-            CUDA_SELECTION=""
-            CUDA_SKIP_REASON=""
-            if [ -n "$CUDA_VERSION_ARG" ]; then
-                CUDA_SELECTION="custom"
-                CUDA_INSTALL_REQUESTED=true
-                TARGET_CUDA_VERSION="$CUDA_VERSION_ARG"
-                if [[ "$TARGET_CUDA_VERSION" =~ ^[0-9]+$ ]]; then
-                    TARGET_CUDA_VERSION="${TARGET_CUDA_VERSION}.0"
-                fi
-                print_info "CUDA version argument provided; selecting custom CUDA $TARGET_CUDA_VERSION."
-            else
-                CUDA_CHOICE_ACTION=""
-                echo "Choose CUDA installation option:"
-                if [ "$CURRENT_CUDA_DISPLAY" = "None" ]; then
-                    echo "  1) Install latest version ($LATEST_CUDA_VERSION)"
-                    echo "  2) Install custom version"
-                    echo "  3) Skip CUDA installation"
-                    read -p "Enter choice (1/2/3): " CUDA_CHOICE
-                    while [[ ! "$CUDA_CHOICE" =~ ^[123]$ ]]; do
-                        read -p "Please enter 1, 2, or 3: " CUDA_CHOICE
-                    done
-                    case $CUDA_CHOICE in
-                        1) CUDA_CHOICE_ACTION="latest" ;;
-                        2) CUDA_CHOICE_ACTION="custom" ;;
-                        3) CUDA_CHOICE_ACTION="skip" ;;
-                    esac
-                else
-                    echo "  1) Keep current version"
-                    echo "  2) Install latest version ($LATEST_CUDA_VERSION)"
-                    echo "  3) Install custom version"
-                    echo "  4) Skip CUDA installation"
-                    read -p "Enter choice (1/2/3/4): " CUDA_CHOICE
-                    while [[ ! "$CUDA_CHOICE" =~ ^[1234]$ ]]; do
-                        read -p "Please enter 1, 2, 3, or 4: " CUDA_CHOICE
-                    done
-                    case $CUDA_CHOICE in
-                        1) CUDA_CHOICE_ACTION="keep" ;;
-                        2) CUDA_CHOICE_ACTION="latest" ;;
-                        3) CUDA_CHOICE_ACTION="custom" ;;
-                        4) CUDA_CHOICE_ACTION="skip" ;;
-                    esac
-                fi
+    if [[ "$target_version" =~ ^[0-9]+$ ]]; then
+        target_version="${target_version}.0"
+    fi
 
-                case $CUDA_CHOICE_ACTION in
-                    keep)
-                        CUDA_SELECTION="keep"
-                        CUDA_INSTALL_REQUESTED=false
-                        print_info "Keeping existing CUDA toolkit ($CURRENT_CUDA_DISPLAY)."
-                        ;;
-                    latest)
-                        CUDA_SELECTION="latest"
-                        CUDA_INSTALL_REQUESTED=true
-                        TARGET_CUDA_VERSION="$LATEST_CUDA_VERSION"
-                        ;;
-                    custom)
-                        CUDA_SELECTION="custom"
-                        while true; do
-                            read -p "Enter desired CUDA version (e.g. 13, 13.0, 13.0.1, or 13.0.2-1): " CUSTOM_VERSION
-                            if is_valid_cuda_version_arg "$CUSTOM_VERSION"; then
-                                if [[ "$CUSTOM_VERSION" =~ ^[0-9]+$ ]]; then
-                                    CUSTOM_VERSION="${CUSTOM_VERSION}.0"
-                                fi
-                                TARGET_CUDA_VERSION="$CUSTOM_VERSION"
-                                CUDA_INSTALL_REQUESTED=true
-                                break
-                            else
-                                print_error "Invalid version number. Use major, major.minor, major.minor.patch, or major.minor.patch-release (e.g. 13, 13.0, 13.0.1, or 13.0.2-1)."
-                            fi
-                        done
-                        ;;
-                    skip)
-                        CUDA_SELECTION="skip"
-                        CUDA_INSTALL_REQUESTED=false
-                        CUDA_SKIP_REASON="user_skip"
-                        print_info "Skipping CUDA toolkit installation per user selection."
-                        ;;
-                esac
-            fi
+    target_major="${target_version%%.*}"
+    target_remainder="${target_version#*.}"
+    target_minor="${target_remainder%%.*}"
+    target_stream="${target_major}.${target_minor}"
+    if [[ "$target_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+        target_exact_version="$target_version"
+    fi
 
-            TARGET_CUDA_VERSION_MAJOR=""
-            TARGET_CUDA_VERSION_MINOR=""
-            TARGET_CUDA_VERSION_NORMALIZED=""
-            TARGET_CUDA_EXACT_VERSION=""
-            if [ -n "$TARGET_CUDA_VERSION" ]; then
-                TARGET_CUDA_VERSION_MAJOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f1)
-                TARGET_CUDA_VERSION_MINOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f2)
-                TARGET_CUDA_VERSION_MINOR=${TARGET_CUDA_VERSION_MINOR:-0}
-                TARGET_CUDA_VERSION_NORMALIZED="${TARGET_CUDA_VERSION_MAJOR}.${TARGET_CUDA_VERSION_MINOR}"
-                if [[ "$TARGET_CUDA_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
-                    TARGET_CUDA_EXACT_VERSION="$TARGET_CUDA_VERSION"
-                fi
-            fi
-
-            if [ "$CUDA_SELECTION" = "latest" ] && [ -n "$TARGET_CUDA_VERSION_NORMALIZED" ]; then
-                LATEST_ALREADY_PRESENT=false
-                for installed_version in "${INSTALLED_CUDA_VERSIONS[@]}"; do
-                    if [ "$installed_version" = "$TARGET_CUDA_VERSION_NORMALIZED" ]; then
-                        LATEST_ALREADY_PRESENT=true
-                        break
-                    fi
-                done
-                if [ "$LATEST_ALREADY_PRESENT" = true ]; then
-                    print_info "Latest CUDA version $TARGET_CUDA_VERSION is already installed; no action needed."
-                    CUDA_INSTALL_REQUESTED=false
-                    CUDA_SKIP_REASON="already_up_to_date"
-                    CUDA_MISSING=false
-                fi
-            fi
-
-            if [ "$CUDA_INSTALL_REQUESTED" = true ]; then
-                if [ -z "$TARGET_CUDA_VERSION" ]; then
-                    TARGET_CUDA_VERSION="$TARGET_CUDA_VERSION_DEFAULT"
-                    TARGET_CUDA_VERSION_MAJOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f1)
-                    TARGET_CUDA_VERSION_MINOR=$(echo "$TARGET_CUDA_VERSION" | cut -d. -f2)
-                    TARGET_CUDA_EXACT_VERSION=""
-                    TARGET_CUDA_VERSION_MINOR=${TARGET_CUDA_VERSION_MINOR:-0}
-                    TARGET_CUDA_VERSION_NORMALIZED="${TARGET_CUDA_VERSION_MAJOR}.${TARGET_CUDA_VERSION_MINOR}"
-                fi
-
-                TARGET_CUDA_MAJOR=$TARGET_CUDA_VERSION_MAJOR
-                TARGET_CUDA_MINOR=$TARGET_CUDA_VERSION_MINOR
-
-                if [ -n "$DRIVER_CUDA_VERSION" ]; then
-                    DRIVER_CUDA_MAJOR=$(echo $DRIVER_CUDA_VERSION | cut -d. -f1)
-                    DRIVER_CUDA_MINOR=$(echo $DRIVER_CUDA_VERSION | cut -d. -f2)
-                    if [ "$TARGET_CUDA_MAJOR" -gt "$DRIVER_CUDA_MAJOR" ] || { [ "$TARGET_CUDA_MAJOR" -eq "$DRIVER_CUDA_MAJOR" ] && [ "$TARGET_CUDA_MINOR" -gt "$DRIVER_CUDA_MINOR" ]; }; then
-                        print_warning "Selected CUDA version $TARGET_CUDA_VERSION may exceed driver support ($DRIVER_CUDA_VERSION). Installation may fail unless the driver is updated."
-                    else
-                        print_info "Driver support check passed for CUDA $TARGET_CUDA_VERSION."
-                    fi
-                else
-                    print_warning "Driver capabilities unknown; proceeding with CUDA $TARGET_CUDA_VERSION."
-                fi
-
-                CUDA_PKG_VERSION=$(echo "$TARGET_CUDA_VERSION_NORMALIZED" | sed 's/\./-/g')
-                DNF_REFRESHED=false
-                CUDA_INSTALLED=false
-                for REPO_VERSION in "${CUDA_REPO_VERSIONS[@]}"; do
-                    [ -z "$REPO_VERSION" ] && continue
-                    print_info "Attempting CUDA installation from NVIDIA repository: $REPO_VERSION"
-
-                    if [ "$OS_TYPE" = "ubuntu" ]; then
-                        PACKAGES_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/Packages"
-                        PACKAGE_VERSION=$(curl -fsSL "$PACKAGES_URL" 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
-                            function matches_requested(version, requested, len, next_char) {
-                                if (requested == "") {
-                                    return 1
-                                }
-                                len = length(requested)
-                                if (substr(version, 1, len) != requested) {
-                                    return 0
-                                }
-                                next_char = substr(version, len + 1, 1)
-                                return (next_char == "" || next_char !~ /[0-9]/)
-                            }
-                            $1 == "Package:" && $2 == pkg { pkgmatch=1; next }
-                            pkgmatch && $1 == "Version:" {
-                                if (matches_requested($2, requested_version)) {
-                                    print $2
-                                }
-                            }
-                            pkgmatch && $0 == "" { pkgmatch=0 }
-                        ' | sort -V | tail -1)
-                        if [ -z "$PACKAGE_VERSION" ]; then
-                            if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} matching $TARGET_CUDA_EXACT_VERSION from $REPO_VERSION"
-                            else
-                                print_warning "Could not determine package version for cuda-toolkit-${CUDA_PKG_VERSION} from $REPO_VERSION"
-                            fi
-                            continue
-                        fi
-
-                        if ! setup_ubuntu_cuda_repo "$REPO_VERSION"; then
-                            continue
-                        fi
-
-                        CUDA_APT_PACKAGE="cuda-toolkit-${CUDA_PKG_VERSION}"
-                        CUDA_APT_PACKAGE_SPEC="$CUDA_APT_PACKAGE"
-                        if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                            CUDA_APT_PACKAGE_SPEC="${CUDA_APT_PACKAGE}=${PACKAGE_VERSION}"
-                            print_info "Resolved CUDA toolkit package version: $PACKAGE_VERSION"
-                        else
-                            print_info "Resolved CUDA toolkit package stream: ${CUDA_APT_PACKAGE} (latest matching package version: $PACKAGE_VERSION)"
-                        fi
-
-                        print_info "Installing CUDA toolkit package from NVIDIA repository..."
-                        if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                            if ${SUDO_PREFIX}apt install -y --allow-downgrades "$CUDA_APT_PACKAGE_SPEC"; then
-                                print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
-                                CUDA_INSTALLED=true
-                            else
-                                print_warning "Failed to install CUDA toolkit package $CUDA_APT_PACKAGE_SPEC"
-                            fi
-                        elif $PKG_INSTALL_CMD "$CUDA_APT_PACKAGE_SPEC"; then
-                            print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
-                            CUDA_INSTALLED=true
-                        else
-                            print_warning "Failed to install CUDA toolkit package $CUDA_APT_PACKAGE_SPEC"
-                        fi
-
-                    elif [ "$OS_TYPE" = "rhel" ]; then
-                        PRIMARY_URL=$(get_rhel_primary_url "$REPO_VERSION")
-                        if [ -z "$PRIMARY_URL" ]; then
-                            print_warning "Could not locate repository metadata for $REPO_VERSION"
-                            continue
-                        fi
-                        RPM_RELATIVE_PATH=$(curl -fsSL "$PRIMARY_URL" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-toolkit-${CUDA_PKG_VERSION}" -v requested_version="$TARGET_CUDA_EXACT_VERSION" '
-                            function matches_requested(version, requested, len, next_char) {
-                                if (requested == "") {
-                                    return 1
-                                }
-                                len = length(requested)
-                                if (substr(version, 1, len) != requested) {
-                                    return 0
-                                }
-                                next_char = substr(version, len + 1, 1)
-                                return (next_char == "" || next_char !~ /[0-9]/)
-                            }
-                            /<package/ { pkgmatch=0; version_ok=0 }
-                            $0 ~ "<name>" pkg "</name>" {
-                                pkgmatch=1
-                                version_ok=0
-                                if (requested_version == "") {
-                                    version_ok=1
-                                }
-                            }
-                            pkgmatch && /<version / {
-                                version=""
-                                release=""
-                                version_ok=0
-                                if (match($0, /ver="([^"]+)"/, arr)) {
-                                    version=arr[1]
-                                }
-                                if (match($0, /rel="([^"]+)"/, arr)) {
-                                    release=arr[1]
-                                }
-                                if (release != "") {
-                                    version=version "-" release
-                                }
-                                if (matches_requested(version, requested_version)) {
-                                    version_ok=1
-                                }
-                            }
-                            pkgmatch && /<location href=/ {
-                                if (version_ok == 1) {
-                                    match($0, /href="([^"]+)"/, arr)
-                                    if (arr[1] != "") { print arr[1]; exit }
-                                }
-                            }
-                        ')
-                        if [ -z "$RPM_RELATIVE_PATH" ]; then
-                            if [ -n "$TARGET_CUDA_EXACT_VERSION" ]; then
-                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION matching $TARGET_CUDA_EXACT_VERSION"
-                            else
-                                print_warning "Could not locate CUDA toolkit package metadata for $REPO_VERSION"
-                            fi
-                            continue
-                        fi
-
-                        RPM_FILE_BASENAME=$(basename "$RPM_RELATIVE_PATH")
-                        CUDA_RPM_FILE="${CUDA_CACHE_DIR}/$RPM_FILE_BASENAME"
-                        CUDA_RPM_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/$RPM_RELATIVE_PATH"
-
-                        if [ ! -f "$CUDA_RPM_FILE" ]; then
-                            print_info "Downloading CUDA toolkit package from NVIDIA..."
-                            if wget -O "$CUDA_RPM_FILE" "$CUDA_RPM_URL"; then
-                                CUDA_PACKAGE_DOWNLOADS+=("$CUDA_RPM_FILE")
-                            else
-                                print_warning "Failed to download $CUDA_RPM_URL"
-                                rm -f "$CUDA_RPM_FILE"
-                                continue
-                            fi
-                        else
-                            print_info "Using temporary CUDA toolkit package: $CUDA_RPM_FILE"
-                        fi
-
-                        if [ "$DNF_REFRESHED" = false ]; then
-                            print_info "Refreshing package metadata before CUDA installation..."
-                            if ! $PKG_UPDATE_CMD; then
-                                print_warning "Package metadata refresh failed; CUDA installation may require manual dependency resolution"
-                            fi
-                            DNF_REFRESHED=true
-                        fi
-
-                        print_info "Installing CUDA toolkit package..."
-                        if $PKG_INSTALL_CMD "$CUDA_RPM_FILE"; then
-                            print_info "✓ CUDA $TARGET_CUDA_VERSION installed successfully"
-                            CUDA_INSTALLED=true
-                        else
-                            print_warning "Failed to install CUDA toolkit from $CUDA_RPM_FILE"
-                        fi
-                    else
-                        print_warning "Unsupported OS type $OS_TYPE for CUDA installation attempt"
-                    fi
-
-                    if [ "$CUDA_INSTALLED" = true ]; then
-                        break
-                    fi
-                done
-                if [ "$CUDA_INSTALLED" = true ]; then
-                    prompt_for_default_cuda_version
-
-                    CUDA_HOME_IN_BASHRC=false
-                    CUDA_PATH_IN_BASHRC=false
-                    CUDA_LD_LIBRARY_PATH_IN_BASHRC=false
-
-                    if grep -q 'CUDA_HOME="/usr/local/cuda"' ~/.bashrc; then
-                        CUDA_HOME_IN_BASHRC=true
-                    fi
-                    if grep -q "/usr/local/cuda/bin" ~/.bashrc; then
-                        CUDA_PATH_IN_BASHRC=true
-                    fi
-                    if grep -q "/usr/local/cuda/lib64" ~/.bashrc; then
-                        CUDA_LD_LIBRARY_PATH_IN_BASHRC=true
-                    fi
-
-                    if [ "$CUDA_HOME_IN_BASHRC" = false ] || [ "$CUDA_PATH_IN_BASHRC" = false ] || [ "$CUDA_LD_LIBRARY_PATH_IN_BASHRC" = false ]; then
-                        if [ "$AUTO_YES" = true ]; then
-                            ADD_CUDA_ENV="y"
-                        else
-                            read -p "Add CUDA environment variables to ~/.bashrc? (y/n): " ADD_CUDA_ENV
-                        fi
-
-                        if [[ "$ADD_CUDA_ENV" =~ ^[Yy]$ ]]; then
-                            echo '' >> ~/.bashrc
-                            if ! grep -q '^# CUDA toolkit$' ~/.bashrc; then
-                                echo '# CUDA toolkit' >> ~/.bashrc
-                            fi
-                            if [ "$CUDA_HOME_IN_BASHRC" = false ]; then
-                                echo 'export CUDA_HOME="/usr/local/cuda"' >> ~/.bashrc
-                            fi
-                            if [ "$CUDA_PATH_IN_BASHRC" = false ]; then
-                                echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
-                            fi
-                            if [ "$CUDA_LD_LIBRARY_PATH_IN_BASHRC" = false ]; then
-                                echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
-                            fi
-                            print_info "Added CUDA environment variables to ~/.bashrc"
-                            print_info "Run 'source ~/.bashrc' or start a new terminal to use nvcc"
-                        else
-                            print_info "Skipped adding CUDA environment variables"
-                            print_info "You can manually add CUDA_HOME=/usr/local/cuda and /usr/local/cuda/bin to your PATH later"
-                        fi
-                    fi
-                    CUDA_MISSING=false
-                else
-                    print_error "Failed to install CUDA automatically"
-                    print_info "You may need to install it manually from:"
-                    print_info "https://developer.nvidia.com/cuda-downloads"
-                    print_info ""
-                    if [ "$OS_TYPE" = "ubuntu" ]; then
-                        print_info "Select: Linux > x86_64 > Ubuntu > $OS_VERSION_ID > deb (network)"
-                    elif [ "$OS_TYPE" = "rhel" ]; then
-                        print_info "Select: Linux > x86_64 > RHEL > $OS_VERSION_ID > rpm (network)"
-                    fi
-                    INSTALL_SUCCESS=false
-                fi
-            else
-                CUDA_MISSING=false
-            fi
-
-            if [ "$INSTALL_SUCCESS" = true ]; then
-                DRIVER_CUDA_STREAM="$CURRENT_CUDA_VERSION_NORMALIZED"
-                if [ -n "$TARGET_CUDA_VERSION_NORMALIZED" ]; then
-                    DRIVER_CUDA_STREAM="$TARGET_CUDA_VERSION_NORMALIZED"
-                fi
-
-                install_nvidia_driver_for_gpu_support "$DRIVER_CUDA_STREAM"
-            fi
-        
-        echo ""
-        if [ "$INSTALL_SUCCESS" = true ]; then
-            if [ ${#CUDA_PACKAGE_DOWNLOADS[@]} -gt 0 ]; then
-                echo ""
-                print_info "CUDA support package(s) downloaded temporarily: ${CUDA_PACKAGE_DOWNLOADS[*]}"
-                cleanup_cuda_cache
-                print_info "Deleted temporary CUDA download directory: $CUDA_CACHE_DIR"
-            fi
-            print_info "✅ Installation complete!"
+    if [ -n "$DRIVER_CUDA_VERSION" ]; then
+        local driver_major="${DRIVER_CUDA_VERSION%%.*}"
+        local driver_minor="${DRIVER_CUDA_VERSION#*.}"
+        if [ "$target_major" -gt "$driver_major" ] || { [ "$target_major" -eq "$driver_major" ] && [ "$target_minor" -gt "$driver_minor" ]; }; then
+            print_warning "Selected CUDA version $target_version may exceed driver support ($DRIVER_CUDA_VERSION). Installation may fail unless the driver is updated."
         else
-            print_error "❌ Installation had errors - check messages above"
-            exit 1
+            print_info "Driver support check passed for CUDA $target_version."
         fi
+    else
+        print_warning "Driver capabilities unknown; proceeding with CUDA $target_version."
+    fi
+
+    cuda_package_stream="${target_stream//./-}"
+    for repo_version in "${CUDA_REPO_VERSIONS[@]}"; do
+        [ -z "$repo_version" ] && continue
+        print_info "Attempting CUDA $target_version installation from NVIDIA repository: $repo_version"
+
+        if [ "$OS_TYPE" = "ubuntu" ]; then
+            local packages_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo_version}/x86_64/Packages"
+            local package_version
+            local cuda_apt_package
+            local cuda_apt_package_spec
+
+            package_version=$(curl -fsSL "$packages_url" 2>/dev/null | awk -v pkg="cuda-toolkit-${cuda_package_stream}" -v requested_version="$target_exact_version" '
+                function matches_requested(version, requested, len, next_char) {
+                    if (requested == "") {
+                        return 1
+                    }
+                    len = length(requested)
+                    if (substr(version, 1, len) != requested) {
+                        return 0
+                    }
+                    next_char = substr(version, len + 1, 1)
+                    return (next_char == "" || next_char !~ /[0-9]/)
+                }
+                $1 == "Package:" && $2 == pkg { pkgmatch=1; next }
+                pkgmatch && $1 == "Version:" {
+                    if (matches_requested($2, requested_version)) {
+                        print $2
+                    }
+                }
+                pkgmatch && $0 == "" { pkgmatch=0 }
+            ' | sort -V | tail -1)
+
+            if [ -z "$package_version" ]; then
+                if [ -n "$target_exact_version" ]; then
+                    print_warning "Could not determine package version for cuda-toolkit-${cuda_package_stream} matching $target_exact_version from $repo_version"
+                else
+                    print_warning "Could not determine package version for cuda-toolkit-${cuda_package_stream} from $repo_version"
+                fi
+                continue
+            fi
+
+            if ! setup_ubuntu_cuda_repo "$repo_version"; then
+                continue
+            fi
+
+            cuda_apt_package="cuda-toolkit-${cuda_package_stream}"
+            cuda_apt_package_spec="$cuda_apt_package"
+            if [ -n "$target_exact_version" ]; then
+                cuda_apt_package_spec="${cuda_apt_package}=${package_version}"
+                print_info "Resolved CUDA toolkit package version: $package_version"
+            else
+                print_info "Resolved CUDA toolkit package stream: $cuda_apt_package (latest matching package version: $package_version)"
+            fi
+
+            print_info "Installing CUDA toolkit package from NVIDIA repository..."
+            if [ -n "$target_exact_version" ]; then
+                if ${SUDO_PREFIX}apt install -y --allow-downgrades "$cuda_apt_package_spec"; then
+                    cuda_installed=true
+                else
+                    print_warning "Failed to install CUDA toolkit package $cuda_apt_package_spec"
+                fi
+            elif $PKG_INSTALL_CMD "$cuda_apt_package_spec"; then
+                cuda_installed=true
+            else
+                print_warning "Failed to install CUDA toolkit package $cuda_apt_package_spec"
+            fi
+        elif [ "$OS_TYPE" = "rhel" ]; then
+            local primary_url
+            local rpm_relative_path
+            local rpm_file_basename
+            local cuda_rpm_file
+            local cuda_rpm_url
+
+            primary_url=$(get_rhel_primary_url "$repo_version")
+            if [ -z "$primary_url" ]; then
+                print_warning "Could not locate repository metadata for $repo_version"
+                continue
+            fi
+
+            rpm_relative_path=$(curl -fsSL "$primary_url" 2>/dev/null | gzip -dc 2>/dev/null | awk -v pkg="cuda-toolkit-${cuda_package_stream}" -v requested_version="$target_exact_version" '
+                function matches_requested(version, requested, len, next_char) {
+                    if (requested == "") {
+                        return 1
+                    }
+                    len = length(requested)
+                    if (substr(version, 1, len) != requested) {
+                        return 0
+                    }
+                    next_char = substr(version, len + 1, 1)
+                    return (next_char == "" || next_char !~ /[0-9]/)
+                }
+                /<package/ { pkgmatch=0; version_ok=0 }
+                $0 ~ "<name>" pkg "</name>" {
+                    pkgmatch=1
+                    version_ok=(requested_version == "")
+                }
+                pkgmatch && /<version / {
+                    version=""
+                    release=""
+                    version_ok=0
+                    if (match($0, /ver="([^"]+)"/, arr)) {
+                        version=arr[1]
+                    }
+                    if (match($0, /rel="([^"]+)"/, arr)) {
+                        release=arr[1]
+                    }
+                    if (release != "") {
+                        version=version "-" release
+                    }
+                    if (matches_requested(version, requested_version)) {
+                        version_ok=1
+                    }
+                }
+                pkgmatch && /<location href=/ && version_ok == 1 {
+                    match($0, /href="([^"]+)"/, arr)
+                    if (arr[1] != "") {
+                        print arr[1]
+                        exit
+                    }
+                }
+            ')
+
+            if [ -z "$rpm_relative_path" ]; then
+                if [ -n "$target_exact_version" ]; then
+                    print_warning "Could not locate CUDA toolkit package metadata for $repo_version matching $target_exact_version"
+                else
+                    print_warning "Could not locate CUDA toolkit package metadata for $repo_version"
+                fi
+                continue
+            fi
+
+            rpm_file_basename=$(basename "$rpm_relative_path")
+            cuda_rpm_file="${CUDA_CACHE_DIR}/${repo_version}-${rpm_file_basename}"
+            cuda_rpm_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo_version}/x86_64/$rpm_relative_path"
+
+            if [ ! -f "$cuda_rpm_file" ]; then
+                print_info "Downloading CUDA toolkit package from NVIDIA..."
+                if wget -O "$cuda_rpm_file" "$cuda_rpm_url"; then
+                    CUDA_PACKAGE_DOWNLOADS+=("$cuda_rpm_file")
+                else
+                    print_warning "Failed to download $cuda_rpm_url"
+                    rm -f "$cuda_rpm_file"
+                    continue
+                fi
+            else
+                print_info "Using temporary CUDA toolkit package: $cuda_rpm_file"
+            fi
+
+            if [ "$RHEL_METADATA_REFRESHED" = false ]; then
+                print_info "Refreshing package metadata before CUDA installation..."
+                if ! $PKG_UPDATE_CMD; then
+                    print_warning "Package metadata refresh failed; CUDA installation may require manual dependency resolution"
+                fi
+                RHEL_METADATA_REFRESHED=true
+            fi
+
+            print_info "Installing CUDA toolkit package..."
+            if $PKG_INSTALL_CMD "$cuda_rpm_file"; then
+                cuda_installed=true
+            else
+                print_warning "Failed to install CUDA toolkit from $cuda_rpm_file"
+            fi
+        fi
+
+        if [ "$cuda_installed" = true ]; then
+            break
+        fi
+    done
+
+    if [ "$cuda_installed" = true ]; then
+        print_info "✓ CUDA $target_version installed successfully"
+        LAST_INSTALLED_CUDA_STREAM="$target_stream"
+        return 0
+    fi
+
+    print_error "Failed to install CUDA $target_version"
+    print_info "Manual installer: https://developer.nvidia.com/cuda-downloads"
+    return 1
+}
+
+configure_cuda_environment() {
+    local cuda_home_in_bashrc=false
+    local cuda_path_in_bashrc=false
+    local cuda_ld_library_path_in_bashrc=false
+    local add_cuda_env="n"
+
+    if grep -q 'CUDA_HOME="/usr/local/cuda"' ~/.bashrc 2>/dev/null; then
+        cuda_home_in_bashrc=true
+    fi
+    if grep -q "/usr/local/cuda/bin" ~/.bashrc 2>/dev/null; then
+        cuda_path_in_bashrc=true
+    fi
+    if grep -q "/usr/local/cuda/lib64" ~/.bashrc 2>/dev/null; then
+        cuda_ld_library_path_in_bashrc=true
+    fi
+
+    if [ "$cuda_home_in_bashrc" = true ] && [ "$cuda_path_in_bashrc" = true ] && [ "$cuda_ld_library_path_in_bashrc" = true ]; then
+        return 0
+    fi
+
+    if [ "$AUTO_YES" = true ]; then
+        add_cuda_env="y"
+    else
+        read -r -p "Add CUDA environment variables to ~/.bashrc? (y/n): " add_cuda_env
+    fi
+
+    if [[ "$add_cuda_env" =~ ^[Yy]$ ]]; then
+        echo '' >> ~/.bashrc
+        if ! grep -q '^# CUDA toolkit$' ~/.bashrc 2>/dev/null; then
+            echo '# CUDA toolkit' >> ~/.bashrc
+        fi
+        if [ "$cuda_home_in_bashrc" = false ]; then
+            echo 'export CUDA_HOME="/usr/local/cuda"' >> ~/.bashrc
+        fi
+        if [ "$cuda_path_in_bashrc" = false ]; then
+            echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
+        fi
+        if [ "$cuda_ld_library_path_in_bashrc" = false ]; then
+            echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
+        fi
+        print_info "Added CUDA environment variables to ~/.bashrc"
+        print_info "Run 'source ~/.bashrc' or start a new terminal to use nvcc"
+    else
+        print_info "Skipped adding CUDA environment variables"
+    fi
+}
+
+TARGET_CUDA_VERSION_DEFAULT="12.9"
+CURRENT_CUDA_DISPLAY="None"
+if command -v nvcc &> /dev/null; then
+    CURRENT_CUDA_DISPLAY="$CUDA_VERSION"
+fi
+
+if [ -n "$DRIVER_CUDA_VERSION" ]; then
+    print_info "Driver reports CUDA compatibility up to version $DRIVER_CUDA_VERSION"
+else
+    print_info "No NVIDIA driver version detected; proceeding without driver compatibility data"
+fi
+
+build_cuda_repo_versions
+
+LATEST_CUDA_VERSION=""
+if [ "${#CUDA_VERSION_ARGS[@]}" -eq 0 ]; then
+    LATEST_CUDA_VERSION=$(detect_latest_cuda_version "${CUDA_REPO_VERSIONS[@]}")
+    if [ -z "$LATEST_CUDA_VERSION" ]; then
+        print_warning "Unable to determine the latest CUDA version automatically; defaulting to $TARGET_CUDA_VERSION_DEFAULT."
+        LATEST_CUDA_VERSION="$TARGET_CUDA_VERSION_DEFAULT"
+    else
+        print_info "Latest CUDA version detected from repositories: $LATEST_CUDA_VERSION"
+    fi
+fi
+
+print_info "Installed CUDA versions detected: $INSTALLED_CUDA_VERSIONS_DISPLAY"
+print_info "Current CUDA version: $CURRENT_CUDA_DISPLAY"
+
+EXPLICIT_CUDA_REQUEST=false
+CUDA_INSTALL_REQUESTED=false
+REQUESTED_CUDA_VERSIONS=()
+
+if [ "${#CUDA_VERSION_ARGS[@]}" -gt 0 ]; then
+    EXPLICIT_CUDA_REQUEST=true
+    REQUESTED_CUDA_VERSIONS=("${CUDA_VERSION_ARGS[@]}")
+
+    request_display=""
+    for request_index in "${!CUDA_VERSION_ARGS[@]}"; do
+        request_label="${CUDA_VERSION_ARGS[$request_index]}"
+        if [ "${CUDA_VERSION_STREAMS[$request_index]}" = "$DEFAULT_CUDA_VERSION_STREAM" ]; then
+            request_label="$request_label (default)"
+        fi
+        if [ -n "$request_display" ]; then
+            request_display+=", "
+        fi
+        request_display+="$request_label"
+    done
+
+    if [ "$AUTO_YES" = true ]; then
+        CUDA_INSTALL_REQUESTED=true
+        print_info "Automatic mode enabled (-y): installing requested CUDA versions: $request_display"
+    else
+        read -r -p "Install requested CUDA versions ($request_display)? (y/n): " INSTALL_REQUESTED_CUDAS
+        if [[ "$INSTALL_REQUESTED_CUDAS" =~ ^[Yy]$ ]]; then
+            CUDA_INSTALL_REQUESTED=true
+        else
+            print_info "Skipped requested CUDA installations."
+        fi
+    fi
+else
+    CUDA_CHOICE_ACTION=""
+    echo "Choose CUDA installation option:"
+    if [ "$CURRENT_CUDA_DISPLAY" = "None" ]; then
+        echo "  1) Install latest version ($LATEST_CUDA_VERSION)"
+        echo "  2) Install custom version"
+        echo "  3) Skip CUDA installation"
+        read -r -p "Enter choice (1/2/3): " CUDA_CHOICE
+        while [[ ! "$CUDA_CHOICE" =~ ^[123]$ ]]; do
+            read -r -p "Please enter 1, 2, or 3: " CUDA_CHOICE
+        done
+        case $CUDA_CHOICE in
+            1) CUDA_CHOICE_ACTION="latest" ;;
+            2) CUDA_CHOICE_ACTION="custom" ;;
+            3) CUDA_CHOICE_ACTION="skip" ;;
+        esac
+    else
+        echo "  1) Keep current version"
+        echo "  2) Install latest version ($LATEST_CUDA_VERSION)"
+        echo "  3) Install custom version"
+        echo "  4) Skip CUDA installation"
+        read -r -p "Enter choice (1/2/3/4): " CUDA_CHOICE
+        while [[ ! "$CUDA_CHOICE" =~ ^[1234]$ ]]; do
+            read -r -p "Please enter 1, 2, 3, or 4: " CUDA_CHOICE
+        done
+        case $CUDA_CHOICE in
+            1) CUDA_CHOICE_ACTION="keep" ;;
+            2) CUDA_CHOICE_ACTION="latest" ;;
+            3) CUDA_CHOICE_ACTION="custom" ;;
+            4) CUDA_CHOICE_ACTION="skip" ;;
+        esac
+    fi
+
+    case $CUDA_CHOICE_ACTION in
+        keep)
+            print_info "Keeping existing CUDA toolkit ($CURRENT_CUDA_DISPLAY)."
+            ;;
+        latest)
+            latest_stream="$(cuda_version_stream "$LATEST_CUDA_VERSION")"
+            latest_already_present=false
+            for installed_version in "${INSTALLED_CUDA_VERSIONS[@]}"; do
+                if [ "$(cuda_version_stream "$installed_version")" = "$latest_stream" ]; then
+                    latest_already_present=true
+                    break
+                fi
+            done
+            if [ "$latest_already_present" = true ]; then
+                print_info "Latest CUDA version $LATEST_CUDA_VERSION is already installed; no action needed."
+            else
+                CUDA_INSTALL_REQUESTED=true
+                REQUESTED_CUDA_VERSIONS=("$LATEST_CUDA_VERSION")
+            fi
+            ;;
+        custom)
+            while true; do
+                read -r -p "Enter desired CUDA version (e.g. 13, 13.0, 13.0.1, or 13.0.2-1): " CUSTOM_VERSION
+                if is_valid_cuda_version_arg "$CUSTOM_VERSION"; then
+                    CUDA_INSTALL_REQUESTED=true
+                    REQUESTED_CUDA_VERSIONS=("$CUSTOM_VERSION")
+                    break
+                fi
+                print_error "Invalid version number. Use major, major.minor, major.minor.patch, or major.minor.patch-release."
+            done
+            ;;
+        skip)
+            print_info "Skipping CUDA toolkit installation per user selection."
+            ;;
+    esac
+fi
+
+PREINSTALL_CUDA_DEFAULT_EXISTED=false
+PREINSTALL_CUDA_DEFAULT_WAS_SYMLINK=false
+PREINSTALL_CUDA_DEFAULT_LINK_TARGET=""
+if [ -e /usr/local/cuda ] || [ -L /usr/local/cuda ]; then
+    PREINSTALL_CUDA_DEFAULT_EXISTED=true
+fi
+if [ -L /usr/local/cuda ]; then
+    PREINSTALL_CUDA_DEFAULT_WAS_SYMLINK=true
+    PREINSTALL_CUDA_DEFAULT_LINK_TARGET="$(readlink /usr/local/cuda)"
+fi
+
+LAST_INSTALLED_CUDA_STREAM=""
+ANY_CUDA_INSTALLED=false
+RHEL_METADATA_REFRESHED=false
+
+if [ "$CUDA_INSTALL_REQUESTED" = true ]; then
+    for requested_cuda_version in "${REQUESTED_CUDA_VERSIONS[@]}"; do
+        if install_cuda_toolkit_version "$requested_cuda_version"; then
+            ANY_CUDA_INSTALLED=true
+        else
+            INSTALL_SUCCESS=false
+        fi
+    done
+fi
+
+if [ "$ANY_CUDA_INSTALLED" = true ]; then
+    if [ "$EXPLICIT_CUDA_REQUEST" = true ]; then
+        if [ -n "$DEFAULT_CUDA_VERSION_STREAM" ]; then
+            print_info "Setting explicitly selected CUDA default: $DEFAULT_CUDA_VERSION_STREAM"
+            if ! set_default_cuda_version "$DEFAULT_CUDA_VERSION_STREAM"; then
+                print_error "Failed to set CUDA $DEFAULT_CUDA_VERSION_STREAM as the default."
+                INSTALL_SUCCESS=false
+            fi
+        elif ! restore_preinstall_cuda_default; then
+            print_error "Failed to preserve the pre-install CUDA default."
+            INSTALL_SUCCESS=false
+        fi
+    else
+        TARGET_CUDA_VERSION_NORMALIZED="$LAST_INSTALLED_CUDA_STREAM"
+        prompt_for_default_cuda_version
+    fi
+
+    if [ -e /usr/local/cuda ]; then
+        configure_cuda_environment
+    else
+        print_warning "No /usr/local/cuda default is set; skipping CUDA environment configuration."
+    fi
+fi
+
+if [ "$INSTALL_SUCCESS" = true ]; then
+    DRIVER_CUDA_STREAM="$(get_current_cuda_default_version)"
+    if [ -z "$DRIVER_CUDA_STREAM" ]; then
+        DRIVER_CUDA_STREAM="$CURRENT_CUDA_VERSION_NORMALIZED"
+    fi
+    if [ -z "$DRIVER_CUDA_STREAM" ]; then
+        DRIVER_CUDA_STREAM="$LAST_INSTALLED_CUDA_STREAM"
+    fi
+    install_nvidia_driver_for_gpu_support "$DRIVER_CUDA_STREAM"
+fi
+
+echo ""
+if [ "$INSTALL_SUCCESS" = true ]; then
+    if [ "${#CUDA_PACKAGE_DOWNLOADS[@]}" -gt 0 ]; then
+        echo ""
+        print_info "CUDA support package(s) downloaded temporarily: ${CUDA_PACKAGE_DOWNLOADS[*]}"
+        cleanup_cuda_cache
+        print_info "Deleted temporary CUDA download directory: $CUDA_CACHE_DIR"
+    fi
+    print_info "✅ Installation complete!"
+else
+    print_error "❌ Installation had errors - check messages above"
+    exit 1
+fi

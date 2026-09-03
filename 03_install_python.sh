@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script: 04_install_python.sh
+# Script: 03_install_python.sh
 # Purpose: Check and install the latest Python via pyenv and uv
 
 # Colors

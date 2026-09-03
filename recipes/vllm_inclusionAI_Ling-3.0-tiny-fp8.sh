@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PYTHON_ENV="env_inclusionai-vllm"
+PYTHON_ENV="env_inclusionai-ling3-vllm"
 INFERENCE_PROVIDER="vLLM"
 INFERENCE_ENV=""
 MODEL_REPO="inclusionAI/Ling-3.0-tiny-fp8"
