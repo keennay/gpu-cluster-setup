@@ -126,10 +126,10 @@ python_buffer=""
 editing=""
 status_message=""
 
-PANEL_WIDTH=78
-PANEL_HEIGHT=21
+PANEL_WIDTH=80
+PANEL_HEIGHT=27
 MIN_COLUMNS=80
-MIN_ROWS=21
+MIN_ROWS=27
 FIELD_WIDTH=47
 terminal_rows=21
 terminal_columns=80
@@ -270,6 +270,13 @@ render_field() {
     fi
     printf -v RENDERED_FIELD '%-47.47s' "$visible"
 }
+append_blank_line() {
+    local blank
+
+    printf -v blank '%*s' "$((PANEL_WIDTH - 2))" ""
+    PANEL_LINES+=("│${blank}│")
+}
+
 
 build_panel() {
     local all_selected=0
@@ -285,11 +292,12 @@ build_panel() {
     local index
     local -a cells
     local border
-    local title="OMP Workstation Installer"
+    local title="YONIQ GPU Setup"
 
     PANEL_LINES=()
     printf -v border '%*s' "$((PANEL_WIDTH - ${#title} - 5))" ""
     PANEL_LINES+=("┌─ $title ${border// /─}┐")
+    append_blank_line
 
     marker_for "install"
     install_text="${FOCUS_MARKER} [ Install ]"
@@ -299,6 +307,7 @@ build_panel() {
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
 
     append_separator "Selection"
+    append_blank_line
     if all_packages_selected; then
         all_selected=1
         selected_mark="X"
@@ -314,6 +323,7 @@ build_panel() {
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
 
     append_separator "Dependencies"
+    append_blank_line
     for ((row = 0; row < 3; row++)); do
         cells=("" "" "")
         for ((column = 0; column < 3; column++)); do
@@ -322,8 +332,9 @@ build_panel() {
             cells[column]="$CONTROL_TEXT"
         done
         printf -v content '%-25.25s%-25.25s%-26.26s' "${cells[0]}" "${cells[1]}" "${cells[2]}"
-        PANEL_LINES+=("│${content}│")
+        PANEL_LINES+=("│ ${content} │")
     done
+    append_blank_line
 
     append_separator "CUDA Version"
     marker_for "cuda_default"
@@ -344,7 +355,7 @@ build_panel() {
     fi
     render_field "$cuda_buffer" "$active"
     printf -v content '%-11.11s%s[%s]   ' "$default_text" "$custom_text" "$RENDERED_FIELD"
-    PANEL_LINES+=("│${content}│")
+    PANEL_LINES+=("│ ${content} │")
 
     append_separator "Python Version"
     marker_for "python_default"
@@ -365,9 +376,10 @@ build_panel() {
     fi
     render_field "$python_buffer" "$active"
     printf -v content '%-13.13s%s[%s] ' "$default_text" "$custom_text" "$RENDERED_FIELD"
-    PANEL_LINES+=("│${content}│")
+    PANEL_LINES+=("│ ${content} │")
 
     append_separator "Coding CLIs"
+    append_blank_line
     for ((row = 0; row < 4; row++)); do
         cells=("" "" "")
         for ((column = 0; column < 3; column++)); do
@@ -382,8 +394,9 @@ build_panel() {
         else
             printf -v content '%-25.25s%-25.25s%-26.26s' "${cells[0]}" "${cells[1]}" "${cells[2]}"
         fi
-        PANEL_LINES+=("│${content}│")
+        PANEL_LINES+=("│ ${content} │")
     done
+    append_blank_line
 
     append_separator "Controls"
     if [ -n "$status_message" ]; then
@@ -406,34 +419,34 @@ style_panel_line() {
 
     case "$line_index" in
         0)
-            title="OMP Workstation Installer"
+            title="YONIQ GPU Setup"
             is_border=1
             ;;
-        2)
+        3)
             title="Selection"
             is_border=1
             ;;
-        5)
+        7)
             title="Dependencies"
             is_border=1
             ;;
-        9)
+        13)
             title="CUDA Version"
             is_border=1
             ;;
-        11)
+        15)
             title="Python Version"
             is_border=1
             ;;
-        13)
+        17)
             title="Coding CLIs"
             is_border=1
             ;;
-        18)
+        24)
             title="Controls"
             is_border=1
             ;;
-        20)
+        26)
             is_border=1
             ;;
     esac
@@ -451,13 +464,13 @@ style_panel_line() {
 
     body="${line#│}"
     body="${body%│}"
-    if (( line_index == 19 )); then
+    if (( line_index == 25 )); then
         if [ -n "$status_message" ]; then
             body="${STYLE_ALERT}${body}${STYLE_RESET}"
         else
             body="${STYLE_MUTED}${body}${STYLE_RESET}"
         fi
-    elif (( line_index == 4 )); then
+    elif (( line_index == 6 )); then
         body="${STYLE_MUTED}${body}${STYLE_RESET}"
     else
         body="${body//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
@@ -483,7 +496,7 @@ draw_screen() {
 
     if (( terminal_columns < MIN_COLUMNS || terminal_rows < MIN_ROWS )); then
         terminal_too_small=1
-        message="Terminal too small: need 80x21, have ${terminal_columns}x${terminal_rows}"
+        message="Terminal too small: need ${MIN_COLUMNS}x${MIN_ROWS}, have ${terminal_columns}x${terminal_rows}"
         message_row=$(( (terminal_rows + 1) / 2 ))
         message_column=$(( (terminal_columns - ${#message}) / 2 + 1 ))
         if (( message_row < 1 )); then
@@ -519,8 +532,8 @@ draw_screen() {
         if (( cursor_offset > FIELD_WIDTH - 1 )); then
             cursor_offset=$((FIELD_WIDTH - 1))
         fi
-        cursor_row=$((panel_top + 10))
-        cursor_column=$((panel_left + 26 + cursor_offset))
+        cursor_row=$((panel_top + 14))
+        cursor_column=$((panel_left + 27 + cursor_offset))
         printf '\033[?25h\033[%d;%dH' "$cursor_row" "$cursor_column" >&"$TTY_FD"
     elif [ "$editing" = "python" ]; then
         buffer_length=${#python_buffer}
@@ -528,8 +541,8 @@ draw_screen() {
         if (( cursor_offset > FIELD_WIDTH - 1 )); then
             cursor_offset=$((FIELD_WIDTH - 1))
         fi
-        cursor_row=$((panel_top + 12))
-        cursor_column=$((panel_left + 28 + cursor_offset))
+        cursor_row=$((panel_top + 16))
+        cursor_column=$((panel_left + 29 + cursor_offset))
         printf '\033[?25h\033[%d;%dH' "$cursor_row" "$cursor_column" >&"$TTY_FD"
     fi
 }
