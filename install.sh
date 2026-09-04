@@ -1397,6 +1397,7 @@ perform_installation() {
     fi
 
     printf 'Installation complete.\n'
+    printf 'A system reboot is recommended before using the installed environment.\n'
     return 0
 }
 
