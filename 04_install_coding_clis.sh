@@ -173,7 +173,6 @@ curl_cli_selected() {
         section_selected "$SELECT_OMP" ||
         section_selected "$SELECT_CODEX" ||
         section_selected "$SELECT_OPENCODE" ||
-        section_selected "$SELECT_PI" ||
         section_selected "$SELECT_PRIME"
 }
 
@@ -425,7 +424,7 @@ if section_selected "$SELECT_PI" &&
     prompt_yes_no INSTALL_PI "  Install Pi? (y/n): "
     if [[ "$INSTALL_PI" =~ ^[Yy]$ ]]; then
         print_info "Installing Pi..."
-        if curl -fsSL https://pi.dev/install.sh | sh; then
+        if npm install --global --ignore-scripts --no-fund --no-audit --progress=false @earendil-works/pi-coding-agent; then
             print_info "Pi installed"
         else
             print_warning "Failed to install Pi"
@@ -440,7 +439,7 @@ if section_selected "$SELECT_PRIME" &&
     prompt_yes_no INSTALL_PRIME "  Install Prime Intellect Agent? (y/n): "
     if [[ "$INSTALL_PRIME" =~ ^[Yy]$ ]]; then
         print_info "Installing Prime Intellect Agent..."
-        if curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh; then
+        if curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | PRIME_AGENT_INSTALLER_PLAIN=1 PRIME_AGENT_BOOTSTRAP_KERNEL_ON_INSTALL=1 setsid --wait sh; then
             print_info "Prime Intellect Agent installed"
         else
             print_warning "Failed to install Prime Intellect Agent"
