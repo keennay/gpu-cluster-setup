@@ -80,14 +80,14 @@ prompt_yes_no() {
 }
 
 load_nvm_node() {
-    if command -v npm &> /dev/null; then
+    if command -v node &> /dev/null && command -v npm &> /dev/null; then
         return
     fi
 
     export NVM_DIR="${NVM_DIR:-$CONFIG_HOME/.nvm}"
     if [ -s "$NVM_DIR/nvm.sh" ]; then
         . "$NVM_DIR/nvm.sh"
-        if ! command -v npm &> /dev/null; then
+        if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
             nvm use 24 >/dev/null 2>&1 || nvm use node >/dev/null 2>&1 || true
         fi
     fi
@@ -180,12 +180,41 @@ curl_cli_selected() {
 print_info "Coding CLI Installer"
 echo ""
 
-if section_selected "$SELECT_GEMINI"; then
+if section_selected "$SELECT_DEEPSEEK" ||
+   section_selected "$SELECT_GEMINI" ||
+   section_selected "$SELECT_PI" ||
+   section_selected "$SELECT_PRIME"; then
     load_nvm_node
-    if ! command -v npm &> /dev/null; then
-        print_error "npm not found - install Node.js first by running ./01_install_dependencies.sh --node"
-        exit 1
-    fi
+fi
+
+NODE_AVAILABLE=false
+NPM_AVAILABLE=false
+PNPM_AVAILABLE=false
+if command -v node &> /dev/null; then
+    NODE_AVAILABLE=true
+fi
+if command -v npm &> /dev/null; then
+    NPM_AVAILABLE=true
+fi
+if command -v pnpm &> /dev/null; then
+    PNPM_AVAILABLE=true
+fi
+
+if section_selected "$SELECT_DEEPSEEK" &&
+   { [ "$NODE_AVAILABLE" = false ] || [ "$PNPM_AVAILABLE" = false ]; }; then
+    print_warning "Skipping DeepSeek Harness: Node.js or pnpm was not found."
+fi
+if section_selected "$SELECT_GEMINI" &&
+   { [ "$NODE_AVAILABLE" = false ] || [ "$NPM_AVAILABLE" = false ]; }; then
+    print_warning "Skipping Gemini CLI: Node.js or npm was not found."
+fi
+if section_selected "$SELECT_PI" &&
+   { [ "$NODE_AVAILABLE" = false ] || [ "$NPM_AVAILABLE" = false ]; }; then
+    print_warning "Skipping Pi: Node.js or npm was not found."
+fi
+if section_selected "$SELECT_PRIME" &&
+   { [ "$NODE_AVAILABLE" = false ] || [ "$NPM_AVAILABLE" = false ]; }; then
+    print_warning "Skipping Prime Intellect Agent: Node.js or npm was not found."
 fi
 
 if curl_cli_selected && ! command -v curl &> /dev/null; then
@@ -233,7 +262,9 @@ if section_selected "$SELECT_CLAUDE"; then
     fi
 fi
 
-if section_selected "$SELECT_DEEPSEEK"; then
+if section_selected "$SELECT_DEEPSEEK" &&
+   [ "$NODE_AVAILABLE" = true ] &&
+   [ "$PNPM_AVAILABLE" = true ]; then
     # DeepSeek Harness
     prompt_yes_no INSTALL_DEEPSEEK "  Install DeepSeek Harness? (y/n): "
     if [[ "$INSTALL_DEEPSEEK" =~ ^[Yy]$ ]]; then
@@ -272,7 +303,9 @@ if section_selected "$SELECT_DEEPSEEK"; then
     fi
 fi
 
-if section_selected "$SELECT_GEMINI"; then
+if section_selected "$SELECT_GEMINI" &&
+   [ "$NODE_AVAILABLE" = true ] &&
+   [ "$NPM_AVAILABLE" = true ]; then
     # Gemini CLI
     prompt_yes_no INSTALL_GEMINI "  Install Gemini CLI? (y/n): "
     if [[ "$INSTALL_GEMINI" =~ ^[Yy]$ ]]; then
@@ -371,7 +404,9 @@ if section_selected "$SELECT_OPENCODE"; then
     fi
 fi
 
-if section_selected "$SELECT_PI"; then
+if section_selected "$SELECT_PI" &&
+   [ "$NODE_AVAILABLE" = true ] &&
+   [ "$NPM_AVAILABLE" = true ]; then
     # Pi
     prompt_yes_no INSTALL_PI "  Install Pi? (y/n): "
     if [[ "$INSTALL_PI" =~ ^[Yy]$ ]]; then
@@ -384,7 +419,9 @@ if section_selected "$SELECT_PI"; then
     fi
 fi
 
-if section_selected "$SELECT_PRIME"; then
+if section_selected "$SELECT_PRIME" &&
+   [ "$NODE_AVAILABLE" = true ] &&
+   [ "$NPM_AVAILABLE" = true ]; then
     # Prime Intellect Agent
     prompt_yes_no INSTALL_PRIME "  Install Prime Intellect Agent? (y/n): "
     if [[ "$INSTALL_PRIME" =~ ^[Yy]$ ]]; then

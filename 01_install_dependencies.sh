@@ -47,6 +47,20 @@ ensure_config_ownership() {
     return 0
 }
 
+remove_legacy_docker_apt_source() {
+    local legacy_source="/etc/apt/sources.list.d/docker.list"
+
+    if [ ! -e "$legacy_source" ]; then
+        return 0
+    fi
+
+    print_info "Removing legacy Docker APT repository definition..."
+    if ! sudo rm -f "$legacy_source"; then
+        print_error "Failed to remove legacy Docker APT repository definition: $legacy_source"
+        return 1
+    fi
+}
+
 ensure_sudo_installed() {
     if command -v sudo &> /dev/null; then
         print_info "sudo already installed"
@@ -228,6 +242,14 @@ else
 fi
 
 ensure_sudo_installed
+
+# Repair the conflicting state left by an interrupted migration from Docker's
+# legacy docker.list definition before the first apt command reads the sources.
+if [ "$OS_TYPE" = "ubuntu" ] && [ -e /etc/apt/sources.list.d/docker.sources ]; then
+    if ! remove_legacy_docker_apt_source; then
+        exit 1
+    fi
+fi
 
 # Update system packages
 if [ "$AUTO_YES" = true ]; then
@@ -495,6 +517,10 @@ if section_selected "$SELECT_DOCKER"; then
 
     if [[ "$INSTALL_DOCKER" =~ ^[Yy]$ ]]; then
         if [ "$OS_TYPE" = "ubuntu" ]; then
+            if ! remove_legacy_docker_apt_source; then
+                exit 1
+            fi
+
             print_info "Removing conflicting Ubuntu container packages..."
             if ! sudo apt remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc | cut -f1); then
                 print_error "Failed to remove conflicting Ubuntu container packages"
