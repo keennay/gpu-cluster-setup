@@ -82,6 +82,7 @@ ensure_sudo_installed() {
 # Parse arguments
 AUTO_YES=false
 SELECT_ALL=false
+SELECT_DOCKER=false
 SELECT_TMUX=false
 SELECT_NODE=false
 SELECT_PNPM=false
@@ -96,15 +97,16 @@ print_usage() {
     echo "Usage: $0 [-y|--auto] [--all] [section flags...]"
     echo "  -y, --auto       Automatically accept prompts for enabled sections"
     echo "  --all            Enable every optional section"
-    echo "  --tmux           Enable tmux configuration"
+    echo "  --docker         Enable Docker Engine installation"
     echo "  --node           Enable Node.js 24 installation/update"
     echo "  --pnpm           Enable pnpm installation/update"
     echo "  --bun            Enable Bun installation/update"
     echo "  --go             Enable Go installation/update and shell paths"
     echo "  --rust           Enable Rustup installation/update"
-    echo "  --zig           Enable Zig installation/update and xz-utils dependency"
+    echo "  --zig            Enable Zig installation/update and xz-utils dependency"
     echo "  --neovim         Enable Neovim installation/update and aliases"
     echo "  --neovim-configs Enable the author's Neovim configuration"
+    echo "  --tmux           Enable tmux installation and configuration"
     echo "  -h, --help       Show this help message"
     echo ""
     echo "Without section flags, optional sections are skipped. Use --all to enable them."
@@ -114,7 +116,7 @@ for arg in "$@"; do
     case "$arg" in
         -y|--auto) AUTO_YES=true ;;
         --all) SELECT_ALL=true ;;
-        --tmux) SELECT_TMUX=true ;;
+        --docker) SELECT_DOCKER=true ;;
         --node) SELECT_NODE=true ;;
         --pnpm) SELECT_PNPM=true ;;
         --bun) SELECT_BUN=true ;;
@@ -123,6 +125,7 @@ for arg in "$@"; do
         --zig) SELECT_ZIG=true ;;
         --neovim) SELECT_NEOVIM=true ;;
         --neovim-configs) SELECT_NEOVIM_CONFIGS=true ;;
+        --tmux) SELECT_TMUX=true ;;
         -h|--help)
             print_usage
             exit 0
@@ -270,9 +273,9 @@ echo ""
 
 # Basic Linux essentials installed after upgrades to keep tooling current
 if [ "$OS_TYPE" = "ubuntu" ]; then
-    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim nano tmux git git-lfs htop nvtop ripgrep shellcheck bubblewrap ffmpeg)
+    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim nano git git-lfs htop nvtop ripgrep shellcheck bubblewrap ffmpeg)
 else
-    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim-enhanced nano tmux git git-lfs htop nvtop ripgrep ShellCheck bubblewrap ffmpeg)
+    BASIC_LINUX_ESSENTIALS=(curl wget zip unzip less vim-enhanced nano git git-lfs htop nvtop ripgrep ShellCheck bubblewrap ffmpeg)
 fi
 if [ "$AUTO_YES" = true ]; then
     INSTALL_BASICS="y"
@@ -482,28 +485,119 @@ else
     fi
 fi
 
-if section_selected "$SELECT_TMUX" && command -v tmux &> /dev/null; then
-    TMUX_CONFIG_SOURCE="$(dirname "$0")/configs/.tmux.conf"
-    TMUX_CONFIG_TARGET="$HOME/.tmux.conf"
-
+# Install Docker Engine
+if section_selected "$SELECT_DOCKER"; then
     if [ "$AUTO_YES" = true ]; then
-        COPY_TMUX_CONFIG="y"
+        INSTALL_DOCKER="y"
     else
-        read -p "Copy tmux config from $TMUX_CONFIG_SOURCE to $TMUX_CONFIG_TARGET? (y/n): " COPY_TMUX_CONFIG
+        read -r -p "Install Docker Engine? (y/n): " INSTALL_DOCKER
     fi
 
-    if [[ "$COPY_TMUX_CONFIG" =~ ^[Yy]$ ]]; then
-        if [ -f "$TMUX_CONFIG_SOURCE" ]; then
-            if cp "$TMUX_CONFIG_SOURCE" "$TMUX_CONFIG_TARGET"; then
-                print_info "✓ tmux config copied to $TMUX_CONFIG_TARGET"
-            else
-                print_warning "Failed to copy tmux config"
+    if [[ "$INSTALL_DOCKER" =~ ^[Yy]$ ]]; then
+        if [ "$OS_TYPE" = "ubuntu" ]; then
+            print_info "Removing conflicting Ubuntu container packages..."
+            if ! sudo apt remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc | cut -f1); then
+                print_error "Failed to remove conflicting Ubuntu container packages"
+                exit 1
+            fi
+
+            print_info "Installing Docker repository prerequisites..."
+            if ! sudo apt install -y ca-certificates curl; then
+                print_error "Failed to install Docker repository prerequisites"
+                exit 1
+            fi
+
+            if ! sudo install -m 0755 -d /etc/apt/keyrings; then
+                print_error "Failed to create /etc/apt/keyrings"
+                exit 1
+            fi
+
+            print_info "Installing Docker repository signing key..."
+            if ! sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc; then
+                print_error "Failed to download Docker repository signing key"
+                exit 1
+            fi
+            if ! sudo chmod a+r /etc/apt/keyrings/docker.asc; then
+                print_error "Failed to set Docker signing key permissions"
+                exit 1
+            fi
+
+            print_info "Configuring the Docker APT repository..."
+            if ! sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+            then
+                print_error "Failed to configure the Docker APT repository"
+                exit 1
+            fi
+
+            if ! sudo apt update; then
+                print_error "Failed to update package metadata for the Docker repository"
+                exit 1
+            fi
+
+            print_info "Installing Docker Engine..."
+            if ! sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+                print_error "Failed to install Docker Engine"
+                exit 1
+            fi
+
+            if ! sudo systemctl enable docker; then
+                print_error "Failed to enable the Docker service"
+                exit 1
             fi
         else
-            print_warning "tmux config not found at $TMUX_CONFIG_SOURCE"
+            if ! command -v dnf &> /dev/null; then
+                print_error "dnf is required to install Docker Engine on RHEL-compatible systems"
+                exit 1
+            fi
+
+            print_info "Removing conflicting RHEL container packages..."
+            if ! sudo dnf remove -y \
+                docker \
+                docker-client \
+                docker-client-latest \
+                docker-common \
+                docker-latest \
+                docker-latest-logrotate \
+                docker-logrotate \
+                docker-engine \
+                podman \
+                runc; then
+                print_error "Failed to remove conflicting RHEL container packages"
+                exit 1
+            fi
+
+            if ! sudo dnf -y install dnf-plugins-core; then
+                print_error "Failed to install dnf-plugins-core"
+                exit 1
+            fi
+
+            if ! sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo; then
+                print_error "Failed to configure the Docker RHEL repository"
+                exit 1
+            fi
+
+            print_info "Installing Docker Engine..."
+            if ! sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+                print_error "Failed to install Docker Engine"
+                exit 1
+            fi
+
+            if ! sudo systemctl enable --now docker; then
+                print_error "Failed to enable and start the Docker service"
+                exit 1
+            fi
         fi
+
+        print_info "✓ Docker Engine installed"
     else
-        print_info "Skipped copying tmux config"
+        print_info "Skipped Docker Engine installation"
     fi
 fi
 
@@ -1322,6 +1416,47 @@ if section_selected "$SELECT_NEOVIM_CONFIGS" && [ "$NVIM_AVAILABLE" = true ]; th
     else
         print_warning "git not found - skipping NeoVim config install"
     fi
+    fi
+fi
+
+# Install tmux and copy its configuration
+if section_selected "$SELECT_TMUX"; then
+    TMUX_ALREADY_AVAILABLE=false
+    if command -v tmux &> /dev/null; then
+        TMUX_ALREADY_AVAILABLE=true
+    fi
+
+    if [ "$AUTO_YES" = true ]; then
+        SETUP_TMUX="y"
+    elif [ "$TMUX_ALREADY_AVAILABLE" = true ]; then
+        read -r -p "Copy the provided tmux config? (y/n): " SETUP_TMUX
+    else
+        read -r -p "Install tmux and copy the provided config? (y/n): " SETUP_TMUX
+    fi
+
+    if [[ "$SETUP_TMUX" =~ ^[Yy]$ ]]; then
+        if [ "$TMUX_ALREADY_AVAILABLE" = false ]; then
+            print_info "Installing tmux..."
+            if ! $PKG_INSTALL_CMD tmux; then
+                print_error "Failed to install tmux"
+                exit 1
+            fi
+            print_info "✓ tmux installed"
+        fi
+
+        TMUX_CONFIG_SOURCE="$(dirname "$0")/configs/.tmux.conf"
+        TMUX_CONFIG_TARGET="$HOME/.tmux.conf"
+        if [ -f "$TMUX_CONFIG_SOURCE" ]; then
+            if cp "$TMUX_CONFIG_SOURCE" "$TMUX_CONFIG_TARGET"; then
+                print_info "✓ tmux config copied to $TMUX_CONFIG_TARGET"
+            else
+                print_warning "Failed to copy tmux config"
+            fi
+        else
+            print_warning "tmux config not found at $TMUX_CONFIG_SOURCE"
+        fi
+    else
+        print_info "Skipped tmux installation/configuration"
     fi
 fi
 

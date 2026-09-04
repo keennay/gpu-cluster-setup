@@ -21,15 +21,20 @@ is_valid_python_version_arg() {
 
 # Parse arguments
 AUTO_YES=false
+INSTALL_UV_SELECTED=false
 PYTHON_VERSION_ARG=""
 for arg in "$@"; do
     case "$arg" in
         -y|--auto)
             AUTO_YES=true
             ;;
+        --uv)
+            INSTALL_UV_SELECTED=true
+            ;;
         -h|--help)
-            echo "Usage: $0 [-y|--auto] [python-version]"
-            echo "  -y, --auto        Automatically accept yes/no prompts"
+            echo "Usage: $0 [-y|--auto] [--uv] [python-version]"
+            echo "  -y, --auto        Automatically accept Python and pyenv prompts"
+            echo "  --uv              Include uv in automatic installation"
             echo "  python-version    Automatically select custom Python version (e.g. 3.11.15)"
             exit 0
             ;;
@@ -263,6 +268,9 @@ if [ -n "$PYTHON_VERSION_ARG" ]; then
     PYTHON_ACTION="install_custom"
     TARGET_PYTHON_VERSION="$PYTHON_VERSION_ARG"
     print_info "Python version argument provided; selecting custom Python $TARGET_PYTHON_VERSION."
+elif [ "$AUTO_YES" = true ]; then
+    PYTHON_ACTION="install_latest"
+    print_info "Automatic mode enabled (-y): installing the latest Python version via pyenv."
 elif [ "$PYTHON_PRESENT" = false ]; then
     print_warning "No existing python3 installation detected; a new version will be installed."
     PYTHON_ACTION="install_latest"
@@ -364,7 +372,11 @@ else
     print_error "✗ uv is not installed"
     
     if [ "$AUTO_YES" = true ]; then
-        INSTALL_UV="y"
+        if [ "$INSTALL_UV_SELECTED" = true ]; then
+            INSTALL_UV="y"
+        else
+            INSTALL_UV="n"
+        fi
     else
         read -r -p "Install uv? (y/n): " INSTALL_UV
     fi

@@ -41,7 +41,7 @@ if ! { exec 8<>/dev/tty; } 2>/dev/null; then
 fi
 TTY_OPEN=1
 DEPENDENCY_LABELS=(
-    "Tmux"
+    "Docker"
     "Node.js 24"
     "pnpm"
     "Bun"
@@ -50,9 +50,10 @@ DEPENDENCY_LABELS=(
     "Zig"
     "Neovim"
     "Neovim Configs"
+    "Tmux"
 )
 DEPENDENCY_FLAGS=(
-    "--tmux"
+    "--docker"
     "--node"
     "--pnpm"
     "--bun"
@@ -61,8 +62,9 @@ DEPENDENCY_FLAGS=(
     "--zig"
     "--neovim"
     "--neovim-configs"
+    "--tmux"
 )
-DEPENDENCY_SELECTED=(1 1 1 1 1 1 1 1 1)
+DEPENDENCY_SELECTED=(1 1 1 1 1 1 1 1 1 1)
 
 CLI_LABELS=(
     "Arcee nac"
@@ -91,6 +93,7 @@ CLI_FLAGS=(
     "--prime"
 )
 CLI_SELECTED=(1 1 1 1 1 1 1 1 1 1 1)
+ASTRAL_UV_SELECTED=1
 
 all_dependencies_selected() {
     local selected
@@ -115,10 +118,15 @@ all_clis_selected() {
 }
 
 all_packages_selected() {
-    all_dependencies_selected && all_clis_selected
+    all_dependencies_selected && (( ASTRAL_UV_SELECTED )) && all_clis_selected
 }
 CUDA_DEFAULT_VERSION="13.0"
 PYTHON_DEFAULT_VERSION="3.11.16"
+CUDA_GUIDANCE_LINE_ONE="Select 13.0 or type a custom CUDA version >= 12.8."
+CUDA_GUIDANCE_LINE_TWO="Up to 10 CUDA versions can be installed, comma separated, with the"
+CUDA_GUIDANCE_LINE_THREE="first in the list as the default CUDA option"
+PYTHON_GUIDANCE="Select 3.11.16 or type a custom Python version >= 3.11"
+CONTROLS_TEXT="Arrows/Tab move  Space select  Enter activate  i install  q cancel"
 cuda_choice="default"
 python_choice="default"
 cuda_buffer=""
@@ -127,9 +135,9 @@ editing=""
 status_message=""
 
 PANEL_WIDTH=80
-PANEL_HEIGHT=28
+PANEL_HEIGHT=38
 MIN_COLUMNS=80
-MIN_ROWS=28
+MIN_ROWS=38
 FIELD_WIDTH=47
 terminal_rows=21
 terminal_columns=80
@@ -177,10 +185,12 @@ FOCUS_CONTROLS=(
     "dependency:6"
     "dependency:7"
     "dependency:8"
+    "dependency:9"
     "cuda_default"
     "cuda_custom"
     "python_default"
     "python_custom"
+    "astral_uv"
     "cli:0"
     "cli:1"
     "cli:2"
@@ -231,6 +241,15 @@ center_content() {
     right=$((width - ${#text} - left))
     printf -v CENTERED_CONTENT '%*s%s%*s' "$left" "" "$text" "$right" ""
 }
+align_with_controls() {
+    local text="$1"
+    local width=$((PANEL_WIDTH - 2))
+    local left=$(( (width - ${#CONTROLS_TEXT}) / 2 ))
+    local available=$((width - left))
+
+    printf -v ALIGNED_CONTENT '%*s%-*.*s' "$left" "" "$available" "$available" "$text"
+}
+
 
 append_separator() {
     local title="$1"
@@ -327,18 +346,20 @@ build_panel() {
     if (( all_selected )); then
         center_content ""
     else
-        center_content "[ ] Custom Installation"
+        center_content "[X] Custom Installation"
     fi
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
 
-    append_separator "Dependencies"
+    append_separator "Install / Update Dependencies"
     append_blank_line
-    for ((row = 0; row < 3; row++)); do
+    for ((row = 0; row < 4; row++)); do
         cells=("" "" "")
         for ((column = 0; column < 3; column++)); do
             index=$((row * 3 + column))
-            checkbox_text "dependency:$index" "${DEPENDENCY_SELECTED[$index]}" "${DEPENDENCY_LABELS[$index]}"
-            cells[column]="$CONTROL_TEXT"
+            if (( index < ${#DEPENDENCY_LABELS[@]} )); then
+                checkbox_text "dependency:$index" "${DEPENDENCY_SELECTED[$index]}" "${DEPENDENCY_LABELS[$index]}"
+                cells[column]="$CONTROL_TEXT"
+            fi
         done
         printf -v content '%-25.25s%-25.25s%-26.26s' "${cells[0]}" "${cells[1]}" "${cells[2]}"
         PANEL_LINES+=("│ ${content} │")
@@ -346,15 +367,16 @@ build_panel() {
     append_blank_line
 
     append_separator "CUDA Version"
+    append_blank_line
     selected_mark=" "
     if [ "$cuda_choice" = "default" ]; then
-        selected_mark="X"
+        selected_mark="x"
     fi
     control_text "cuda_default" "(${selected_mark}) $CUDA_DEFAULT_VERSION"
     default_text="$CONTROL_TEXT"
     selected_mark=" "
     if [ "$cuda_choice" = "custom" ]; then
-        selected_mark="X"
+        selected_mark="x"
     fi
     active=0
     if [ "$editing" = "cuda" ]; then
@@ -366,17 +388,25 @@ build_panel() {
     printf -v content '%-11.11s%s   ' "$default_text" "$custom_text"
     PANEL_LINES+=("│ ${content} │")
     append_blank_line
+    align_with_controls "$CUDA_GUIDANCE_LINE_ONE"
+    PANEL_LINES+=("│${ALIGNED_CONTENT}│")
+    align_with_controls "$CUDA_GUIDANCE_LINE_TWO"
+    PANEL_LINES+=("│${ALIGNED_CONTENT}│")
+    align_with_controls "$CUDA_GUIDANCE_LINE_THREE"
+    PANEL_LINES+=("│${ALIGNED_CONTENT}│")
 
+    append_blank_line
     append_separator "Python Version"
+    append_blank_line
     selected_mark=" "
     if [ "$python_choice" = "default" ]; then
-        selected_mark="X"
+        selected_mark="x"
     fi
     control_text "python_default" "(${selected_mark}) $PYTHON_DEFAULT_VERSION"
     default_text="$CONTROL_TEXT"
     selected_mark=" "
     if [ "$python_choice" = "custom" ]; then
-        selected_mark="X"
+        selected_mark="x"
     fi
     active=0
     if [ "$editing" = "python" ]; then
@@ -387,8 +417,14 @@ build_panel() {
     custom_text="$CONTROL_TEXT"
     printf -v content '%-13.13s%s ' "$default_text" "$custom_text"
     PANEL_LINES+=("│ ${content} │")
+    checkbox_text "astral_uv" "$ASTRAL_UV_SELECTED" "Astral UV"
+    printf -v content '%-76.76s' "$CONTROL_TEXT"
+    PANEL_LINES+=("│ ${content} │")
     append_blank_line
+    align_with_controls "$PYTHON_GUIDANCE"
+    PANEL_LINES+=("│${ALIGNED_CONTENT}│")
 
+    append_blank_line
     append_separator "Coding CLIs"
     append_blank_line
     for ((row = 0; row < 4; row++)); do
@@ -413,7 +449,7 @@ build_panel() {
     if [ -n "$status_message" ]; then
         center_content "$status_message"
     else
-        center_content "Arrows/Tab move  Space select  Enter activate  i install  q cancel"
+        center_content "$CONTROLS_TEXT"
     fi
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
     printf -v border '%*s' "$((PANEL_WIDTH - 2))" ""
@@ -440,26 +476,26 @@ style_panel_line() {
             is_border=1
             ;;
         6)
-            title="Dependencies"
+            title="Install / Update Dependencies"
             is_border=1
             ;;
-        12)
+        13)
             title="CUDA Version"
             is_border=1
             ;;
-        15)
+        21)
             title="Python Version"
             is_border=1
             ;;
-        18)
+        28)
             title="Coding CLIs"
             is_border=1
             ;;
-        25)
+        35)
             title="Controls"
             is_border=1
             ;;
-        27)
+        37)
             is_border=1
             ;;
     esac
@@ -477,22 +513,22 @@ style_panel_line() {
 
     body="${line#│}"
     body="${body%│}"
-    if (( line_index == 26 )); then
+    if (( line_index == 36 )); then
         if [ -n "$status_message" ]; then
             body="${STYLE_ALERT}${body}${STYLE_RESET}"
         else
             body="${STYLE_MUTED}${body}${STYLE_RESET}"
         fi
-    elif (( line_index == 5 )); then
+    elif (( line_index == 5 || line_index == 17 || line_index == 18 || line_index == 19 || line_index == 26 )); then
         body="${STYLE_MUTED}${body}${STYLE_RESET}"
     else
         if [ -n "$FOCUSED_TEXT" ] && [[ "$body" == *"$FOCUSED_TEXT"* ]]; then
             before="${body%%"$FOCUSED_TEXT"*}"
             after="${body#*"$FOCUSED_TEXT"}"
             before="${before//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
-            before="${before//"(X)"/${STYLE_SELECTED}(X)${STYLE_RESET}}"
+            before="${before//"(x)"/${STYLE_SELECTED}(x)${STYLE_RESET}}"
             after="${after//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
-            after="${after//"(X)"/${STYLE_SELECTED}(X)${STYLE_RESET}}"
+            after="${after//"(x)"/${STYLE_SELECTED}(x)${STYLE_RESET}}"
             focused="${FOCUSED_TEXT/#>/›}"
             if (( FLASH_PHASE )); then
                 focus_style="$STYLE_FOCUS_ALTERNATE"
@@ -502,7 +538,7 @@ style_panel_line() {
             body="${before}${focus_style}${focused}${STYLE_RESET}${after}"
         else
             body="${body//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
-            body="${body//"(X)"/${STYLE_SELECTED}(X)${STYLE_RESET}}"
+            body="${body//"(x)"/${STYLE_SELECTED}(x)${STYLE_RESET}}"
         fi
     fi
     STYLED_LINE="${STYLE_BORDER}│${STYLE_RESET}${body}${STYLE_BORDER}│${STYLE_RESET}"
@@ -565,7 +601,7 @@ draw_screen() {
         if (( cursor_offset > FIELD_WIDTH - 1 )); then
             cursor_offset=$((FIELD_WIDTH - 1))
         fi
-        cursor_row=$((panel_top + 13))
+        cursor_row=$((panel_top + 15))
         cursor_column=$((panel_left + 27 + cursor_offset))
         printf '\033[?25h\033[%d;%dH' "$cursor_row" "$cursor_column" >&"$TTY_FD"
     elif [ "$editing" = "python" ]; then
@@ -574,7 +610,7 @@ draw_screen() {
         if (( cursor_offset > FIELD_WIDTH - 1 )); then
             cursor_offset=$((FIELD_WIDTH - 1))
         fi
-        cursor_row=$((panel_top + 16))
+        cursor_row=$((panel_top + 23))
         cursor_column=$((panel_left + 29 + cursor_offset))
         printf '\033[?25h\033[%d;%dH' "$cursor_row" "$cursor_column" >&"$TTY_FD"
     fi
@@ -937,6 +973,7 @@ select_every_package() {
     for ((index = 0; index < ${#CLI_SELECTED[@]}; index++)); do
         CLI_SELECTED[index]=1
     done
+    ASTRAL_UV_SELECTED=1
 }
 refresh_runtime_paths() {
     local candidate
@@ -1005,7 +1042,7 @@ perform_installation() {
     local -a cli_args=(-y)
 
     if [ "$cuda_choice" = "custom" ] && ! validate_cuda_versions "$cuda_buffer"; then
-        focus_index=13
+        focus_index=14
         FLASH_PHASE=0
         FLASH_TIMEOUT_COUNT=0
         edit_version "cuda" "$cuda_choice" "$cuda_buffer"
@@ -1021,7 +1058,7 @@ perform_installation() {
         return 1
     fi
     if [ "$python_choice" = "custom" ] && ! validate_python_version "$python_buffer"; then
-        focus_index=15
+        focus_index=16
         FLASH_PHASE=0
         FLASH_TIMEOUT_COUNT=0
         edit_version "python" "$python_choice" "$python_buffer"
@@ -1056,6 +1093,9 @@ perform_installation() {
         done
     fi
 
+    if (( ASTRAL_UV_SELECTED )); then
+        python_args+=("--uv")
+    fi
     if [ "$python_choice" = "default" ]; then
         python_args+=("$PYTHON_DEFAULT_VERSION")
     else
@@ -1127,6 +1167,9 @@ activate_focused() {
             ;;
         python_custom)
             activate_custom_version "python" "$activation_key"
+            ;;
+        astral_uv)
+            ASTRAL_UV_SELECTED=$((1 - ASTRAL_UV_SELECTED))
             ;;
         cli:*)
             index="${control#cli:}"
