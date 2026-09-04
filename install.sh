@@ -117,8 +117,12 @@ all_clis_selected() {
     return 0
 }
 
-all_packages_selected() {
-    all_dependencies_selected && (( ASTRAL_UV_SELECTED )) && all_clis_selected
+install_defaults_selected() {
+    all_dependencies_selected &&
+        (( ASTRAL_UV_SELECTED )) &&
+        all_clis_selected &&
+        [ "$cuda_choice" = "default" ] &&
+        [ "$python_choice" = "default" ]
 }
 CUDA_DEFAULT_VERSION="13.0"
 PYTHON_DEFAULT_VERSION="3.11.16"
@@ -126,7 +130,7 @@ CUDA_GUIDANCE_LINE_ONE="Select 13.0 or type a custom CUDA version >= 12.8."
 CUDA_GUIDANCE_LINE_TWO="Up to 10 CUDA versions can be installed, comma separated, with the"
 CUDA_GUIDANCE_LINE_THREE="first in the list as the default CUDA option"
 PYTHON_GUIDANCE="Select 3.11.16 or type a custom Python version >= 3.11"
-CONTROLS_TEXT="Arrows/Tab move  Space select  Enter activate  i install  q cancel"
+CONTROLS_TEXT="Click/Arrows/Tab move  Space select  Enter activate  i install  q cancel"
 cuda_choice="default"
 python_choice="default"
 cuda_buffer=""
@@ -138,7 +142,7 @@ PANEL_WIDTH=80
 PANEL_HEIGHT=38
 MIN_COLUMNS=80
 MIN_ROWS=38
-FIELD_WIDTH=47
+FIELD_WIDTH=45
 terminal_rows=21
 terminal_columns=80
 panel_top=1
@@ -175,7 +179,7 @@ fi
 FOCUS_CONTROLS=(
     "install"
     "cancel"
-    "install_everything"
+    "install_defaults"
     "dependency:0"
     "dependency:1"
     "dependency:2"
@@ -188,8 +192,10 @@ FOCUS_CONTROLS=(
     "dependency:9"
     "cuda_default"
     "cuda_custom"
+    "cuda_field"
     "python_default"
     "python_custom"
+    "python_field"
     "astral_uv"
     "cli:0"
     "cli:1"
@@ -203,6 +209,17 @@ FOCUS_CONTROLS=(
     "cli:9"
     "cli:10"
 )
+HITBOX_CONTROLS=()
+HITBOX_ROWS=()
+HITBOX_LEFTS=()
+HITBOX_RIGHTS=()
+MOUSE_BUTTON=0
+MOUSE_COLUMN=0
+MOUSE_ROW=0
+MOUSE_CONTROL=""
+CUDA_FIELD_BOX=""
+PYTHON_FIELD_BOX=""
+
 
 terminal_size() {
     local size=""
@@ -288,15 +305,16 @@ render_field() {
     local value="$1"
     local active="$2"
     local visible="$value"
+    local visible_width=$((FIELD_WIDTH - 1))
 
     if (( ${#value} > FIELD_WIDTH )); then
         if (( active )); then
-            visible="<${value: -46}"
+            visible="<${value: -visible_width}"
         else
-            visible="${value:0:46}>"
+            visible="${value:0:visible_width}>"
         fi
     fi
-    printf -v RENDERED_FIELD '%-47.47s' "$visible"
+    printf -v RENDERED_FIELD "%-${FIELD_WIDTH}.${FIELD_WIDTH}s" "$visible"
 }
 append_blank_line() {
     local blank
@@ -304,6 +322,79 @@ append_blank_line() {
     printf -v blank '%*s' "$((PANEL_WIDTH - 2))" ""
     PANEL_LINES+=("│${blank}│")
 }
+register_control_hitbox() {
+    local control="$1"
+    local text="$2"
+    local row=$(( ${#PANEL_LINES[@]} - 1 ))
+    local line="${PANEL_LINES[$row]}"
+    local prefix
+    local left
+
+    if [ -z "$text" ] || [[ "$line" != *"$text"* ]]; then
+        return
+    fi
+
+    prefix="${line%%"$text"*}"
+    left=${#prefix}
+    HITBOX_CONTROLS+=("$control")
+    HITBOX_ROWS+=("$row")
+    HITBOX_LEFTS+=("$left")
+    HITBOX_RIGHTS+=("$((left + ${#text} - 1))")
+}
+control_is_enabled() {
+    if [ "$1" = "install_defaults" ] && install_defaults_selected; then
+        return 1
+    fi
+    return 0
+}
+
+set_focus_control() {
+    local control="$1"
+    local control_index
+
+    for control_index in "${!FOCUS_CONTROLS[@]}"; do
+        if [ "${FOCUS_CONTROLS[$control_index]}" = "$control" ]; then
+            focus_index=$control_index
+            return 0
+        fi
+    done
+    return 1
+}
+
+
+focus_mouse_control() {
+    local row=$((MOUSE_ROW - panel_top))
+    local column=$((MOUSE_COLUMN - panel_left))
+    local hitbox_index
+
+    MOUSE_CONTROL=""
+    if (( row < 0 || row >= PANEL_HEIGHT || column < 0 || column >= PANEL_WIDTH )); then
+        return 1
+    fi
+
+    for hitbox_index in "${!HITBOX_CONTROLS[@]}"; do
+        if (( row != HITBOX_ROWS[hitbox_index] ||
+              column < HITBOX_LEFTS[hitbox_index] ||
+              column > HITBOX_RIGHTS[hitbox_index] )); then
+            continue
+        fi
+
+        MOUSE_CONTROL="${HITBOX_CONTROLS[$hitbox_index]}"
+        if ! control_is_enabled "$MOUSE_CONTROL"; then
+            continue
+        fi
+        if set_focus_control "$MOUSE_CONTROL"; then
+            FLASH_PHASE=0
+            FLASH_TIMEOUT_COUNT=0
+            status_message=""
+            return 0
+        fi
+    done
+
+    MOUSE_CONTROL=""
+    return 1
+}
+
 
 
 build_panel() {
@@ -313,7 +404,9 @@ build_panel() {
     local cancel_text
     local content
     local custom_text
+    local custom_installation_text
     local default_text
+    local field_text
     local active
     local row
     local column
@@ -323,6 +416,10 @@ build_panel() {
     local title="YONIQ GPU Setup"
 
     PANEL_LINES=()
+    HITBOX_CONTROLS=()
+    HITBOX_ROWS=()
+    HITBOX_LEFTS=()
+    HITBOX_RIGHTS=()
     FOCUSED_TEXT=""
     printf -v border '%*s' "$((PANEL_WIDTH - ${#title} - 5))" ""
     PANEL_LINES+=("┌─ $title ${border// /─}┐")
@@ -333,21 +430,27 @@ build_panel() {
     cancel_text="$CONTROL_TEXT"
     center_content "$install_text $cancel_text"
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
+    register_control_hitbox "install" "$install_text"
+    register_control_hitbox "cancel" "$cancel_text"
     append_blank_line
 
     append_separator "Selection"
-    if all_packages_selected; then
+    if install_defaults_selected; then
         all_selected=1
-        selected_mark="X"
-    fi
-    control_text "install_everything" "[${selected_mark}] Install Everything"
-    center_content "$CONTROL_TEXT"
-    PANEL_LINES+=("│${CENTERED_CONTENT}│")
-    if (( all_selected )); then
-        center_content ""
+        selected_mark=" "
+        CONTROL_TEXT="  [X] Install Defaults"
     else
-        center_content "[X] Custom Installation"
+        selected_mark="X"
+        control_text "install_defaults" "[ ] Install Defaults"
     fi
+    printf -v content '%-25.25s' "$CONTROL_TEXT"
+    center_content "$content"
+    PANEL_LINES+=("│${CENTERED_CONTENT}│")
+    if (( ! all_selected )); then
+        register_control_hitbox "install_defaults" "$CONTROL_TEXT"
+    fi
+    custom_installation_text="  [${selected_mark}] Custom Installation"
+    center_content "$custom_installation_text"
     PANEL_LINES+=("│${CENTERED_CONTENT}│")
 
     append_separator "Install / Update Dependencies"
@@ -363,6 +466,12 @@ build_panel() {
         done
         printf -v content '%-25.25s%-25.25s%-26.26s' "${cells[0]}" "${cells[1]}" "${cells[2]}"
         PANEL_LINES+=("│ ${content} │")
+        for ((column = 0; column < 3; column++)); do
+            index=$((row * 3 + column))
+            if (( index < ${#DEPENDENCY_LABELS[@]} )); then
+                register_control_hitbox "dependency:$index" "${cells[$column]}"
+            fi
+        done
     done
     append_blank_line
 
@@ -378,15 +487,21 @@ build_panel() {
     if [ "$cuda_choice" = "custom" ]; then
         selected_mark="x"
     fi
+    control_text "cuda_custom" "(${selected_mark}) Custom"
+    custom_text="$CONTROL_TEXT"
     active=0
     if [ "$editing" = "cuda" ]; then
         active=1
     fi
     render_field "$cuda_buffer" "$active"
-    control_text "cuda_custom" "(${selected_mark}) Custom [${RENDERED_FIELD}]"
-    custom_text="$CONTROL_TEXT"
-    printf -v content '%-11.11s%s   ' "$default_text" "$custom_text"
+    CUDA_FIELD_BOX="[${RENDERED_FIELD}]"
+    control_text "cuda_field" "$CUDA_FIELD_BOX"
+    field_text="$CONTROL_TEXT"
+    printf -v content '%-11.11s %s %s  ' "$default_text" "$custom_text" "$field_text"
     PANEL_LINES+=("│ ${content} │")
+    register_control_hitbox "cuda_default" "$default_text"
+    register_control_hitbox "cuda_custom" "$custom_text"
+    register_control_hitbox "cuda_field" "$CUDA_FIELD_BOX"
     append_blank_line
     align_with_controls "$CUDA_GUIDANCE_LINE_ONE"
     PANEL_LINES+=("│${ALIGNED_CONTENT}│")
@@ -408,18 +523,25 @@ build_panel() {
     if [ "$python_choice" = "custom" ]; then
         selected_mark="x"
     fi
+    control_text "python_custom" "(${selected_mark}) Custom"
+    custom_text="$CONTROL_TEXT"
     active=0
     if [ "$editing" = "python" ]; then
         active=1
     fi
     render_field "$python_buffer" "$active"
-    control_text "python_custom" "(${selected_mark}) Custom [${RENDERED_FIELD}]"
-    custom_text="$CONTROL_TEXT"
-    printf -v content '%-13.13s%s ' "$default_text" "$custom_text"
+    PYTHON_FIELD_BOX="[${RENDERED_FIELD}]"
+    control_text "python_field" "$PYTHON_FIELD_BOX"
+    field_text="$CONTROL_TEXT"
+    printf -v content '%-13.13s %s %s' "$default_text" "$custom_text" "$field_text"
     PANEL_LINES+=("│ ${content} │")
+    register_control_hitbox "python_default" "$default_text"
+    register_control_hitbox "python_custom" "$custom_text"
+    register_control_hitbox "python_field" "$PYTHON_FIELD_BOX"
     checkbox_text "astral_uv" "$ASTRAL_UV_SELECTED" "Astral UV"
     printf -v content '%-76.76s' "$CONTROL_TEXT"
     PANEL_LINES+=("│ ${content} │")
+    register_control_hitbox "astral_uv" "$CONTROL_TEXT"
     append_blank_line
     align_with_controls "$PYTHON_GUIDANCE"
     PANEL_LINES+=("│${ALIGNED_CONTENT}│")
@@ -442,6 +564,12 @@ build_panel() {
             printf -v content '%-25.25s%-25.25s%-26.26s' "${cells[0]}" "${cells[1]}" "${cells[2]}"
         fi
         PANEL_LINES+=("│ ${content} │")
+        for ((column = 0; column < 3; column++)); do
+            index=$((row * 3 + column))
+            if (( index < ${#CLI_LABELS[@]} )); then
+                register_control_hitbox "cli:$index" "${cells[$column]}"
+            fi
+        done
     done
     append_blank_line
 
@@ -465,6 +593,7 @@ style_panel_line() {
     local is_border=0
     local focused
     local focus_style
+    local disabled_field=""
 
     case "$line_index" in
         0)
@@ -519,6 +648,8 @@ style_panel_line() {
         else
             body="${STYLE_MUTED}${body}${STYLE_RESET}"
         fi
+    elif (( line_index == 4 )) && install_defaults_selected; then
+        body="${STYLE_MUTED}${body}${STYLE_RESET}"
     elif (( line_index == 5 || line_index == 17 || line_index == 18 || line_index == 19 || line_index == 26 )); then
         body="${STYLE_MUTED}${body}${STYLE_RESET}"
     else
@@ -540,6 +671,16 @@ style_panel_line() {
             body="${body//"[X]"/${STYLE_SELECTED}[X]${STYLE_RESET}}"
             body="${body//"(x)"/${STYLE_SELECTED}(x)${STYLE_RESET}}"
         fi
+    fi
+    if (( line_index == 15 )) && [ "$cuda_choice" != "custom" ]; then
+        disabled_field="$CUDA_FIELD_BOX"
+    elif (( line_index == 23 )) && [ "$python_choice" != "custom" ]; then
+        disabled_field="$PYTHON_FIELD_BOX"
+    fi
+    if [ -n "$disabled_field" ] && [[ "$body" == *"$disabled_field"* ]]; then
+        before="${body%%"$disabled_field"*}"
+        after="${body#*"$disabled_field"}"
+        body="${before}${STYLE_MUTED}${disabled_field}${STYLE_RESET}${after}"
     fi
     STYLED_LINE="${STYLE_BORDER}│${STYLE_RESET}${body}${STYLE_BORDER}│${STYLE_RESET}"
 }
@@ -602,7 +743,7 @@ draw_screen() {
             cursor_offset=$((FIELD_WIDTH - 1))
         fi
         cursor_row=$((panel_top + 15))
-        cursor_column=$((panel_left + 27 + cursor_offset))
+        cursor_column=$((panel_left + 30 + cursor_offset))
         printf '\033[?25h\033[%d;%dH' "$cursor_row" "$cursor_column" >&"$TTY_FD"
     elif [ "$editing" = "python" ]; then
         buffer_length=${#python_buffer}
@@ -611,7 +752,7 @@ draw_screen() {
             cursor_offset=$((FIELD_WIDTH - 1))
         fi
         cursor_row=$((panel_top + 23))
-        cursor_column=$((panel_left + 29 + cursor_offset))
+        cursor_column=$((panel_left + 32 + cursor_offset))
         printf '\033[?25h\033[%d;%dH' "$cursor_row" "$cursor_column" >&"$TTY_FD"
     fi
 }
@@ -713,6 +854,47 @@ validate_python_version() {
     return 0
 }
 
+read_sgr_mouse_event() {
+    local payload=""
+    local byte=""
+    local mouse_pattern='^([0-9]+);([0-9]+);([0-9]+)([Mm])$'
+
+    while (( ${#payload} < 32 )); do
+        if ! IFS= read -r -s -n 1 -t 0.05 -u "$TTY_FD" byte; then
+            if (( WINCH_PENDING )); then
+                KEY="resize"
+                return 0
+            fi
+            return 1
+        fi
+        payload+="$byte"
+        if [ "$byte" = "M" ] || [ "$byte" = "m" ]; then
+            break
+        fi
+    done
+
+    if [[ ! "$payload" =~ $mouse_pattern ]]; then
+        return 1
+    fi
+
+    MOUSE_BUTTON=$((10#${BASH_REMATCH[1]}))
+    MOUSE_COLUMN=$((10#${BASH_REMATCH[2]}))
+    MOUSE_ROW=$((10#${BASH_REMATCH[3]}))
+    if (( MOUSE_COLUMN < 1 || MOUSE_ROW < 1 )); then
+        return 1
+    fi
+
+    if [ "${BASH_REMATCH[4]}" = "M" ] &&
+       (( (MOUSE_BUTTON & 3) == 0 &&
+          (MOUSE_BUTTON & 32) == 0 &&
+          (MOUSE_BUTTON & 64) == 0 )); then
+        KEY="mouse"
+    else
+        KEY="mouse_ignore"
+    fi
+    return 0
+}
+
 read_key() {
     local byte=""
     local second=""
@@ -721,6 +903,7 @@ read_key() {
 
     KEY=""
     KEY_CHAR=""
+    MOUSE_CONTROL=""
     if (( WINCH_PENDING )); then
         KEY="resize"
         return 0
@@ -792,6 +975,12 @@ read_key() {
                 fi
                 return 0
             fi
+            if [ "$second$third" = "[<" ]; then
+                if ! read_sgr_mouse_event; then
+                    KEY="unknown"
+                fi
+                return 0
+            fi
             case "$second$third" in
                 "[A"|"OA") KEY="previous" ;;
                 "[B"|"OB") KEY="next" ;;
@@ -813,21 +1002,83 @@ move_focus() {
     local direction="$1"
     local control_count=${#FOCUS_CONTROLS[@]}
 
-    if [ "$direction" = "next" ]; then
-        focus_index=$(( (focus_index + 1) % control_count ))
-    else
-        focus_index=$(( (focus_index - 1 + control_count) % control_count ))
-    fi
+    while true; do
+        if [ "$direction" = "next" ]; then
+            focus_index=$(( (focus_index + 1) % control_count ))
+        else
+            focus_index=$(( (focus_index - 1 + control_count) % control_count ))
+        fi
+        if control_is_enabled "${FOCUS_CONTROLS[$focus_index]}"; then
+            break
+        fi
+    done
     FLASH_PHASE=0
     FLASH_TIMEOUT_COUNT=0
     status_message=""
 }
+append_version_character() {
+    local kind="$1"
+    local character="$2"
+    local buffer
+    local max_length
+    local invalid_message
+    local length_message
+
+    if [ "$kind" = "cuda" ]; then
+        buffer="$cuda_buffer"
+        max_length=169
+        invalid_message="Invalid CUDA character; use digits, dots, and commas only."
+        length_message="CUDA input is limited to 169 characters."
+    else
+        buffer="$python_buffer"
+        max_length=16
+        invalid_message="Invalid Python character; use digits and dots only."
+        length_message="Python input is limited to 16 characters."
+    fi
+
+    case "$character" in
+        [0-9])
+            ;;
+        ".")
+            if [[ "$buffer" != *[0-9] ]]; then
+                status_message="Enter a digit before a dot; consecutive dots are not allowed."
+                return
+            fi
+            ;;
+        ",")
+            if [ "$kind" != "cuda" ]; then
+                status_message="$invalid_message"
+                return
+            fi
+            if [[ "$buffer" != *[0-9] ]]; then
+                status_message="Enter a CUDA version before a comma; consecutive separators are not allowed."
+                return
+            fi
+            ;;
+        *)
+            status_message="$invalid_message"
+            return
+            ;;
+    esac
+
+    if (( ${#buffer} >= max_length )); then
+        status_message="$length_message"
+        return
+    fi
+    if [ "$kind" = "cuda" ]; then
+        cuda_buffer+="$character"
+    else
+        python_buffer+="$character"
+    fi
+    status_message=""
+}
+
 
 edit_version() {
     local kind="$1"
     local saved_choice="$2"
     local saved_buffer="$3"
-    local buffer_length
+    local current_buffer
 
     editing="$kind"
     if [ "$kind" = "cuda" ]; then
@@ -866,6 +1117,68 @@ edit_version() {
         fi
 
         case "$KEY" in
+            mouse)
+                if focus_mouse_control && [ "$MOUSE_CONTROL" != "${kind}_field" ]; then
+                    if [ "$MOUSE_CONTROL" = "${kind}_default" ] ||
+                       [ "$MOUSE_CONTROL" = "install_defaults" ]; then
+                        editing=""
+                        status_message=""
+                        activate_focused "mouse"
+                        return $?
+                    fi
+
+                    if [ "$kind" = "cuda" ]; then
+                        current_buffer="$cuda_buffer"
+                    else
+                        current_buffer="$python_buffer"
+                    fi
+
+                    if [ -z "$current_buffer" ]; then
+                        if [ "$kind" = "cuda" ]; then
+                            cuda_choice="default"
+                        else
+                            python_choice="default"
+                        fi
+                        editing=""
+                        status_message=""
+                        if [ "$MOUSE_CONTROL" = "${kind}_custom" ]; then
+                            return 0
+                        fi
+                    elif [ "$kind" = "cuda" ]; then
+                        if validate_cuda_versions "$cuda_buffer"; then
+                            editing=""
+                        else
+                            set_focus_control "cuda_field"
+                        fi
+                    elif validate_python_version "$python_buffer"; then
+                        editing=""
+                    else
+                        set_focus_control "python_field"
+                    fi
+
+                    if [ -z "$editing" ]; then
+                        if [ "$MOUSE_CONTROL" = "cuda_field" ]; then
+                            kind="cuda"
+                            saved_choice="$cuda_choice"
+                            saved_buffer="$cuda_buffer"
+                            cuda_choice="custom"
+                            editing="$kind"
+                        elif [ "$MOUSE_CONTROL" = "python_field" ]; then
+                            kind="python"
+                            saved_choice="$python_choice"
+                            saved_buffer="$python_buffer"
+                            python_choice="custom"
+                            editing="$kind"
+                        else
+                            activate_focused "mouse"
+                            return $?
+                        fi
+                    fi
+                fi
+                ;;
+            mouse_ignore)
+                continue
+                ;;
             escape)
                 if [ "$kind" = "cuda" ]; then
                     cuda_choice="$saved_choice"
@@ -898,29 +1211,7 @@ edit_version() {
                 status_message=""
                 ;;
             character)
-                if [ "$kind" = "cuda" ]; then
-                    if [[ "$KEY_CHAR" != [0-9] && "$KEY_CHAR" != "." && "$KEY_CHAR" != "," ]]; then
-                        status_message="Invalid CUDA character; use digits, dots, and commas only."
-                    else
-                        buffer_length=${#cuda_buffer}
-                        if (( buffer_length >= 169 )); then
-                            status_message="CUDA input is limited to 169 characters."
-                        else
-                            cuda_buffer+="$KEY_CHAR"
-                            status_message=""
-                        fi
-                    fi
-                elif [[ "$KEY_CHAR" != [0-9] && "$KEY_CHAR" != "." ]]; then
-                    status_message="Invalid Python character; use digits and dots only."
-                else
-                    buffer_length=${#python_buffer}
-                    if (( buffer_length >= 16 )); then
-                        status_message="Python input is limited to 16 characters."
-                    else
-                        python_buffer+="$KEY_CHAR"
-                        status_message=""
-                    fi
-                fi
+                append_version_character "$kind" "$KEY_CHAR"
                 ;;
             *)
                 if [ "$kind" = "cuda" ]; then
@@ -934,37 +1225,8 @@ edit_version() {
     done
 }
 
-activate_custom_version() {
-    local kind="$1"
-    local activation_key="$2"
-    local previous_choice
-    local previous_buffer
-    local is_valid=0
 
-    if [ "$kind" = "cuda" ]; then
-        previous_choice="$cuda_choice"
-        previous_buffer="$cuda_buffer"
-        if validate_cuda_versions "$cuda_buffer"; then
-            is_valid=1
-        fi
-        cuda_choice="custom"
-    else
-        previous_choice="$python_choice"
-        previous_buffer="$python_buffer"
-        if validate_python_version "$python_buffer"; then
-            is_valid=1
-        fi
-        python_choice="custom"
-    fi
-
-    if (( is_valid )) && [ "$activation_key" = "space" ]; then
-        status_message=""
-        return 0
-    fi
-    edit_version "$kind" "$previous_choice" "$previous_buffer"
-}
-
-select_every_package() {
+select_install_defaults() {
     local index
 
     for ((index = 0; index < ${#DEPENDENCY_SELECTED[@]}; index++)); do
@@ -974,7 +1236,12 @@ select_every_package() {
         CLI_SELECTED[index]=1
     done
     ASTRAL_UV_SELECTED=1
+    cuda_choice="default"
+    cuda_buffer=""
+    python_choice="default"
+    python_buffer=""
 }
+
 refresh_runtime_paths() {
     local candidate
     local path_entry
@@ -1042,7 +1309,7 @@ perform_installation() {
     local -a cli_args=(-y)
 
     if [ "$cuda_choice" = "custom" ] && ! validate_cuda_versions "$cuda_buffer"; then
-        focus_index=14
+        set_focus_control "cuda_field"
         FLASH_PHASE=0
         FLASH_TIMEOUT_COUNT=0
         edit_version "cuda" "$cuda_choice" "$cuda_buffer"
@@ -1058,7 +1325,7 @@ perform_installation() {
         return 1
     fi
     if [ "$python_choice" = "custom" ] && ! validate_python_version "$python_buffer"; then
-        focus_index=16
+        set_focus_control "python_field"
         FLASH_PHASE=0
         FLASH_TIMEOUT_COUNT=0
         edit_version "python" "$python_choice" "$python_buffer"
@@ -1135,9 +1402,12 @@ perform_installation() {
 
 
 activate_focused() {
-    local activation_key="$1"
     local control="${FOCUS_CONTROLS[$focus_index]}"
     local index
+
+    if ! control_is_enabled "$control"; then
+        return 0
+    fi
 
     status_message=""
     case "$control" in
@@ -1147,9 +1417,9 @@ activate_focused() {
         cancel)
             return 3
             ;;
-        install_everything)
-            if ! all_packages_selected; then
-                select_every_package
+        install_defaults)
+            if ! install_defaults_selected; then
+                select_install_defaults
             fi
             ;;
         dependency:*)
@@ -1158,15 +1428,23 @@ activate_focused() {
             ;;
         cuda_default)
             cuda_choice="default"
+            cuda_buffer=""
             ;;
         cuda_custom)
-            activate_custom_version "cuda" "$activation_key"
+            cuda_choice="custom"
+            ;;
+        cuda_field)
+            edit_version "cuda" "$cuda_choice" "$cuda_buffer"
             ;;
         python_default)
             python_choice="default"
+            python_buffer=""
             ;;
         python_custom)
-            activate_custom_version "python" "$activation_key"
+            python_choice="custom"
+            ;;
+        python_field)
+            edit_version "python" "$python_choice" "$python_buffer"
             ;;
         astral_uv)
             ASTRAL_UV_SELECTED=$((1 - ASTRAL_UV_SELECTED))
@@ -1188,7 +1466,7 @@ leave_tui() {
         if [ -n "$SAVED_STTY" ]; then
             stty "$SAVED_STTY" <&"$TTY_FD" 2>/dev/null || true
         fi
-        printf '\033[0m\033[?25h\033[?1049l' >&"$TTY_FD"
+        printf '\033[0m\033[?1000l\033[?1006l\033[?25h\033[?1049l' >&"$TTY_FD"
         TUI_ACTIVE=0
     fi
 
@@ -1231,7 +1509,7 @@ enter_tui() {
         return 1
     fi
 
-    printf '\033[?1049h\033[2J\033[H\033[?25l' >&"$TTY_FD"
+    printf '\033[?1049h\033[?1006h\033[?1000h\033[2J\033[H\033[?25l' >&"$TTY_FD"
 }
 cancel_installation() {
     leave_tui
@@ -1278,6 +1556,26 @@ run_tui() {
         fi
 
         case "$KEY" in
+            mouse)
+                if focus_mouse_control; then
+                    activate_focused "mouse"
+                    activation_status=$?
+                    if (( activation_status == 2 )); then
+                        terminal_input_closed
+                        return 1
+                    fi
+                    if (( activation_status == 3 )); then
+                        cancel_installation
+                        return 0
+                    fi
+                    if (( ! TUI_ACTIVE )); then
+                        return "$activation_status"
+                    fi
+                fi
+                ;;
+            mouse_ignore)
+                continue
+                ;;
             next)
                 move_focus "next"
                 ;;
