@@ -1192,7 +1192,6 @@ python3 "$PYTHON_SCRIPT"
 RESULT=$?
 
 if [ -f "$PYTHON_RESULT_FILE" ]; then
-    # shellcheck disable=SC1090
     . "$PYTHON_RESULT_FILE"
 fi
 

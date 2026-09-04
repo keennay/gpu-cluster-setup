@@ -6,7 +6,6 @@
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f "$HOME/.bashrc" ]; then
-    # shellcheck source=/dev/null
     source "$HOME/.bashrc"
 fi
 
@@ -1068,7 +1067,6 @@ apply_env_cuda_selection() {
     CUDA_ENV_VERSION=""
 
     if [ -f "$cuda_config" ]; then
-        # shellcheck source=/dev/null
         source "$cuda_config"
     fi
 
@@ -1206,7 +1204,6 @@ echo ""
 # ACTIVATE IF BEING SOURCED
 if [ "$BEING_SOURCED" = true ]; then
     print_info "Activating ML environment..."
-    # shellcheck source=/dev/null
     if ! source "$ENV_PATH/activate_ml"; then
         fail_script "Failed to activate ML environment"
         return 1

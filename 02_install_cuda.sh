@@ -977,7 +977,6 @@ detect_os_package_manager() {
         return 1
     fi
 
-    # shellcheck disable=SC1091
     source /etc/os-release
     OS_ID="$ID"
     OS_NAME="$NAME"

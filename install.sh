@@ -1478,7 +1478,6 @@ leave_tui() {
     trap - INT TERM HUP WINCH
 }
 
-# shellcheck disable=SC2317  # Invoked indirectly by the signal traps below.
 handle_signal() {
     local status="$1"
 

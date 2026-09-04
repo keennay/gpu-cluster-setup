@@ -256,6 +256,20 @@ if section_selected "$SELECT_CLAUDE"; then
         print_info "Installing Claude Code..."
         if curl -fsSL https://claude.ai/install.sh | bash; then
             print_info "Claude Code installed"
+            CLAUDE_BIN_DIR="$HOME/.local/bin"
+            CLAUDE_PATH_EXPORT='export PATH="$HOME/.local/bin:$PATH"'
+            BASHRC_PATH="$HOME/.bashrc"
+            if ! grep -Fqx "$CLAUDE_PATH_EXPORT" "$BASHRC_PATH" 2>/dev/null; then
+                if printf '\n%s\n' "$CLAUDE_PATH_EXPORT" >> "$BASHRC_PATH"; then
+                    print_info "Added $CLAUDE_BIN_DIR to PATH in $BASHRC_PATH"
+                else
+                    print_warning "Claude Code installed, but failed to add $CLAUDE_BIN_DIR to PATH in $BASHRC_PATH"
+                fi
+            fi
+            case ":$PATH:" in
+                *":$CLAUDE_BIN_DIR:"*) ;;
+                *) export PATH="$CLAUDE_BIN_DIR:$PATH" ;;
+            esac
         else
             print_warning "Failed to install Claude Code"
         fi
@@ -362,7 +376,7 @@ if section_selected "$SELECT_CODEX"; then
     prompt_yes_no INSTALL_CODEX "  Install OpenAI Codex? (y/n): "
     if [[ "$INSTALL_CODEX" =~ ^[Yy]$ ]]; then
         print_info "Installing OpenAI Codex..."
-        if curl -fsSL https://chatgpt.com/codex/install.sh | sh; then
+        if curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh; then
             print_info "OpenAI Codex installed"
         else
             print_warning "Failed to install OpenAI Codex"

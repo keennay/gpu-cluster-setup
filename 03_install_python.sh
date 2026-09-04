@@ -60,7 +60,6 @@ NEEDS_PATH_UPDATE=false
 reload_shell_env() {
     # Source bashrc to get latest PATH
     if [ -f "$HOME/.bashrc" ]; then
-        # shellcheck source=/dev/null
         source "$HOME/.bashrc"
     fi
     
@@ -387,8 +386,6 @@ else
         
         # Add to PATH if not present
         if ! grep -q ".cargo/bin" "$HOME/.bashrc"; then
-            # Keep this literal so future shells expand their own HOME and PATH.
-            # shellcheck disable=SC2016
             echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$HOME/.bashrc"
             print_info "Added cargo/bin to PATH in ~/.bashrc"
             NEEDS_PATH_UPDATE=true

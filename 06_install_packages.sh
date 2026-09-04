@@ -5,7 +5,6 @@
 # Usage: ./06_install_packages.sh [ENV_NAME]
 
 if [ -f "$HOME/.bashrc" ]; then
-    # shellcheck source=/dev/null
     source "$HOME/.bashrc"
 fi
 
@@ -573,7 +572,6 @@ activate_environment_override() {
     fi
 
     print_info "Activating requested environment: $env_path"
-    # shellcheck source=/dev/null
     if ! source "$activate_script"; then
         print_error "Failed to activate requested environment: $env_path"
         return 1
@@ -1083,7 +1081,6 @@ install_arcee_deepgemm() {
     run_command chmod +x "$deepgemm_installer" || return 1
 
     print_info "Installing vLLM $vllm_ref's pinned DeepGEMM build for Arcee..."
-    # shellcheck disable=SC2016
     run_command env VIRTUAL_ENV="$VIRTUAL_ENV" PATH="$VIRTUAL_ENV/bin:$PATH" \
         bash -c 'cd "$1" && bash "$2"' _ "$VIRTUAL_ENV" "$deepgemm_installer" || return 1
 }
