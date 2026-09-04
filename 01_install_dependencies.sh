@@ -485,7 +485,7 @@ else
     fi
 fi
 
-# Install Docker Engine
+# Install Docker Engine; Ubuntu follows https://docs.docker.com/engine/install/ubuntu/
 if section_selected "$SELECT_DOCKER"; then
     if [ "$AUTO_YES" = true ]; then
         INSTALL_DOCKER="y"
@@ -547,6 +547,13 @@ EOF
                 exit 1
             fi
 
+            print_info "Starting Docker service..."
+            if ! sudo systemctl start docker; then
+                print_error "Failed to start the Docker service"
+                exit 1
+            fi
+
+            print_info "Enabling Docker service at boot..."
             if ! sudo systemctl enable docker; then
                 print_error "Failed to enable the Docker service"
                 exit 1
