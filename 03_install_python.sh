@@ -335,7 +335,7 @@ else
     else
         print_info "Installing Python $TARGET_PYTHON_VERSION via pyenv..."
         print_info "This compiles Python from source and may take several minutes."
-        if ! MAKE_OPTS="-j$(nproc)" pyenv install "$TARGET_PYTHON_VERSION"; then
+        if ! MAKE_OPTS="-j$(nproc)" pyenv install --force "$TARGET_PYTHON_VERSION"; then
             print_error "Failed to install Python $TARGET_PYTHON_VERSION"
             exit 1
         fi
